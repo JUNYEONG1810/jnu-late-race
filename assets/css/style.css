@@ -1,0 +1,123 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #dff1ff;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  color: #2b3240;
+  user-select: none;
+}
+
+canvas { display: block; }
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  background: #dff1ff;
+  z-index: 10;
+}
+
+#hud { position: fixed; inset: 0; pointer-events: none; }
+
+.panel, .pill {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(40, 60, 90, 0.18);
+}
+
+.pill { border-radius: 999px; padding: 8px 20px; font-weight: 700; transition: opacity 0.3s; }
+.hidden { opacity: 0; }
+
+#building-name {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 20px;
+}
+
+#speedo {
+  left: 20px;
+  bottom: 20px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+#speed { font-size: 44px; font-weight: 800; min-width: 2.2ch; text-align: right; font-variant-numeric: tabular-nums; }
+#speedo small { font-size: 16px; font-weight: 700; color: #6b7385; }
+
+#quality {
+  top: 16px;
+  right: 16px;
+  padding: 6px 8px 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+#quality button {
+  font: inherit;
+  border: 0;
+  border-radius: 9px;
+  padding: 5px 12px;
+  background: #eef1f5;
+  color: #55607a;
+  cursor: pointer;
+}
+#quality button.on { background: #ff8a7a; color: #fff; }
+#fps { color: #8a93a6; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+#toast {
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+}
+
+#help {
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  font-size: 15px;
+  line-height: 2;
+  text-align: center;
+  transition: opacity 0.6s;
+}
+kbd {
+  display: inline-block;
+  min-width: 26px;
+  padding: 0 7px;
+  margin: 0 2px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #cfd6e2;
+  border-bottom-width: 3px;
+  font-family: inherit; /* 기본 고정폭 한글 글꼴은 W를 ₩로 그림 */
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+
+#attribution {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 12px;
+  color: #4a5366;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  pointer-events: auto;
+}
