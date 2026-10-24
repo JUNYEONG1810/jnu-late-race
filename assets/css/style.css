@@ -35,6 +35,23 @@ canvas { display: block; }
 .pill { border-radius: 999px; padding: 8px 20px; font-weight: 700; transition: opacity 0.3s; }
 .hidden { opacity: 0; }
 
+#labels { position: absolute; inset: 0; overflow: hidden; }
+.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 100%;
+  white-space: nowrap;
+  padding: 5px 12px 6px;
+  border-radius: 999px;
+  background: rgba(47, 61, 92, 0.88);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(20, 30, 50, 0.25);
+}
+.label::before { content: "📍 "; }
+
 #building-name {
   top: 18px;
   left: 50%;

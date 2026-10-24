@@ -8,6 +8,11 @@ import { Hud } from './hud.js';
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
 const SHOW_FPS = new URLSearchParams(location.search).has('fps');
+// 항상 이름표를 띄울 주요 건물: [OSM 이름, 화면에 보일 이름]
+const LANDMARKS = [
+  ['중앙도서관'], ['공과대 2호관'], ['농생대 1호관'], ['제1학생마루'],
+  ['생활관 6호관 보람학사', '생활관 6호관'], ['대학본부'],
+];
 
 // ---------- 렌더러, 장면, 빛 ----------
 
@@ -17,7 +22,7 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(SKY_HORIZON, 350, 1600);
+scene.fog = new THREE.Fog(SKY_HORIZON, 700, 3000);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 5000);
 
@@ -63,6 +68,7 @@ function setQuality(q) {
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = high;
   sun.castShadow = high;
+  world.trees.setDensity(high ? 1 : 0.5);
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
   try { localStorage.setItem('quality', q); } catch {}
@@ -100,11 +106,18 @@ const rig = new CameraRig(camera);
 const car = new Car();
 scene.add(car.object);
 let collider = null;
+let world = null;
 
 async function start() {
-  const campus = await loadCampus('data/campus.json?v=1');
-  buildMap(scene, campus);
+  const campus = await loadCampus('data/campus.json?v=2');
+  world = buildMap(scene, campus, { anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()) });
   collider = new Collider(campus);
+  for (const o of world.gateObstacles) collider.addObstacle(o);
+  for (const [osmName, label] of LANDMARKS) {
+    const b = campus.buildings.find((x) => x.name === osmName);
+    if (b) hud.addLabel(label || osmName, b.center[0], b.height + 5, b.center[1]);
+    else console.warn('이름표 건물을 찾지 못함:', osmName);
+  }
 
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
@@ -113,7 +126,7 @@ async function start() {
   rig.update(0, car);
   document.getElementById('loading').remove();
   hud.showHelp(7000);
-  window.game = { car, rig, collider, campus, renderer }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world }; // 콘솔에서 확인용
   renderer.setAnimationLoop(loop);
 }
 
@@ -137,6 +150,7 @@ function loop() {
   sun.position.copy(sun.target.position).add(SUN_OFFSET);
 
   hud.setSpeed(car.speedKmh);
+  hud.updateLabels(camera);
   nameTimer -= dt;
   if (nameTimer <= 0) {
     nameTimer = 0.2;

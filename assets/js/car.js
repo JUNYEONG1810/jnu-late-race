@@ -204,18 +204,20 @@ export class Collider {
     this.cell = cell;
     this.grid = new Map();
     this.edges = []; // [x1, z1, x2, z2, 건물 번호]
-    this.buildings = campus.buildings;
-    campus.buildings.forEach((b, bi) => {
-      const o = b.outline;
-      for (let i = 0; i < o.length; i++) {
-        const [x1, z1] = o[i];
-        const [x2, z2] = o[(i + 1) % o.length];
-        this.addEdge([x1, z1, x2, z2, bi]);
-      }
-    });
+    this.buildings = [];
+    for (const b of campus.buildings) this.addObstacle(b.outline, b.name);
     this.boundary = campus.boundary;
-    this.stamp = new Uint32Array(this.edges.length);
     this.query = 0;
+  }
+
+  // 건물이 아닌 장애물(정문 기둥 등)도 같은 방식으로 넣는다
+  addObstacle(outline, name = '') {
+    const bi = this.buildings.push({ name }) - 1;
+    for (let i = 0; i < outline.length; i++) {
+      const [x1, z1] = outline[i];
+      const [x2, z2] = outline[(i + 1) % outline.length];
+      this.addEdge([x1, z1, x2, z2, bi]);
+    }
   }
 
   addEdge(e) {
@@ -235,6 +237,7 @@ export class Collider {
   // (x, z)에서 r 안쪽 칸들의 변을 중복 없이 하나씩 넘겨 준다
   forEachEdge(x, z, r, fn) {
     const c = this.cell;
+    if (!this.stamp || this.stamp.length < this.edges.length) this.stamp = new Uint32Array(this.edges.length);
     const q = ++this.query;
     for (let gx = Math.floor((x - r) / c); gx <= Math.floor((x + r) / c); gx++) {
       for (let gz = Math.floor((z - r) / c); gz <= Math.floor((z + r) / c); gz++) {

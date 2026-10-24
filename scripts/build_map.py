@@ -18,24 +18,30 @@ LEVEL_M = 3.5
 DEFAULT_HEIGHT_M = 14.0
 EARTH_R = 6378137.0
 
-# 도로 종류별 폭(m)
-MAIN_ROADS = {"motorway", "trunk", "primary", "secondary", "tertiary",
-              "motorway_link", "trunk_link", "primary_link", "secondary_link", "tertiary_link"}
-NORMAL_ROADS = {"residential", "unclassified", "service", "living_street", "road"}
-FOOT_ROADS = {"footway", "path", "pedestrian", "steps", "cycleway", "track", "bridleway"}
+# 도로 종류별 폭(m)과 차도/보행로 구분
+CAR_ROAD_WIDTHS = {
+    "motorway": 16, "trunk": 14, "primary": 14, "secondary": 12, "tertiary": 10,
+    "motorway_link": 9, "trunk_link": 9, "primary_link": 9, "secondary_link": 8, "tertiary_link": 7,
+    "residential": 8, "unclassified": 8, "road": 8, "living_street": 7, "service": 7,
+}
+FOOT_ROAD_WIDTHS = {"footway": 3, "path": 2.5, "pedestrian": 4, "steps": 3,
+                    "cycleway": 3, "track": 3.5, "bridleway": 3}
 
 # 녹지(물 포함) 종류: OSM 태그 값 → 게임에서 쓸 kind
+# park/garden은 대부분 광장·조경 구역이라 게임에서 초록으로 칠하지 않고 나무만 심는다.
+# sports_centre·stadium·recreation_ground는 시설 전체 구역이라 넣지 않는다.
 GREEN_KINDS = {
     "landuse": {"grass": "grass", "meadow": "grass", "village_green": "grass",
-                "recreation_ground": "grass", "forest": "forest", "orchard": "farm",
+                "forest": "forest", "orchard": "farm",
                 "farmland": "farm", "allotments": "farm", "plant_nursery": "farm",
                 "greenhouse_horticulture": "farm", "flowerbed": "grass", "cemetery": "grass"},
-    "leisure": {"park": "park", "garden": "park", "pitch": "pitch", "track": "pitch",
-                "playground": "park", "golf_course": "grass", "sports_centre": "pitch",
-                "stadium": "pitch", "common": "grass", "nature_reserve": "forest"},
+    "leisure": {"park": "park", "garden": "park", "pitch": "pitch", "track": "track",
+                "playground": "park", "golf_course": "grass", "nature_reserve": "forest"},
     "natural": {"wood": "forest", "scrub": "forest", "grassland": "grass", "heath": "grass",
                 "water": "water", "wetland": "water"},
 }
+DIRT_SURFACES = {"dirt", "ground", "sand", "clay", "gravel", "fine_gravel", "compacted", "earth"}
+SPAWN_BEFORE_GATE_M = 20  # 정문 바깥쪽에서 출발해 문을 지나 들어가게
 
 
 # ---------- 좌표 변환과 기하 ----------
@@ -159,16 +165,12 @@ def parse_height(tags):
 
 
 def road_width(hw):
-    if hw in MAIN_ROADS:
-        return 8
-    if hw in NORMAL_ROADS:
-        return 6
-    if hw in FOOT_ROADS:
-        return 3
-    return None
+    return CAR_ROAD_WIDTHS.get(hw) or FOOT_ROAD_WIDTHS.get(hw)
 
 
 def green_kind(tags):
+    if tags.get("leisure") == "pitch":
+        return "dirt" if tags.get("surface") in DIRT_SURFACES else "pitch"
     for key, table in GREEN_KINDS.items():
         if tags.get(key) in table:
             return table[tags[key]]
@@ -235,7 +237,8 @@ def main():
                 run.append(pts[i])
             elif run:
                 if len(run) >= 2:
-                    road = {"id": f"w{el['id']}", "type": hw, "width": width, "points": rpts(run)}
+                    road = {"id": f"w{el['id']}", "type": hw, "car": hw in CAR_ROAD_WIDTHS,
+                            "width": width, "points": rpts(run)}
                     if tags.get("name"):
                         road["name"] = tags["name"]
                     roads.append(road)
@@ -311,7 +314,7 @@ def find_spawn(elements, proj, boundary):
     best = None
     for el in elements:
         tags = el.get("tags", {})
-        if el["type"] != "way" or road_width(tags.get("highway", "")) not in (6, 8):
+        if el["type"] != "way" or tags.get("highway") not in CAR_ROAD_WIDTHS:
             continue
         ids = el.get("nodes", [])
         if gate["id"] not in ids:
@@ -321,18 +324,20 @@ def find_spawn(elements, proj, boundary):
         for path in (pts[i:], pts[i::-1]):
             if len(path) < 2:
                 continue
-            pos, d = walk(path, 25)
+            pos, _ = walk(path, 25)
+            _, d0 = walk(path, 0.01)  # 정문에서 처음 나아가는 방향
             # 경계 안쪽으로 깊을수록 높은 점수 (밖이면 음수)
             score = dist_to_ring(pos, boundary) * (1 if point_in_poly(pos, boundary) else -1)
             if best is None or score > best[0]:
-                best = (score, pos, d)
+                best = (score, d0, CAR_ROAD_WIDTHS[tags["highway"]])
     if best is None:  # 정문을 지나는 차도가 없으면 캠퍼스 중심(0,0)을 향하게
         L = math.hypot(*gp) or 1
-        d = (-gp[0] / L, -gp[1] / L)
-        pos = (gp[0] + d[0] * 25, gp[1] + d[1] * 25)
+        d, road_w = (-gp[0] / L, -gp[1] / L), 8
     else:
-        _, pos, d = best
-    return {"gateNode": gate["id"], "gate": [r1(gp[0]), r1(gp[1])],
+        _, d, road_w = best
+    # 정문 바깥에서 출발해 문을 바라보게
+    pos = (gp[0] - d[0] * SPAWN_BEFORE_GATE_M, gp[1] - d[1] * SPAWN_BEFORE_GATE_M)
+    return {"gateNode": gate["id"], "gate": [r1(gp[0]), r1(gp[1])], "gateRoadWidth": road_w,
             "position": [r1(pos[0]), r1(pos[1])], "dir": [round(d[0], 3), round(d[1], 3)]}
 
 
