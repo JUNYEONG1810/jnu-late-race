@@ -1,32 +1,46 @@
-// 귀여운 저폴리 차, 아케이드 주행, 건물 충돌.
-// 차의 앞은 로컬 +z. heading h일 때 앞 방향 = (sin h, cos h) (x 동쪽, z 남쪽).
+// 미니 굴착기(미니 포크레인) 모델, 아케이드 주행, 부스터 게이지, 건물 충돌.
+// 차량의 앞은 로컬 +z. heading h일 때 앞 방향 = (sin h, cos h) (x 동쪽, z 남쪽).
 import * as THREE from 'three';
 
 export const DRIVE = {
   maxSpeed: 60 / 3.6,    // 기본 최고 속도 (m/s)
-  boostSpeed: 85 / 3.6,  // Shift 부스트 최고 속도
+  boostSpeed: 120 / 3.6, // 부스터 최고 속도
   reverseSpeed: 20 / 3.6,
   accel: 9,              // m/s²
-  boostAccel: 14,
+  boostAccel: 24,
   brake: 22,
   coastDrag: 3.5,
   handbrake: 9,
   steerRate: 2.3,        // rad/s (저속 기준 최대 회전 속도)
   grip: 10,              // 옆 미끄러짐이 사라지는 빠르기
   driftGrip: 1.6,        // Space 누를 때
-  radius: 1.6,           // 충돌 원 반지름 (m)
+  radius: 1.9,           // 충돌 원 반지름 (m) — 앞으로 뻗은 팔까지 덮도록
+  radiusOffset: 0.5,     // 충돌 원 중심을 앞으로 옮기는 거리 (m)
   wallMargin: 40,        // 캠퍼스 경계 밖으로 나갈 수 있는 거리 (m)
 };
 
-const WHEEL_R = 0.38;
+export const BOOST = {
+  fillTime: 15, // 빈 게이지가 저절로 가득 차는 시간 (s)
+  useTime: 4,   // 가득 찬 게이지를 다 쓰는 시간 (s)
+};
+
+export const EXCAVATOR_COLOR = '#f5b82e';
+
+// 궤도 고리: 앞뒤 휠 중심 사이 반 길이, 고리 반지름, 중심 높이
+const TRACK = { half: 1.0, r: 0.34, y: 0.37, x: 0.72, cleats: 18 };
+const WHEEL_R = 0.3;
+// 팔 기본 각도 (rad, rotation.x): 붐은 앞위로, 암은 아래로 꺾이고, 버킷은 안쪽으로
+const ARM_POSE = { boom: -0.75, stick: 1.95, bucket: 0.5 };
 
 export class Car {
-  constructor(color = '#ff7b7b') {
+  constructor(color = EXCAVATOR_COLOR) {
     this.object = new THREE.Group();
     this.body = new THREE.Group();
     this.object.add(this.body);
     this.wheels = [];
-    this.frontPivots = [];
+    this.tracks = [];
+    this.trackS = 0;
+    this.spring = { boom: { x: 0, v: 0 }, stick: { x: 0, v: 0 }, bucket: { x: 0, v: 0 } };
     this.buildModel(color);
 
     this.pos = new THREE.Vector2();
@@ -34,10 +48,20 @@ export class Car {
     this.heading = 0;
     this.steer = 0;
     this.forwardSpeed = 0;
+    this.lateralSpeed = 0;
     this.braking = false;
     this.drifting = false;
-    this.boosting = false;
     this.hitTimer = 0;
+
+    this.boost = 1;          // 게이지 0~1 (처음엔 가득)
+    this.boosting = false;
+    this.boostLocked = false; // 게이지가 비면 Shift를 뗐다 다시 눌러야 함
+    this.boostFx = 0;         // 효과 세기 0~1 (부드럽게 켜지고 꺼짐)
+    this.onBoostStart = null;
+
+    this.prevSpeed = 0;
+    this.accel = 0;
+    this.time = 0;
   }
 
   buildModel(color) {
@@ -51,49 +75,118 @@ export class Car {
     };
 
     this.paint = mat(color);
-    const glass = mat('#4f6f94');
-    const dark = mat('#3a3f48');
-    const white = mat('#fbfbf6');
+    const dark = mat('#3a3d44');
+    const steel = mat('#9aa0a8');
+    const rubber = mat('#232529');
+    const glass = mat('#7fb0d6', { transparent: true, opacity: 0.75 });
 
-    box(1.84, 0.62, 3.5, this.paint, 0, 0.7, 0);          // 차체
-    this.cabin = [
-      box(1.6, 0.58, 1.85, glass, 0, 1.28, -0.25),        // 유리 부분
-      box(1.66, 0.14, 1.95, this.paint, 0, 1.62, -0.25),  // 지붕
-    ];
-    box(1.9, 0.26, 0.3, dark, 0, 0.5, 1.72);              // 앞 범퍼
-    box(1.9, 0.26, 0.3, dark, 0, 0.5, -1.72);             // 뒤 범퍼
-    for (const x of [-0.6, 0.6]) box(0.36, 0.18, 0.06, white, x, 0.82, 1.76); // 전조등
-
-    this.brakeMat = mat('#c0262c', { emissive: '#ff2020', emissiveIntensity: 0.15 });
-    for (const x of [-0.65, 0.65]) box(0.4, 0.16, 0.06, this.brakeMat, x, 0.84, -1.76);
-
-    const tireGeo = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.3, 14).rotateZ(Math.PI / 2);
-    const hubGeo = new THREE.BoxGeometry(0.32, 0.08, 0.5);
-    const tireMat = mat('#2c2f36');
-    const hubMat = mat('#d9dde3');
-    for (const [x, z, front] of [[0.86, 1.15, true], [-0.86, 1.15, true], [0.86, -1.15, false], [-0.86, -1.15, false]]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(x, WHEEL_R, z);
-      const wheel = new THREE.Group();
-      const tire = new THREE.Mesh(tireGeo, tireMat);
-      tire.castShadow = true;
-      const hub = new THREE.Mesh(hubGeo, hubMat); // 돌아가는 게 보이도록 바퀴 휠에 막대
-      hub.position.x = Math.sign(x) * 0.12;
-      wheel.add(tire, hub);
-      pivot.add(wheel);
-      this.object.add(pivot);
-      this.wheels.push(wheel);
-      if (front) this.frontPivots.push(pivot);
+    // ---- 궤도 (몸체 기울기와 상관없이 땅에 붙어 있게 object에 바로) ----
+    const cleatGeo = new THREE.BoxGeometry(0.5, 0.07, 0.2);
+    const wheelGeo = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.46, 12).rotateZ(Math.PI / 2);
+    for (const sx of [1, -1]) {
+      box(0.4, 0.42, TRACK.half * 2, dark, sx * TRACK.x, TRACK.y, 0, this.object); // 궤도 틀
+      for (const z of [-TRACK.half, TRACK.half]) {
+        const wheel = new THREE.Group();
+        wheel.position.set(sx * TRACK.x, TRACK.y, z);
+        wheel.add(new THREE.Mesh(wheelGeo, steel));
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.1, 0.5), dark); // 도는 게 보이게
+        wheel.add(spoke);
+        this.object.add(wheel);
+        this.wheels.push(wheel);
+      }
+      const cleats = new THREE.InstancedMesh(cleatGeo, rubber, TRACK.cleats);
+      cleats.castShadow = true;
+      cleats.frustumCulled = false;
+      cleats.position.x = sx * TRACK.x;
+      this.object.add(cleats);
+      this.tracks.push(cleats);
     }
+    this.updateTracks();
+
+    // ---- 윗몸 (돌림판 위) ----
+    const turntable = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.16, 16), dark);
+    turntable.position.y = 0.8;
+    this.body.add(turntable);
+    box(1.5, 0.56, 1.75, this.paint, 0, 1.15, -0.1);         // 몸체
+    box(1.56, 0.52, 0.42, this.paint, 0, 1.12, -1.08);       // 뒤 균형추
+    box(0.62, 0.3, 0.8, this.paint, -0.42, 1.57, -0.5);      // 엔진 덮개
+
+    // 운전석 캐빈 (왼쪽 = 로컬 +x)
+    const cab = { x: 0.34, y: 1.9, z: 0.2, w: 0.8, h: 0.95, d: 0.95 };
+    this.cabin = [box(cab.w - 0.06, cab.h, cab.d - 0.06, glass, cab.x, cab.y, cab.z)];
+    for (const [px, pz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      this.cabin.push(box(0.07, cab.h, 0.07, this.paint, cab.x + px * cab.w / 2, cab.y, cab.z + pz * cab.d / 2));
+    }
+    this.cabin.push(box(cab.w + 0.12, 0.09, cab.d + 0.14, this.paint, cab.x, cab.y + cab.h / 2 + 0.04, cab.z));
+
+    // 배기구 (위로 솟음) + 불꽃
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.75, 10), steel);
+    pipe.position.set(-0.5, 1.95, -0.72);
+    pipe.castShadow = true;
+    this.body.add(pipe);
+    this.flame = this.buildFlame();
+    this.flame.position.set(-0.5, 2.33, -0.72);
+    this.body.add(this.flame);
+
+    // 브레이크등 (균형추 뒤)
+    this.brakeMat = mat('#c0262c', { emissive: '#ff2020', emissiveIntensity: 0.15 });
+    for (const x of [-0.55, 0.55]) box(0.24, 0.12, 0.05, this.brakeMat, x, 1.2, -1.31);
+
+    // ---- 팔: 붐 → 암 → 버킷 (각 마디가 스프링으로 흔들림) ----
+    this.boomPivot = new THREE.Group();
+    this.boomPivot.position.set(-0.3, 1.25, 0.72);
+    this.body.add(this.boomPivot);
+    box(0.24, 0.26, 1.6, this.paint, 0, 0, 0.8, this.boomPivot);
+    box(0.08, 0.08, 1.1, steel, 0, 0.18, 0.6, this.boomPivot); // 유압 실린더
+
+    this.stickPivot = new THREE.Group();
+    this.stickPivot.position.set(0, 0, 1.6);
+    this.boomPivot.add(this.stickPivot);
+    box(0.2, 0.22, 1.25, this.paint, 0, 0, 0.62, this.stickPivot);
+
+    this.bucketPivot = new THREE.Group();
+    this.bucketPivot.position.set(0, 0, 1.25);
+    this.stickPivot.add(this.bucketPivot);
+    box(0.72, 0.08, 0.5, dark, 0, -0.04, 0.22, this.bucketPivot);   // 바닥
+    box(0.72, 0.42, 0.08, dark, 0, 0.17, 0.02, this.bucketPivot);   // 뒤판
+    for (const sx of [-1, 1]) box(0.06, 0.36, 0.48, dark, sx * 0.36, 0.12, 0.22, this.bucketPivot); // 옆판
+    for (let i = 0; i < 4; i++) box(0.08, 0.06, 0.14, steel, -0.27 + i * 0.18, -0.04, 0.53, this.bucketPivot); // 이빨
+    this.poseArm();
+  }
+
+  buildFlame() {
+    const group = new THREE.Group();
+    group.rotation.x = -0.55; // 위·뒤로 기울여 뿜음
+    const fire = (r, h, c) => {
+      const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10).translate(0, h / 2, 0),
+        new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, depthWrite: false }));
+      group.add(m);
+      return m;
+    };
+    // 밝은 하늘 앞에서도 주황이 보이도록 일반 합성(가산 합성은 하얗게 날아감)
+    fire(0.3, 1.9, '#ff5a14');
+    fire(0.18, 1.2, '#ffb02e');
+    fire(0.09, 0.7, '#fff3a0');
+    group.visible = false;
+    return group;
   }
 
   setColor(color) {
     this.paint.color.set(color);
   }
 
-  // 운전석 시점에서는 유리와 지붕을 숨겨 앞이 보이게
+  // 운전석 시점에서는 캐빈(유리·기둥·지붕)을 숨겨 앞이 보이게
   setCockpitView(on) {
     for (const m of this.cabin) m.visible = !on;
+  }
+
+  // 부스터 게이지 채우기 (amount: 0~1, 1이면 가득). 지각 모드의 미션 완료 보상에 쓴다
+  addBoost(amount = 1) {
+    this.boost = Math.min(1, this.boost + amount);
+  }
+
+  get boostReady() {
+    return this.boost >= 1;
   }
 
   place(x, z, dirX, dirZ) {
@@ -114,19 +207,21 @@ export class Car {
   // input: { up, down, left, right, drift, boost } (불리언)
   update(dt, input, collider) {
     const D = DRIVE;
+    this.updateBoost(dt, input.boost);
+
     const f = this.forward();
-    const r = new THREE.Vector2(f.y, -f.x); // 옆 방향 (차 기준 왼쪽)
+    const r = new THREE.Vector2(f.y, -f.x); // 옆 방향 (차량 기준 왼쪽)
     let fs = this.vel.dot(f);
     let lat = this.vel.dot(r);
 
-    this.boosting = input.boost && input.up;
+    const throttle = input.up || this.boosting; // 부스터는 Shift만 눌러도 앞으로
     const top = this.boosting ? D.boostSpeed : D.maxSpeed;
     this.braking = false;
 
-    if (input.up) {
+    if (throttle) {
       if (fs < -0.5) { fs += D.brake * dt; this.braking = true; }
       else if (fs < top) fs = Math.min(top, fs + (this.boosting ? D.boostAccel : D.accel) * dt);
-      else fs = Math.max(top, fs - D.coastDrag * dt); // 부스트 끝나면 천천히 줄어듦
+      else fs = Math.max(top, fs - D.coastDrag * 2 * dt); // 부스터 끝나면 천천히 줄어듦
     } else if (input.down) {
       if (fs > 0.5) { fs -= D.brake * dt; this.braking = true; }
       else fs = Math.max(-D.reverseSpeed, fs - D.accel * 0.7 * dt);
@@ -156,8 +251,11 @@ export class Car {
     this.pos.addScaledVector(this.vel, dt);
 
     if (collider) {
-      const n = collider.resolve(this.pos, D.radius);
+      // 충돌 원은 팔까지 덮도록 중심을 앞으로 옮겨서 검사
+      const center = this.pos.clone().addScaledVector(nf, D.radiusOffset);
+      const n = collider.resolve(center, D.radius);
       if (n) {
+        this.pos.copy(center).addScaledVector(nf, -D.radiusOffset);
         const vn = this.vel.dot(n);
         if (vn < 0) {
           this.vel.addScaledVector(n, -vn * 1.25); // 벽 쪽 속도를 없애고 살짝 튕김
@@ -179,22 +277,99 @@ export class Car {
     this.syncObject();
   }
 
+  updateBoost(dt, held) {
+    if (!held) this.boostLocked = false;
+    const was = this.boosting;
+    this.boosting = held && !this.boostLocked && this.boost > 0;
+    if (this.boosting) {
+      this.boost = Math.max(0, this.boost - dt / BOOST.useTime);
+      if (this.boost === 0) this.boostLocked = true; // 비면 끝
+    } else {
+      this.boost = Math.min(1, this.boost + dt / BOOST.fillTime);
+    }
+    if (this.boosting && !was && this.onBoostStart) this.onBoostStart();
+    // 효과는 빨리 켜지고 천천히 꺼진다
+    const goal = this.boosting ? 1 : 0;
+    this.boostFx += (goal - this.boostFx) * Math.min(1, dt * (this.boosting ? 6 : 2.2));
+  }
+
   animate(dt) {
+    this.time += dt;
+
+    // 궤도: 위쪽은 앞으로, 아래쪽은 뒤로 (땅에 붙어 있는 것처럼)
+    this.trackS += this.forwardSpeed * dt;
+    this.updateTracks();
     const spin = (this.forwardSpeed * dt) / WHEEL_R;
     for (const w of this.wheels) w.rotation.x += spin;
-    for (const p of this.frontPivots) p.rotation.y = this.steer * 0.45;
-    // 차체가 살짝 기울어 귀엽게
+
+    // 앞뒤 가속도 → 팔 스프링 (가속하면 뒤로 젖혀지고, 브레이크·충돌하면 앞으로 출렁)
+    const a = (this.forwardSpeed - this.prevSpeed) / Math.max(dt, 1e-4);
+    this.prevSpeed = this.forwardSpeed;
+    this.accel += (a - this.accel) * Math.min(1, dt * 12);
+    const S = this.spring;
+    const flutter = this.boosting ? Math.sin(this.time * 34) * 22 + Math.sin(this.time * 13) * 10 : 0;
+    step(S.boom, 40, 5, -this.accel * 0.8, dt, 0.45);
+    step(S.stick, 55, 5, -this.accel * 1.2, dt, 0.6);
+    step(S.bucket, 70, 3, -this.accel * 1.5 + flutter, dt, 0.8);
+    this.poseArm();
+
+    // 몸체가 살짝 기울어 귀엽게
     const roll = THREE.MathUtils.clamp(-this.lateralSpeed * 0.02 + this.steer * this.forwardSpeed * 0.004, -0.12, 0.12);
     this.body.rotation.z += (roll - this.body.rotation.z) * Math.min(1, dt * 6);
-    const pitch = this.braking ? 0.05 : (this.boosting ? -0.04 : 0);
+    const pitch = this.braking ? 0.05 : (this.boosting ? -0.05 : 0);
     this.body.rotation.x += (pitch - this.body.rotation.x) * Math.min(1, dt * 6);
     this.brakeMat.emissiveIntensity = this.braking ? 2.5 : 0.15;
+
+    // 배기구 불꽃: 부스터 세기만큼, 매 프레임 조금씩 일렁임
+    const fx = this.boostFx;
+    this.flame.visible = fx > 0.03;
+    if (this.flame.visible) {
+      const flick = 0.75 + Math.random() * 0.5;
+      this.flame.scale.set(fx * (0.8 + Math.random() * 0.3), fx * flick, fx * (0.8 + Math.random() * 0.3));
+    }
+  }
+
+  poseArm() {
+    this.boomPivot.rotation.x = ARM_POSE.boom + this.spring.boom.x;
+    this.stickPivot.rotation.x = ARM_POSE.stick + this.spring.stick.x;
+    this.bucketPivot.rotation.x = ARM_POSE.bucket + this.spring.bucket.x;
+  }
+
+  // 궤도 무늬 조각들을 고리(위 직선 → 앞 반원 → 아래 직선 → 뒤 반원)를 따라 배치
+  updateTracks() {
+    const { half: a, r: R, y: y0, cleats: n } = TRACK;
+    const P = 4 * a + 2 * Math.PI * R;
+    const m = tmpMatrix, q = tmpQuat, p = tmpVec;
+    for (let i = 0; i < n; i++) {
+      let s = (((this.trackS + (i * P) / n) % P) + P) % P;
+      let y, z, ny, nz;
+      if (s < 2 * a) { y = y0 + R; z = -a + s; ny = 1; nz = 0; }
+      else if ((s -= 2 * a) < Math.PI * R) { const t = s / R; ny = Math.cos(t); nz = Math.sin(t); y = y0 + R * ny; z = a + R * nz; }
+      else if ((s -= Math.PI * R) < 2 * a) { y = y0 - R; z = a - s; ny = -1; nz = 0; }
+      else { const t = (s - 2 * a) / R; ny = -Math.cos(t); nz = -Math.sin(t); y = y0 + R * ny; z = -a + R * nz; }
+      q.setFromAxisAngle(X_AXIS, Math.atan2(nz, ny));
+      m.compose(p.set(0, y, z), q, ONE);
+      for (const t of this.tracks) t.setMatrixAt(i, m);
+    }
+    for (const t of this.tracks) t.instanceMatrix.needsUpdate = true;
   }
 
   syncObject() {
     this.object.position.set(this.pos.x, 0, this.pos.y);
     this.object.rotation.y = this.heading;
   }
+}
+
+const tmpMatrix = new THREE.Matrix4();
+const tmpQuat = new THREE.Quaternion();
+const tmpVec = new THREE.Vector3();
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const ONE = new THREE.Vector3(1, 1, 1);
+
+// 감쇠 스프링 한 걸음: 힘 → 각도 변위 x (최대 ±limit)
+function step(s, k, c, force, dt, limit) {
+  s.v += (-k * s.x - c * s.v + force) * dt;
+  s.x = THREE.MathUtils.clamp(s.x + s.v * dt, -limit, limit);
 }
 
 // 건물 외곽선과 캠퍼스 경계로 차(원)를 밀어내는 충돌 처리.

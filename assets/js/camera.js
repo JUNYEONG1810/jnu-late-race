@@ -35,24 +35,25 @@ export class CameraRig {
     const pos = new THREE.Vector3();
     const look = new THREE.Vector3();
     let fov = 60;
+    const boost = car.boostFx; // 부스터 효과 세기 0~1
 
     if (id === 'chase') {
-      const speed01 = Math.min(1, car.speedKmh / 85);
-      const back = 8 + speed01 * 2;
-      pos.set(cx - fx * back, 3.6 + speed01 * 0.8, cz - fz * back);
-      look.set(cx + fx * 4, 1.2, cz + fz * 4);
-      fov = 60 + speed01 * 10 + (car.boosting ? 4 : 0);
+      const speed01 = Math.min(1, car.speedKmh / 60);
+      const back = 8.5 + speed01 * 1.5;
+      pos.set(cx - fx * back, 4 + speed01 * 0.6, cz - fz * back);
+      look.set(cx + fx * 4, 1.6, cz + fz * 4);
+      fov = 60 + speed01 * 8 + boost * 16;
     } else if (id === 'top') {
       pos.set(cx, 110, cz + 45);
       look.set(cx, 0, cz);
-      fov = 50;
+      fov = 50 + boost * 10;
     } else {
-      // 운전석 (왼쪽 좌석) — 흔들리지 않게 바로 따라감
+      // 운전석 캐빈 (왼쪽 좌석) — 흔들리지 않게 바로 따라감
       const hx = Math.sin(car.heading), hz = Math.cos(car.heading);
-      const sx = 0.38; // 차 기준 왼쪽 = 로컬 +x
-      pos.set(cx + hz * sx + hx * 0.3, 1.45, cz - hx * sx + hz * 0.3);
-      look.set(pos.x + hx * 10, 1.2, pos.z + hz * 10);
-      fov = 65;
+      const sx = 0.34; // 차량 기준 왼쪽 = 로컬 +x
+      pos.set(cx + hz * sx + hx * 0.35, 2.05, cz - hx * sx + hz * 0.35);
+      look.set(pos.x + hx * 10, 1.5, pos.z + hz * 10);
+      fov = 65 + boost * 20;
     }
     car.setCockpitView(id === 'driver');
 
@@ -61,7 +62,7 @@ export class CameraRig {
       this.look.copy(look);
       this.snap = false;
     } else {
-      const k = 1 - Math.exp(-dt * 6);
+      const k = 1 - Math.exp(-dt * (6 + boost * 10)); // 부스터 때는 더 바짝 따라감
       this.pos.lerp(pos, k);
       this.look.lerp(look, k);
     }
@@ -70,6 +71,13 @@ export class CameraRig {
       this.camera.updateProjectionMatrix();
     }
     this.camera.position.copy(this.pos);
+    // 부스터 중 카메라 미세 흔들림
+    if (boost > 0.02) {
+      const a = 0.07 * boost;
+      this.camera.position.x += (Math.random() - 0.5) * a;
+      this.camera.position.y += (Math.random() - 0.5) * a;
+      this.camera.position.z += (Math.random() - 0.5) * a;
+    }
     this.camera.lookAt(this.look);
   }
 }

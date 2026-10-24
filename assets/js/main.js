@@ -4,6 +4,7 @@ import { loadCampus, buildMap } from './map.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
+import { unlockAudio, playBoost } from './voice.js';
 
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
@@ -81,6 +82,7 @@ const GAME_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
 addEventListener('keydown', (e) => {
   if (GAME_KEYS.includes(e.code)) e.preventDefault();
   if (e.repeat) return;
+  unlockAudio();
   keys.add(e.code);
   if (e.code === 'KeyC') hud.toast(`시점: ${rig.nextMode().label}`);
   if (e.code === 'KeyH') hud.showHelp();
@@ -104,6 +106,7 @@ function readInput() {
 const hud = new Hud({ onQuality: setQuality });
 const rig = new CameraRig(camera);
 const car = new Car();
+car.onBoostStart = playBoost;
 scene.add(car.object);
 let collider = null;
 let world = null;
@@ -150,6 +153,8 @@ function loop() {
   sun.position.copy(sun.target.position).add(SUN_OFFSET);
 
   hud.setSpeed(car.speedKmh);
+  hud.setBoost(car.boost, car.boosting ? 'active' : car.boostReady ? 'ready' : '');
+  hud.drawSpeedLines(car.boostFx);
   hud.updateLabels(camera);
   nameTimer -= dt;
   if (nameTimer <= 0) {

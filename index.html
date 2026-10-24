@@ -4,15 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전남대 지각 레이스</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=2">
+  <link rel="stylesheet" href="assets/css/style.css?v=3">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=2",
-      "./assets/js/car.js": "./assets/js/car.js?v=2",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=2",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=2"
+      "./assets/js/map.js": "./assets/js/map.js?v=3",
+      "./assets/js/car.js": "./assets/js/car.js?v=3",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=3",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=3",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=3"
     }
   }
   </script>
@@ -21,6 +22,7 @@
   <div id="loading">캠퍼스 불러오는 중…</div>
 
   <div id="hud">
+    <canvas id="speedlines"></canvas>
     <div id="labels"></div>
     <div id="building-name" class="pill hidden"></div>
 
@@ -37,15 +39,20 @@
 
     <div id="toast" class="pill hidden"></div>
 
+    <div id="boost-gauge" class="panel">
+      <span class="boost-text">BOOST</span>
+      <div class="boost-bar"><div class="boost-fill"></div></div>
+    </div>
+
     <div id="help" class="panel">
       <div><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 운전</div>
-      <div><kbd>Space</kbd> 브레이크·드리프트 &nbsp; <kbd>Shift</kbd> 부스트</div>
+      <div><kbd>Space</kbd> 브레이크·드리프트 &nbsp; <kbd>Shift</kbd> 부스터 (게이지 사용)</div>
       <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
     </div>
 
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=2"></script>
+  <script type="module" src="assets/js/main.js?v=3"></script>
 </body>
 </html>

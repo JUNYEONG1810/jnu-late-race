@@ -35,7 +35,46 @@ canvas { display: block; }
 .pill { border-radius: 999px; padding: 8px 20px; font-weight: 700; transition: opacity 0.3s; }
 .hidden { opacity: 0; }
 
+#speedlines { position: absolute; inset: 0; width: 100%; height: 100%; }
 #labels { position: absolute; inset: 0; overflow: hidden; }
+
+#boost-gauge {
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: 380px;
+  padding: 8px 14px 10px;
+  text-align: center;
+}
+.boost-text {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #6b7385;
+}
+.boost-bar {
+  height: 14px;
+  border-radius: 999px;
+  background: #e3e7ee;
+  overflow: hidden;
+}
+.boost-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff9a3c, #ffd23f);
+}
+#boost-gauge.ready .boost-text { color: #ff7a1a; }
+#boost-gauge.ready { animation: boost-glow 0.8s ease-in-out infinite alternate; }
+#boost-gauge.ready .boost-fill { background: linear-gradient(90deg, #ffb13c, #fff07a, #ffb13c); }
+#boost-gauge.active .boost-text { color: #e8412c; }
+#boost-gauge.active .boost-fill { background: linear-gradient(90deg, #ff4b2b, #ff9a3c); }
+@keyframes boost-glow {
+  from { box-shadow: 0 4px 14px rgba(40, 60, 90, 0.18); }
+  to { box-shadow: 0 0 22px 4px rgba(255, 190, 40, 0.85); }
+}
 .label {
   position: absolute;
   left: 0;
@@ -102,7 +141,7 @@ canvas { display: block; }
 
 #help {
   left: 50%;
-  bottom: 24px;
+  bottom: 92px;
   transform: translateX(-50%);
   padding: 14px 22px;
   font-size: 15px;
