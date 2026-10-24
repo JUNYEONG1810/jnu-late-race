@@ -1,0 +1,6 @@
+data/raw/
+cars/private/
+__pycache__/
+.venv/
+Thumbs.db
+desktop.ini
