@@ -131,6 +131,123 @@ export class Hud {
     }
   }
 
+  // ---------- 지각 모드 ----------
+
+  // handlers: { start, resume, retry, exit }
+  bindLate(handlers) {
+    const click = (el, fn) => el.addEventListener('click', () => { el.blur(); fn(); });
+    click($('late-start'), handlers.start);
+    for (const btn of document.querySelectorAll('#pause-menu button, #result button')) {
+      click(btn, handlers[btn.dataset.act]);
+    }
+    this.timerEl = $('timer');
+    this.listEl = $('mission-list');
+    this.tagEl = $('target-tag');
+    this.arrowEl = $('target-arrow');
+    this.hintEl = $('mission-hint');
+    this.progressEl = $('mission-progress');
+    this.countdownEl = $('countdown');
+    this.lastTimer = null;
+  }
+
+  setLateMode(on) {
+    document.body.classList.toggle('late', on);
+    if (!on) {
+      this.showPause(false);
+      this.showResult(null);
+      this.showProgress(null);
+      this.setHint(null);
+      this.showCountdown(null);
+    }
+  }
+
+  // remaining: 남은 초 (음수면 지각)
+  setTimer(remaining) {
+    // 남은 시간은 올림, 지각(올라가는 시간)은 내림 → 결과 화면과 같은 숫자
+    const s = remaining >= 0 ? Math.ceil(remaining) : Math.floor(-remaining);
+    const text = `${remaining < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    if (text === this.lastTimer) return;
+    this.lastTimer = text;
+    this.timerEl.textContent = remaining < 0 ? `지각 ${text}` : text;
+    this.timerEl.classList.toggle('warn', remaining >= 0 && remaining <= 30);
+    this.timerEl.classList.toggle('over', remaining < 0);
+  }
+
+  // missions: [{emoji, label, title}], current: 지금 미션 번호 (이전 것은 완료)
+  setMissions(missions, current) {
+    this.listEl.innerHTML = '<h3>오늘의 할 일</h3>' + missions.map((m, i) => {
+      const cls = i < current ? 'done' : i === current ? 'current' : '';
+      const check = i < current ? '✅' : m.emoji;
+      return `<div class="mission-item ${cls}"><span class="check">${check}</span>`
+        + `<span><b>${m.label}</b><br><span class="title">${m.title}</span></span></div>`;
+    }).join('');
+  }
+
+  // 목표 위치 표시: 화면 안이면 목표 위에 거리 꼬리표, 밖이면 가장자리에 방향 화살표
+  updateTarget(camera, pos, dist) {
+    if (!pos) {
+      this.tagEl.style.display = this.arrowEl.style.display = 'none';
+      return;
+    }
+    tmp.copy(pos).project(camera);
+    const behind = tmp.z > 1;
+    let x = behind ? -tmp.x : tmp.x, y = behind ? -tmp.y : tmp.y;
+    const w = innerWidth / 2, h = innerHeight / 2;
+    const label = `${Math.round(dist)}m`;
+    if (!behind && Math.abs(x) < 0.9 && Math.abs(y) < 0.85) {
+      this.arrowEl.style.display = 'none';
+      this.tagEl.style.display = '';
+      this.tagEl.textContent = label;
+      this.tagEl.style.transform = `translate(${x * w + w}px, ${-y * h + h}px) translate(-50%, -100%)`;
+      return;
+    }
+    this.tagEl.style.display = 'none';
+    this.arrowEl.style.display = '';
+    if (behind && Math.abs(y) < 0.2) y = -0.2; // 바로 뒤면 아래쪽에 표시
+    const sx = x * w, sy = -y * h;
+    const k = Math.min((w - 60) / Math.max(Math.abs(sx), 1e-3), (h - 70) / Math.max(Math.abs(sy), 1e-3));
+    this.arrowEl.style.transform = `translate(${w + sx * k}px, ${h + sy * k}px)`;
+    this.arrowEl.firstElementChild.style.transform = `rotate(${Math.atan2(sy, sx)}rad)`;
+    this.arrowEl.lastElementChild.textContent = label;
+  }
+
+  setHint(text) {
+    if (text) this.hintEl.textContent = text;
+    this.hintEl.classList.toggle('hidden', !text);
+  }
+
+  // mission: { emoji, line }, t: 0~1 진행 (null이면 숨김)
+  showProgress(mission, t = 0) {
+    if (!mission) { this.progressEl.classList.add('hidden'); return; }
+    this.progressEl.classList.remove('hidden');
+    this.progressEl.querySelector('.mp-emoji').textContent = mission.emoji;
+    this.progressEl.querySelector('.mp-line').textContent = t >= 1 ? mission.line : `${mission.title} 중…`;
+    this.progressEl.querySelector('.mp-fill').style.width = `${Math.min(1, t) * 100}%`;
+  }
+
+  showCountdown(text) {
+    this.countdownEl.textContent = text || '';
+  }
+
+  showPause(on) {
+    $('pause-menu').classList.toggle('hidden', !on);
+  }
+
+  // r: { grade, elapsed, remaining } 또는 null
+  showResult(r) {
+    const el = $('result');
+    el.classList.toggle('hidden', !r);
+    if (!r) return;
+    const fmt = (s) => `${Math.floor(Math.abs(s) / 60)}분 ${String(Math.floor(Math.abs(s) % 60)).padStart(2, '0')}초`;
+    const ok = r.remaining >= 0;
+    el.querySelector('.res-title').textContent = ok ? '늦지 않았다!' : '지각…';
+    const g = el.querySelector('.res-grade');
+    g.textContent = r.grade;
+    g.className = `res-grade ${ok ? 'good' : 'bad'}`;
+    el.querySelector('.res-times').innerHTML = `걸린 시간 <b>${fmt(r.elapsed)}</b><br>`
+      + (ok ? `남은 시간 <b>${fmt(r.remaining)}</b>` : `<b>${fmt(r.remaining)}</b> 늦음`);
+  }
+
   setFps(fps) {
     this.fpsEl.classList.remove('hidden');
     this.fpsEl.textContent = `${fps} fps`;

@@ -4,16 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전남대 지각 레이스</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=3">
+  <link rel="stylesheet" href="assets/css/style.css?v=4">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=3",
-      "./assets/js/car.js": "./assets/js/car.js?v=3",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=3",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=3",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=3"
+      "./assets/js/map.js": "./assets/js/map.js?v=4",
+      "./assets/js/car.js": "./assets/js/car.js?v=4",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=4",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=4",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=4",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=4",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=4"
     }
   }
   </script>
@@ -50,9 +52,45 @@
       <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
     </div>
 
+    <button id="late-start" class="panel">🏃 지각 모드 시작 <kbd>L</kbd></button>
+
+    <!-- 지각 모드에서만 보이는 것들 -->
+    <div id="late-ui">
+      <div id="timer" class="pill">7:00</div>
+      <div id="mission-list" class="panel"></div>
+      <div id="target-tag" class="pill"></div>
+      <div id="target-arrow"><div class="arrow">➤</div><span></span></div>
+      <div id="mission-hint" class="pill hidden"></div>
+      <div id="mission-progress" class="panel hidden">
+        <div class="mp-emoji"></div>
+        <div class="mp-line"></div>
+        <div class="mp-bar"><div class="mp-fill"></div></div>
+      </div>
+      <div id="countdown"></div>
+    </div>
+
+    <div id="pause-menu" class="overlay hidden">
+      <div class="dialog panel">
+        <h2>일시정지</h2>
+        <button data-act="resume">계속</button>
+        <button data-act="retry">다시하기</button>
+        <button data-act="exit">자유 주행으로</button>
+      </div>
+    </div>
+
+    <div id="result" class="overlay hidden">
+      <div class="dialog panel">
+        <h2 class="res-title"></h2>
+        <div class="res-grade"></div>
+        <div class="res-times"></div>
+        <button data-act="retry">다시하기</button>
+        <button data-act="exit">자유 주행으로</button>
+      </div>
+    </div>
+
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=3"></script>
+  <script type="module" src="assets/js/main.js?v=4"></script>
 </body>
 </html>

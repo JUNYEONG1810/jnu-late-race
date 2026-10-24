@@ -5,14 +5,15 @@ import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
 import { unlockAudio, playBoost } from './voice.js';
+import { LateMode } from './late-mode.js';
 
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
 const SHOW_FPS = new URLSearchParams(location.search).has('fps');
 // 항상 이름표를 띄울 주요 건물: [OSM 이름, 화면에 보일 이름]
 const LANDMARKS = [
-  ['중앙도서관'], ['공과대 2호관'], ['농생대 1호관'], ['제1학생마루'],
-  ['생활관 6호관 보람학사', '생활관 6호관'], ['대학본부'],
+  ['중앙도서관'], ['공과대 2호관'], ['농생대 1호관'], ['제1학생마루', '제1학생회관'],
+  ['생활관 9C동 예향학사', '생활관 9호관'], ['대학본부'],
 ];
 
 // ---------- 렌더러, 장면, 빛 ----------
@@ -86,6 +87,7 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'KeyC') hud.toast(`시점: ${rig.nextMode().label}`);
   if (e.code === 'KeyH') hud.showHelp();
+  lateMode?.onKey(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -100,6 +102,7 @@ function readInput() {
     boost: keys.has('ShiftLeft') || keys.has('ShiftRight'),
   };
 }
+const NO_INPUT = { up: false, down: false, left: false, right: false, drift: false, boost: false };
 
 // ---------- 시작 ----------
 
@@ -110,6 +113,7 @@ car.onBoostStart = playBoost;
 scene.add(car.object);
 let collider = null;
 let world = null;
+let lateMode = null;
 
 async function start() {
   const campus = await loadCampus('data/campus.json?v=2');
@@ -124,12 +128,13 @@ async function start() {
 
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
+  lateMode = new LateMode({ scene, car, hud, campus, camera, rig });
 
   setQuality(quality);
   rig.update(0, car);
   document.getElementById('loading').remove();
   hud.showHelp(7000);
-  window.game = { car, rig, collider, campus, renderer, world }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode }; // 콘솔에서 확인용
   renderer.setAnimationLoop(loop);
 }
 
@@ -141,11 +146,14 @@ let fpsFrames = 0, fpsTime = 0;
 
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.1);
-  const input = readInput();
+  const input = lateMode.inputLocked ? NO_INPUT : readInput();
 
-  // 프레임이 길면 잘게 나눠서 벽을 뚫지 않게
-  const steps = Math.ceil(dt / (1 / 60));
-  for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
+  // 프레임이 길면 잘게 나눠서 벽을 뚫지 않게. 일시정지·결과 화면에서는 멈춤
+  if (!lateMode.frozen) {
+    const steps = Math.ceil(dt / (1 / 60));
+    for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
+  }
+  lateMode.update(dt);
 
   rig.update(dt, car);
   sky.position.copy(camera.position);

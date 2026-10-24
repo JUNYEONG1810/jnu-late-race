@@ -165,6 +165,151 @@ kbd {
   text-align: center;
 }
 
+/* ---------- 지각 모드 ---------- */
+#late-start {
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 12px 16px;
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  background: #ff6b5a;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#late-start kbd { color: #2b3240; }
+#late-start:hover { background: #ff5442; }
+
+#late-ui { display: none; }
+body.late #late-ui { display: block; }
+body.late #late-start { display: none; }
+body.late #building-name { top: 74px; }
+body.late #toast { top: 124px; }
+
+#timer {
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 30px;
+  font-weight: 800;
+  padding: 6px 26px;
+  font-variant-numeric: tabular-nums;
+}
+#timer.warn { color: #fff; background: rgba(232, 65, 44, 0.92); animation: blink 0.5s steps(2) infinite; }
+#timer.over { color: #fff; background: rgba(160, 20, 20, 0.95); }
+@keyframes blink { 50% { opacity: 0.35; } }
+
+#mission-list {
+  right: 16px;
+  top: 76px;
+  width: 250px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+#mission-list h3 { margin: 0 0 8px; font-size: 15px; }
+.mission-item { display: flex; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; color: #8a93a6; }
+.mission-item .check { width: 20px; text-align: center; }
+.mission-item b { color: inherit; }
+.mission-item.current { background: #fff3cf; color: #2b3240; font-weight: 700; }
+.mission-item.done { color: #2b3240; }
+.mission-item.done .title { text-decoration: line-through; color: #8a93a6; }
+
+#target-tag, #target-arrow { position: absolute; left: 0; top: 0; }
+#target-tag { padding: 4px 12px; font-size: 15px; transform-origin: 50% 100%; }
+#target-arrow { width: 0; height: 0; }
+#target-arrow .arrow {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  text-align: center;
+  font-size: 30px;
+  color: #ff6b5a;
+  text-shadow: 0 0 6px #fff, 0 0 2px #fff;
+}
+#target-arrow span {
+  position: absolute;
+  left: -40px;
+  top: 24px;
+  width: 80px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #2b3240;
+  text-shadow: 0 0 4px #fff, 0 0 2px #fff;
+}
+
+#mission-hint { left: 50%; bottom: 150px; transform: translateX(-50%); font-size: 18px; }
+
+#mission-progress {
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  padding: 16px 20px;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+.mp-emoji { font-size: 52px; line-height: 1.1; }
+.mp-line { margin: 8px 0 12px; font-size: 18px; font-weight: 700; }
+.mp-bar { height: 12px; border-radius: 999px; background: #e3e7ee; overflow: hidden; }
+.mp-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #4cc38a, #8be0a4); }
+
+#countdown {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  font-size: 150px;
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 6px #ff6b5a;
+  paint-order: stroke fill;
+  text-shadow: 0 8px 24px rgba(40, 60, 90, 0.35);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(30, 40, 60, 0.45);
+  pointer-events: auto;
+  transition: opacity 0.25s;
+}
+.overlay.hidden { pointer-events: none; }
+.dialog {
+  position: relative;
+  min-width: 320px;
+  padding: 24px 30px;
+  text-align: center;
+}
+.dialog h2 { margin: 0 0 14px; font-size: 26px; }
+.dialog button {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 0;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  background: #eef1f5;
+  color: #2b3240;
+  cursor: pointer;
+}
+.dialog button:first-of-type { background: #ff6b5a; color: #fff; }
+.res-grade { font-size: 110px; font-weight: 900; line-height: 1; margin: 6px 0 10px; }
+.res-grade.good { color: #f2a51a; }
+.res-grade.bad { color: #e8412c; }
+.res-times { font-size: 17px; line-height: 1.7; margin-bottom: 8px; }
+
 #attribution {
   position: absolute;
   right: 10px;

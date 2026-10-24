@@ -1,5 +1,5 @@
 // 소리는 모두 Web Audio로 직접 합성한다 (소리 파일 없음).
-// 지금은 부스터 효과음만. 꿍싯꿍싯 목소리와 다른 효과음은 다음 단계에서 여기에 추가.
+// 지금은 부스터·미션 완료·카운트다운 효과음. 꿍싯꿍싯 목소리는 다음 단계에서 여기에 추가.
 
 let ctx = null;
 
@@ -68,4 +68,34 @@ export function playBoost() {
   air.connect(bp).connect(ag).connect(out);
   air.start(t);
   air.stop(t + 1.1);
+}
+
+// 짧은 음 하나 (사인파 + 빠른 감쇠)
+function tone(ac, freq, start, dur, vol = 0.3, type = 'sine') {
+  const o = ac.createOscillator();
+  o.type = type;
+  o.frequency.value = freq;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(start);
+  o.stop(start + dur + 0.05);
+}
+
+// 미션 완료 "딩동"
+export function playDing() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  tone(ac, 1318.5, t, 0.5, 0.28);       // 딩 (E6)
+  tone(ac, 1046.5, t + 0.16, 0.7, 0.28); // 동 (C6)
+}
+
+// 카운트다운 삐 (go면 높고 길게)
+export function playBeep(go = false) {
+  const ac = unlockAudio();
+  if (!ac) return;
+  tone(ac, go ? 1320 : 660, ac.currentTime, go ? 0.6 : 0.18, 0.22, 'square');
 }
