@@ -102,6 +102,7 @@
 - `scripts/fetch_osm.py`(Python 표준 라이브러리만) → `data/raw/`(커밋 안 함) → `scripts/build_map.py` → `data/campus.json`(커밋함)
 - 좌표: 캠퍼스 중심 기준 미터(x 동쪽, z 남쪽).
 - 건물 높이 = 층수 × 4m + 옥상 난간 1m. 층수 우선순위: `data/building-floors.csv`에 직접 적은 값 > 브이월드 지상층수(`scripts/fetch_vworld.py`, 키는 `.env`의 `VWORLD_KEY`, 출력·커밋 금지) > OSM `building:levels` > 기본 4층. csv를 고치고 `scripts/building_floors.py`(또는 `build_map.py`)를 다시 돌리면 반영. "전남대학교" 일괄 4층(브이월드 대표값)을 쓴 건물은 csv 출처에 "브이월드(일괄값)"으로 표시. 크레딧에 "건물 층수: 국토교통부 브이월드".
+- 근거 원칙: 측량·사진에서 직접 보이는 것·명시한 규칙 같은 근거가 없으면 값을 지어내지 말고 기본값으로 두며 "근거 없음"이라고 표시한다 (시각적 다양성용으로 고른 값은 "임의"로 표시, 등급 확실/추정/임의는 docs/데이터-근거-요약.md).
 - 건물 외관 우선순위: `data/building-styles.json`(osm id별: 재료 커튼월/벽돌/콘크리트/타일/석재, 벽·지붕 색, 창 형태 개별창/띠창/전면유리, 층 띠, 덩어리 parts(외곽선·원, 층수), 우진각 지붕, 옥상 구조물·태양광, 지붕만 있는 차양 canopy, 근거가 확실할 때 floors) > csv "직접" > csv 추정 > 건물마다 정해진 기본값. 항목마다 근거 이미지(ref/, 커밋 안 함)를 evidence에 적는다. 브이월드 3D는 캠퍼스에 실사 텍스처 건물이 없어 정사영상·수치지도 근거의 간이 방식. OSM 중정(relation inner)은 campus.json `holes`로 뚫는다.
 - 정문: 실제 자리(OSM 정문 점보다 62m 북쪽, 24, 446)에 짙은 회색 루버 지붕 두 덩어리 + 흰 틀 기둥(`map.js` REAL_GATE). 출발 위치는 그 남쪽 25m 들어오는 차로.
 - 국토지리정보원 자료(data/raw/ngii, 커밋 안 함): 정사영상 2025 25cm, 수치지도 2025 1:5,000·2020 1:1,000. 좌표는 EPSG:5186(`scripts/ngii.py`). 게임에는 사진이 아니라 판단 결과만 쓴다: 잔디(`data/lawns.json`), 차도 폭(`data/road-widths.json`), 층수(일괄값·기본값 건물만, 출처 "수치지도"), 지붕색·외관 추정. 잘라낸 사진은 `ref/`(커밋 안 함). 정리는 `docs/참고-조사.md`. 크레딧 "정사영상·수치지도: 국토지리정보원".
