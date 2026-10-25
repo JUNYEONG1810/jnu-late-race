@@ -1044,66 +1044,125 @@ function makeTreeBlocker(campus) {
 
 // ---------- 정문 ----------
 
-// 실제 정문 (국토지리정보원 정사영상 2025, docs/참고-조사.md·docs/진행상황.md [D]):
-// 진입로를 가로지르는 짙은 회색 가로 루버(평행한 보 6~7개) 지붕 두 덩어리 + 양 끝의 흰 사각 틀 기둥.
-// 동쪽(들어오는 차로·경비실 쪽 보도) 약 17m, 서쪽(나가는 차로 바깥쪽) 약 8m. OSM 정문 점보다 약 60m 북쪽.
-// 위에서 본 사진뿐이라 높이·글자는 확인 못 함 → 높이는 7m로, 글자·로고는 넣지 않음.
+// 실제 정문 (근거: 국토지리정보원 정사영상 2025 — 위치·평면, 위키미디어 공용 사진 "정문사진 01.jpg"(전남대학교, CC BY-SA 4.0,
+// 바깥에서 본 정면)·"Chonnam National University Front Gate.jpg"(Gunarta, CC BY-SA 4.0, 동쪽 글자 벽) — 모양·재료·색):
+// 진입로 양쪽에 짙은 철제 관을 나란히 얹은 지붕. 서쪽(나가는 쪽)은 도로 쪽 끝에 높은 화강석 틀 기둥(두 기둥 + 위 덮개),
+// 바깥 끝에 화강석 기둥. 동쪽(들어오는 쪽)은 양 끝 화강석 기둥, 그 아래 흰 경비실 앞면에 흰 세로 핀과 "전남대학교" 글자.
+// 높이는 사진 원근으로 잰 추정값(도로 차선 폭을 자로 씀). 글자는 실제 대문에 있는 "전남대학교"만, 로고·엠블럼은 넣지 않음.
 export const REAL_GATE = {
   center: [24.0, 446.0],      // 진입로 가운데 선(노란 중앙선)과 정문이 만나는 곳
-  spans: [                    // [한쪽 끝, 다른 끝, 도로 방향 폭(m)] 게임 좌표
-    [[26.8, 445.3], [42.4, 452.0], 4.2],
-    [[12.1, 440.2], [19.6, 443.7], 3.6],
-  ],
-  height: 7,                  // 루버 지붕 아래면 높이 (추정)
-  louvers: 6,
-  pier: [0.8, 3.0],           // 흰 틀 기둥: 가로, 도로 방향 길이
+  // [서쪽 끝, 동쪽 끝, 도로 방향 폭(m), 지붕 높이(m)] 게임 좌표. 평면은 정사영상, 높이는 사진 추정
+  spans: {
+    west: [[12.1, 440.2], [19.6, 443.7], 3.6, 6.2],
+    east: [[26.8, 445.3], [42.4, 452.0], 4.2, 5.0],
+  },
+  pylon: { height: 15, width: 3.6, depth: 1.6 }, // 서쪽 도로 쪽 높은 틀 기둥 (사진 추정)
+  pier: [1.6, 1.6],                              // 화강석 기둥 가로·세로
+  guardHouse: { c: [41.9, 447.5], size: [11.2, 9.8], h: 3.6 }, // 수치지도 "경비실" 외곽 크기, 높이는 사진 추정
+  colors: { granite: '#b7b9b7', steel: '#2a313e', wall: '#c8cccf', letters: '#a8874a' }, // 사진 픽셀에서 뽑은 색 (글자색은 눈으로)
 };
 
-// 진입로 위 루버 지붕 + 흰 틀 기둥. 기둥은 충돌용 사각형(obstacles)으로도 돌려준다.
+// 진입로 위 철제 관 지붕 + 화강석 기둥·틀 기둥 + 경비실 글자 벽. 기둥·경비실은 충돌용 사각형(obstacles)으로도 돌려준다.
 function buildGate() {
-  const group = new THREE.Group();
-  const white = new THREE.MeshLambertMaterial({ color: '#e7e7e3' });
-  const dark = new THREE.MeshLambertMaterial({ color: '#41474d' });
-  const obstacles = [];
   const G = REAL_GATE;
-  for (const [a, b, depth] of G.spans) {
+  const group = new THREE.Group();
+  const mat = (color) => new THREE.MeshLambertMaterial({ color });
+  const granite = mat(G.colors.granite), steel = mat(G.colors.steel), wallMat = mat(G.colors.wall);
+  const obstacles = [];
+
+  // a→b 방향을 로컬 +x, 바깥(남쪽)을 로컬 +z로 둔 무리
+  const frame = ([a, b]) => {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len; // 지붕 길이 방향
-    const yaw = Math.atan2(ux, uz) - Math.PI / 2;               // 로컬 +x = 길이 방향
+    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
+    const yaw = Math.atan2(ux, uz) - Math.PI / 2;
     const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
     const ground = Math.min(heightAt(...a), heightAt(...b), heightAt(mx, mz));
-    const span = new THREE.Group();
-    span.position.set(mx, ground, mz);
-    span.rotation.y = yaw;
-    const add = (geo, mat, x, y, z) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.castShadow = m.receiveShadow = true;
-      span.add(m);
+    const g = new THREE.Group();
+    g.position.set(mx, ground, mz);
+    g.rotation.y = yaw;
+    group.add(g);
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const world = (lx, lz) => [mx + lx * c + lz * s, mz - lx * s + lz * c];
+    const toLocal = (x, z) => [(x - mx) * c - (z - mz) * s, (x - mx) * s + (z - mz) * c];
+    const add = (geo, m, x, y, z) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = mesh.receiveShadow = true;
+      g.add(mesh);
+      return mesh;
     };
-    // 루버: 길이 방향으로 긴 보 여러 개를 도로 방향으로 나란히
-    for (let i = 0; i < G.louvers; i++) {
-      const z = -depth / 2 + (depth * (i + 0.5)) / G.louvers;
-      add(new THREE.BoxGeometry(len, 0.55, 0.28), dark, 0, G.height + 0.3, z);
+    // 충돌 사각형 (로컬 x·z 범위)
+    const block = (x0, x1, z0, z1) => obstacles.push([[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => world(x, z)));
+    return { len, add, block, g, toLocal };
+  };
+
+  // 지붕: 길이 방향 철제 관 6개 + 양쪽 테두리 보
+  const roof = (f, depth, h) => {
+    for (let i = 0; i < 6; i++) {
+      const z = -depth / 2 + (depth * (i + 0.5)) / 6;
+      f.add(new THREE.CylinderGeometry(0.24, 0.24, f.len + 0.6, 10).rotateZ(Math.PI / 2), steel, 0, h - 0.3, z);
     }
-    // 루버를 받치는 양쪽 테두리 보
-    for (const z of [-depth / 2, depth / 2]) add(new THREE.BoxGeometry(len + 0.4, 0.35, 0.3), dark, 0, G.height + 0.62, z);
-    // 양 끝 흰 틀 기둥 (가운데가 빈 사각 틀처럼 보이게 앞뒤 두 기둥 + 위아래 가로대)
-    const [pw, pl] = G.pier;
-    for (const sx of [-1, 1]) {
-      const x = sx * (len / 2);
-      const h = G.height + 0.9 + (ground - Math.min(heightAt(...(sx < 0 ? a : b)), ground)) + 2;
-      for (const z of [-pl / 2, pl / 2]) add(new THREE.BoxGeometry(pw, h, 0.5), white, x, h / 2 - 2, z);
-      add(new THREE.BoxGeometry(pw, 0.6, pl + 0.5), white, x, G.height + 0.9, 0);
-      add(new THREE.BoxGeometry(pw, 0.4, pl + 0.5), white, x, 0.2, 0);
-      const wx = mx + Math.cos(yaw) * x, wz = mz - Math.sin(yaw) * x;
-      const c = Math.cos(yaw), s = Math.sin(yaw);
-      obstacles.push([[-pw / 2, -pl / 2 - 0.25], [pw / 2, -pl / 2 - 0.25], [pw / 2, pl / 2 + 0.25], [-pw / 2, pl / 2 + 0.25]]
-        .map(([lx, lz]) => [wx + lx * c + lz * s, wz - lx * s + lz * c]));
-    }
-    group.add(span);
+    for (const z of [-depth / 2, depth / 2]) f.add(new THREE.BoxGeometry(f.len + 0.8, 0.45, 0.3), steel, 0, h - 0.05, z);
+  };
+  const pier = (f, x, h, depth) => {
+    const [pw] = G.pier;
+    f.add(new THREE.BoxGeometry(pw, h + 2, depth + 0.6), granite, x, h / 2 - 1, 0);
+    f.block(x - pw / 2, x + pw / 2, -depth / 2 - 0.3, depth / 2 + 0.3);
+  };
+
+  // 서쪽: 바깥 끝 화강석 기둥 + 도로 쪽 높은 틀 기둥(두 기둥 사이가 비고 위를 덮개로 이음, 위쪽 틈에 짙은 세로 판)
+  {
+    const [a, b, depth, h] = G.spans.west;
+    const f = frame([a, b]);
+    roof(f, depth, h);
+    pier(f, -f.len / 2, h, depth);
+    const P = G.pylon, colW = (P.width - 1.2) / 2, x = f.len / 2;
+    for (const sx of [-1, 1]) f.add(new THREE.BoxGeometry(colW, P.height + 2, P.depth), granite, x + sx * (0.6 + colW / 2), P.height / 2 - 1, 0);
+    f.add(new THREE.BoxGeometry(P.width, 1.0, P.depth), granite, x, P.height - 0.5, 0);
+    f.add(new THREE.BoxGeometry(0.5, P.height * 0.32, P.depth * 0.6), steel, x, P.height * 0.72, 0);
+    f.block(x - P.width / 2, x + P.width / 2, -P.depth / 2, P.depth / 2);
+  }
+
+  // 동쪽: 양 끝 화강석 기둥 + 흰 경비실(앞면 흰 세로 핀과 "전남대학교" 글자)
+  {
+    const [a, b, depth, h] = G.spans.east;
+    const f = frame([a, b]);
+    roof(f, depth, h);
+    pier(f, -f.len / 2, h, depth);
+    pier(f, f.len / 2, h, depth);
+    // 경비실: 수치지도 경비실 중심을 지붕 무리 좌표로
+    const [gx, gz] = G.guardHouse.c, [sw, sd] = G.guardHouse.size, gh = G.guardHouse.h;
+    const [hx, hz] = f.toLocal(gx, gz);
+    f.add(new THREE.BoxGeometry(sw, gh + 1.5, sd), wallMat, hx, (gh + 1.5) / 2 - 1.5, hz);
+    f.block(hx - sw / 2, hx + sw / 2, hz - sd / 2, hz + sd / 2);
+    // 앞면(바깥, 로컬 +z): 사진 순서대로 왼쪽부터 흰 세로 핀 → 글자 판 → 동쪽 끝 화강석 기둥
+    const front = hz + sd / 2;
+    const textX = f.len / 2 - G.pier[0] / 2 - 0.4 - 2.3;
+    for (let i = 0; i < 5; i++) f.add(new THREE.BoxGeometry(0.35, gh, 0.5), wallMat, textX - 2.3 - 0.6 - i * 0.85, gh / 2, front + 0.25);
+    const text = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.6, 0.95),
+      new THREE.MeshLambertMaterial({ map: lettersTexture('전남대학교', G.colors.letters), transparent: true }),
+    );
+    text.position.set(textX, gh * 0.62, front + 0.03);
+    f.g.add(text);
   }
   return { group, obstacles };
+}
+
+// 투명 바탕에 금속색 글자 (정문 글자 벽)
+function lettersTexture(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 106;
+  const g = canvas.getContext('2d');
+  g.fillStyle = color;
+  g.font = '800 80px "Pretendard", "Malgun Gothic", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text.split('').join(' '), 256, 56);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 // 출발 위치를 실제 정문 남쪽 25m, 들어오는 차로(동쪽) 위로. 연출(굴착기 앞·옆·뒤)도 여기서
