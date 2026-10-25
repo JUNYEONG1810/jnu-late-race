@@ -670,3 +670,17 @@ body.title #face-window, body.cine #face-window, body.photo #face-window { displ
 #ending .ending-skip { position: absolute; right: 20px; bottom: 16px; padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 13px; }
 @keyframes ending-roll { from { top: 100%; transform: translate(-50%, 0); } to { top: 0; transform: translate(-50%, -100%); } }
 body.ending #hud > :not(#attribution):not(#ending), body.ending #title, body.ending #result, body.ending #titles { display: none !important; }
+
+/* ---------- 꾸미기 (밤샘 12단계) ---------- */
+#dress { display: none; left: 20px; top: 50%; transform: translateY(-50%); width: 360px; padding: 14px 16px; }
+body.dress #dress { display: block; }
+body.dress #title, body.dress #walk-hint, body.dress #student-bubble, body.dress #student-z, body.dress #face-window { display: none; }
+#dress h3 { margin: 0 0 8px; font-size: 18px; }
+#dress .dress-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+#dress .dress-row span { width: 46px; font-size: 13px; font-weight: 800; color: #5d6573; }
+#dress .dress-row button { padding: 5px 9px; border-radius: 999px; border: 2px solid #dfe3ea; background: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+#dress .dress-row button.on { border-color: #ff6b5a; background: #fff1ee; }
+#dress .dress-row .dress-color { width: 26px; height: 26px; padding: 0; }
+#dress .dress-row .dress-color.on { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #ff6b5a; border-color: transparent; }
+#dress .dress-tip { margin: 6px 0 8px; font-size: 12px; color: #6b7385; }
+#dress [data-act=done] { width: 100%; padding: 9px 0; border: 0; border-radius: 10px; background: #ff6b5a; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }

@@ -17,35 +17,36 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=95">
+  <link rel="stylesheet" href="assets/css/style.css?v=98">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=95",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=95",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=95",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=95",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=95",
-      "./assets/js/life.js": "./assets/js/life.js?v=95",
-      "./assets/js/music.js": "./assets/js/music.js?v=95",
-      "./assets/js/route.js": "./assets/js/route.js?v=95",
-      "./assets/js/surface.js": "./assets/js/surface.js?v=95",
-      "./assets/js/play.js": "./assets/js/play.js?v=95",
-      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=95",
-      "./assets/js/records.js": "./assets/js/records.js?v=95",
-      "./assets/js/car.js": "./assets/js/car.js?v=95",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=95",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=95",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=95",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=95",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=95",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=95",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=95",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=95",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=95",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=95",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=95"
+      "./assets/js/map.js": "./assets/js/map.js?v=98",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=98",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=98",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=98",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=98",
+      "./assets/js/life.js": "./assets/js/life.js?v=98",
+      "./assets/js/music.js": "./assets/js/music.js?v=98",
+      "./assets/js/route.js": "./assets/js/route.js?v=98",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=98",
+      "./assets/js/play.js": "./assets/js/play.js?v=98",
+      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=98",
+      "./assets/js/records.js": "./assets/js/records.js?v=98",
+      "./assets/js/dressup.js": "./assets/js/dressup.js?v=98",
+      "./assets/js/car.js": "./assets/js/car.js?v=98",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=98",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=98",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=98",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=98",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=98",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=98",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=98",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=98",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=98",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=98",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=98"
     }
   }
   </script>
@@ -190,9 +191,18 @@
           <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
           <kbd>E</kbd> 미션 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지
         </div>
+        <button id="btn-dress" class="title-link">꾸미기</button>
         <button id="btn-titles" class="title-link">칭호</button>
         <button id="btn-credits" class="title-link">크레딧</button>
       </div>
+    </div>
+
+    <!-- 꾸미기 (첫 화면): 왼쪽 패널, 마우스로 끌어 돌려 보기 -->
+    <div id="dress" class="panel">
+      <h3>꾸미기</h3>
+      <div class="dress-rows"></div>
+      <p class="dress-tip">마우스로 끌면 돌려 보고, 휠로 가까이·멀리</p>
+      <button data-act="done">완료</button>
     </div>
 
     <!-- 칭호 (첫 화면) -->
@@ -253,6 +263,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=95"></script>
+  <script type="module" src="assets/js/main.js?v=98"></script>
 </body>
 </html>

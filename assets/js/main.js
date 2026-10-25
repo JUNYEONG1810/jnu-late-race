@@ -18,6 +18,7 @@ import { buildSurface } from './surface.js';
 import { buildPlay } from './play.js';
 import { buildCampusLife } from './campus-life.js';
 import { Records, Ghost, Ending, RunEvents } from './records.js';
+import { Wardrobe, DRESS } from './dressup.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -164,6 +165,10 @@ addEventListener('keydown', (e) => {
     else if (e.code === 'Enter') takePhoto();
     return;
   }
+  if (dress.on) { // 꾸미기 중: Esc로 끝
+    if (e.code === 'Escape') setDress(false);
+    return;
+  }
   if (onTitle) {
     if (e.code === 'KeyL') startLate();
     else if (e.code === 'Enter') startFree();
@@ -194,12 +199,13 @@ addEventListener('blur', () => { keys.clear(); dragging = false; });
 let dragging = false;
 const canvas = renderer.domElement;
 canvas.addEventListener('pointerdown', (e) => {
-  if (!walker?.active && !photo.on) return;
+  if (!walker?.active && !photo.on && !dress.on) return;
   dragging = true;
   try { canvas.setPointerCapture(e.pointerId); } catch {} // 창 밖으로 끌어도 계속
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!dragging) return;
+  if (dress.on) { dress.yaw -= e.movementX * 0.008; return; } // 꾸미기: 황소 둘레로 돌려 보기
   if (photo.on) {
     photo.yaw -= e.movementX * 0.004;
     photo.pitch = THREE.MathUtils.clamp(photo.pitch - e.movementY * 0.004, -1.45, 1.45);
@@ -207,6 +213,7 @@ canvas.addEventListener('pointermove', (e) => {
 });
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, () => { dragging = false; });
 canvas.addEventListener('wheel', (e) => {
+  if (dress.on) { e.preventDefault(); dress.dist = THREE.MathUtils.clamp(dress.dist + Math.sign(e.deltaY) * 0.4, DRESS_CAM.distMin, DRESS_CAM.distMax); return; }
   if (photo.on) { // 사진 모드: 휠로 확대·축소 (시야각)
     e.preventDefault();
     camera.fov = THREE.MathUtils.clamp(camera.fov + Math.sign(e.deltaY) * 3, 20, 90);
@@ -264,6 +271,7 @@ const rig = new CameraRig(camera);
 const car = new Car();
 car.onBoostStart = () => { playBoost(); drive.boostT = DRIVE_FACE.boost; }; // 부스터: 깜짝
 car.onBoostEnd = playBoostEnd;
+const wardrobe = new Wardrobe(car.driver); // 꾸미기: 저장된 옷을 입힘 (고른 것만 만듦)
 car.onHit = (s) => { // 쾅: 세게 부딪히면 어질어질 + 머리 위 별
   playHit(s);
   if (s > DRIVE_FACE.crashHit) { drive.crashT = DRIVE_FACE.crash; car.driver.dizzy(DRIVE_FACE.crash); }
@@ -291,6 +299,7 @@ function setupTitle() {
   for (const c of CAR_COLORS) {
     const b = document.createElement('button');
     b.style.background = c;
+    b.dataset.color = c; // 꾸미기 패널과 같이 표시
     b.title = '굴착기 색';
     b.classList.toggle('on', c === color);
     b.addEventListener('click', () => {
@@ -414,6 +423,66 @@ function updateMusicAndClock(dt) {
   }
 }
 const TIME_LEFT = () => TIME_LIMIT - (lateMode.elapsed || 0);
+
+// ---------- 꾸미기 (첫 화면): 게임 카메라가 굴착기 옆에 내려선 황소 학생에게 다가가고, 마우스로 돌려 봄 ----------
+// 렌더러를 하나 더 만들지 않고 같은 장면·같은 카메라를 연출 카메라로 쓴다.
+const DRESS_CAM = { approach: 1.6, dist: 3.0, distMin: 1.8, distMax: 6, height: 0.55, lookY: 0.7, fov: 45 };
+const dress = { on: false, yaw: 0, dist: DRESS_CAM.dist, t: 0, from: null, cam: { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: DRESS_CAM.fov } };
+function setupDress() {
+  const panel = document.getElementById('dress');
+  const rows = panel.querySelector('.dress-rows');
+  const names = { head: '머리', face: '얼굴', neck: '목' };
+  rows.innerHTML = Object.entries(DRESS).map(([slot, list]) => `<div class="dress-row"><span>${names[slot]}</span>`
+    + list.map(([id, label]) => `<button data-slot="${slot}" data-id="${id}">${label}</button>`).join('') + '</div>').join('')
+    + `<div class="dress-row"><span>굴착기</span>${CAR_COLORS.map((c) => `<button class="dress-color" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`;
+  const mark = () => {
+    for (const b of rows.querySelectorAll('[data-slot]')) b.classList.toggle('on', wardrobe.choice[b.dataset.slot] === b.dataset.id);
+    let color = CAR_COLORS[0];
+    try { color = localStorage.getItem('carColor') || color; } catch {}
+    for (const b of rows.querySelectorAll('[data-color]')) b.classList.toggle('on', b.dataset.color === color);
+  };
+  rows.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    b.blur();
+    if (b.dataset.slot) wardrobe.set(b.dataset.slot, b.dataset.id);
+    if (b.dataset.color) {
+      car.setColor(b.dataset.color);
+      try { localStorage.setItem('carColor', b.dataset.color); } catch {}
+      for (const t of document.querySelectorAll('.title-colors button')) t.classList.toggle('on', t.dataset.color === b.dataset.color);
+    }
+    mark();
+  });
+  document.getElementById('btn-dress').addEventListener('click', (e) => { e.currentTarget.blur(); mark(); setDress(true); });
+  panel.querySelector('[data-act=done]').addEventListener('click', (e) => { e.currentTarget.blur(); setDress(false); });
+}
+function setDress(on) {
+  if (on === dress.on || !onTitle) return;
+  dress.on = on;
+  document.body.classList.toggle('dress', on);
+  if (on) {
+    if (!walker.active) walker.exit(); // 굴착기 옆으로 폴짝 내려섬
+    dress.t = 0;
+    dress.yaw = car.heading + Math.PI / 2 + 0.5; // 황소 앞쪽 비스듬히
+    dress.dist = DRESS_CAM.dist;
+    dress.from = { pos: camera.position.clone(), look: camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(30).add(camera.position) };
+    rig.setCinematic(dress.cam);
+  } else {
+    walker.boardNow();
+    rig.setCinematic(titleCam);
+  }
+}
+function updateDressCamera(dt) {
+  dress.t += dt;
+  if (walker.active) walker.doze = 0; // 꾸미는 동안에는 졸지 않게
+  const w = walker.active ? walker : null;
+  const tx = w ? w.pos.x : car.pos.x, tz = w ? w.pos.y : car.pos.y, ty = (w ? w.y : car.object.position.y) + DRESS_CAM.lookY;
+  const goalPos = new THREE.Vector3(tx + Math.sin(dress.yaw) * dress.dist, ty + DRESS_CAM.height, tz + Math.cos(dress.yaw) * dress.dist);
+  const goalLook = new THREE.Vector3(tx, ty, tz);
+  const k = Math.min(1, dress.t / DRESS_CAM.approach), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // ease-in-out
+  dress.cam.pos.lerpVectors(dress.from.pos, goalPos, e);
+  dress.cam.look.lerpVectors(dress.from.look, goalLook, e);
+}
 
 // ---------- 사진 모드 (P): 화면 안내를 숨기고 자유 카메라, 촬영하면 PNG 저장 ----------
 const PHOTO = { speed: 14, minAbove: 1.2 }; // 이동 m/s, 땅 위 최소 높이
@@ -692,6 +761,7 @@ async function start() {
   walker.onSplash = (x, z) => life.splashAt(x, z); // 풍덩: 물보라·소리, 오리가 흩어짐
   hud.initMinimap(campus);
   setupTitle();
+  setupDress();
 
   setQuality(quality);
   applyLight();
@@ -699,7 +769,7 @@ async function start() {
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
   loadingUi.done();
-  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life, records, ghost, ending, events }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life, records, ghost, ending, events, wardrobe }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
   setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
@@ -794,8 +864,9 @@ function loop() {
   world.shuttle.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null,
     cineHide ? [[lateMode.stage.to.x, lateMode.stage.to.z], [car.pos.x, car.pos.y]] : []);
 
+  if (dress.on) updateDressCamera(dt);
   if (photo.on) updatePhotoCamera(dt);
-  else if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
+  else if (walking && !dress.on) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
   else rig.update(dt, car);
   play.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null, !onTitle && !lateMode.active && !photo.on);
   life.update(lateMode.frozen ? 0 : dt, camera, focus, !lateMode.active);
