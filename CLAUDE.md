@@ -140,6 +140,7 @@ assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
 data/campus.json
 scripts/fetch_osm.py, scripts/build_map.py
+scripts/fetch_terrain.py, terrain_report.py, building_floors.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
 README.md, 제작로그.md, CLAUDE.md
 ```
 
