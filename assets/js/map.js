@@ -11,7 +11,7 @@ const WALL_COLORS = ['#ece0c6', '#f5f3ee', '#d7d9db', '#b86b52'];
 const ROOF_COLORS = ['#8fb79c', '#c3c5c1', '#b3aa9c'];
 const ENTRANCE_COLOR = '#3a3f47';
 // 외관 종류 (data/building-floors.csv "외관" 칸, 비우면 콘크리트) → 외벽색을 안 적었을 때의 기본색
-const FACADE_COLORS = { 커튼월: '#e3edf4', 벽돌: '#a65a44', 타일: '#ece7dc' };
+const FACADE_COLORS = { 커튼월: '#e3edf4', 벽돌: '#a65a44', 타일: '#ece7dc', 석재: '#d8d2c4' };
 const OUTSIDE_TINT = new THREE.Color('#eceef0');
 const OUTSIDE_MIX = 0.45;
 
@@ -562,42 +562,27 @@ function courtLines(b, g, color) {
 
 // ---------- 건물 ----------
 
-// 한 칸 = 가로 3m × 한 층 3.5m. 흰 벽 + 층 사이 가로줄 + 창문. 벽 색은 정점 색과 곱해진다.
-function makeWindowTexture(anisotropy) {
+// 외관 텍스처: 한 칸 = 가로 3m(bay) × 한 층. 재료 무늬 × 창 형태(개별창/띠창/전면유리) × 층 띠. 색은 정점 색(외벽색)과 곱해진다
+const textureCache = new Map();
+function facadeTexture(key, anisotropy) {
+  if (textureCache.has(key)) return textureCache.get(key);
+  const [material, windows, bands] = key.split('|');
   const S = 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = S;
   const g = canvas.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, S, S);
-  g.fillStyle = '#c9c9c9'; // 층 사이 가로줄 (슬래브)
-  g.fillRect(0, 0, S, 9);
-  const grad = g.createLinearGradient(0, 34, 0, 100);
-  grad.addColorStop(0, '#7f9ab4');
-  grad.addColorStop(1, '#4b6178');
-  g.fillStyle = '#e2e5e8'; // 창틀
-  g.fillRect(16, 32, 96, 70);
-  g.fillStyle = grad;
-  g.fillRect(20, 36, 88, 62);
-  g.fillStyle = '#e2e5e8'; // 가운데 창살
-  g.fillRect(62, 36, 4, 62);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = anisotropy;
-  return tex;
-}
-
-// 외관 텍스처: 한 칸 = 가로 3m × 한 층 4m (창문 텍스처와 같은 크기). 색은 정점 색(외벽색)과 곱해진다
-function facadeTexture(draw, anisotropy) {
-  const S = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = S;
-  draw(canvas.getContext('2d'), S);
+  if (material === '커튼월' || windows === '전면유리') drawGlass(g, S);
+  else {
+    drawMaterial(g, S, material);
+    if (bands === '1') { g.fillStyle = '#bdbbb6'; g.fillRect(0, 0, S, 12); } // 층 띠 (슬래브 끝)
+    if (windows === '띠창') drawRibbon(g, S);
+    else drawWindow(g, 22, 36, 84, 62);
+  }
   const t = new THREE.CanvasTexture(canvas);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = anisotropy;
+  textureCache.set(key, t);
   return t;
 }
 
@@ -609,30 +594,46 @@ function drawWindow(g, x, y, w, h) {
   g.fillRect(x - 3, y - 3, w + 6, h + 6);
   g.fillStyle = grad;
   g.fillRect(x, y, w, h);
+  g.fillStyle = '#e8e8e8'; // 가운데 창살
+  g.fillRect(x + w / 2 - 2, y, 4, h);
 }
 
-// 벽돌: 줄눈(밝은 선) + 엇갈린 세로 줄눈 + 창
-function drawBrick(g, S) {
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, S, S);
-  g.fillStyle = '#d6cfc8';
-  for (let y = 0, row = 0; y < S; y += 8, row++) {
-    g.fillRect(0, y, S, 1.5);
-    for (let x = (row % 2) * 8; x < S; x += 16) g.fillRect(x, y, 1.5, 8);
-  }
-  drawWindow(g, 24, 38, 80, 58);
+// 띠창: 칸 전체를 가로지르는 유리 띠 + 얇은 세로 창살
+function drawRibbon(g, S) {
+  const grad = g.createLinearGradient(0, 40, 0, 96);
+  grad.addColorStop(0, '#86a1ba');
+  grad.addColorStop(1, '#4e647b');
+  g.fillStyle = grad;
+  g.fillRect(0, 40, S, 56);
+  g.fillStyle = '#dfe2e5';
+  g.fillRect(0, 38, S, 3);
+  g.fillRect(0, 95, S, 3);
+  for (const x of [0, 64]) g.fillRect(x, 40, 3, 56);
 }
 
-// 타일: 밝은 네모 줄눈 + 창
-function drawTile(g, S) {
+// 재료 무늬: 콘크리트(민무늬 + 층 줄), 벽돌(줄눈), 타일(네모 줄눈), 석재(큰 돌 판)
+function drawMaterial(g, S, material) {
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, S, S);
-  g.fillStyle = '#dcdad5';
-  for (let i = 0; i < S; i += 16) {
-    g.fillRect(i, 0, 1, S);
-    g.fillRect(0, i, S, 1);
+  if (material === '벽돌') {
+    g.fillStyle = '#d6cfc8';
+    for (let y = 0, row = 0; y < S; y += 8, row++) {
+      g.fillRect(0, y, S, 1.5);
+      for (let x = (row % 2) * 8; x < S; x += 16) g.fillRect(x, y, 1.5, 8);
+    }
+  } else if (material === '타일') {
+    g.fillStyle = '#dcdad5';
+    for (let i = 0; i < S; i += 16) { g.fillRect(i, 0, 1, S); g.fillRect(0, i, S, 1); }
+  } else if (material === '석재') {
+    g.fillStyle = '#d9d4ca';
+    for (let y = 0, row = 0; y < S; y += 32, row++) {
+      g.fillRect(0, y, S, 2);
+      for (let x = (row % 2) * 32; x < S; x += 64) g.fillRect(x, y, 2, 32);
+    }
+  } else {
+    g.fillStyle = '#c9c9c9';
+    g.fillRect(0, 0, S, 9);
   }
-  drawWindow(g, 22, 36, 84, 62);
 }
 
 // 커튼월: 위는 밝은 하늘, 아래로 짙어지는 유리 + 얇은 세로 멀리언 + 층마다 가로 띠
@@ -677,9 +678,9 @@ class MeshBuilder {
   }
 
   // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다
-  wall(p1, p2, y0, y1, n, color, u1 = 0, base = 0) {
+  wall(p1, p2, y0, y1, n, color, u1 = 0, base = 0, floorH = FLOOR_M) {
     const a = [p1[0], y0, p1[1]], b = [p2[0], y0, p2[1]], c = [p2[0], y1, p2[1]], d = [p1[0], y1, p1[1]];
-    const v0 = (y0 - base) / FLOOR_M, v1 = (y1 - base) / FLOOR_M;
+    const v0 = (y0 - base) / floorH, v1 = (y1 - base) / floorH;
     this.tri(a, b, c, n, color, [[0, v0], [u1, v0], [u1, v1]]);
     this.tri(a, c, d, n, color, [[0, v0], [u1, v1], [0, v1]]);
   }
@@ -695,78 +696,160 @@ class MeshBuilder {
   }
 }
 
-// 벽(창문 텍스처)과 지붕·입구(텍스처 없음)를 각각 한 메시로.
+// 벽(외관 텍스처 종류마다 한 메시)과 지붕·입구·옥상 구조물(텍스처 없음)을 각각 합친다.
 // 지붕을 텍스처 메시에 넣으면 멀리서 밉맵 평균 때문에 창문색이 섞여 어두워진다.
+// 외관 우선순위: data/building-styles.json(b.style) > csv "직접" > csv 추정(b.facade 등) > 건물마다 정해진 기본값.
 function buildBuildings(list, anisotropy) {
-  const walls = { 콘크리트: new MeshBuilder(true), 벽돌: new MeshBuilder(true), 타일: new MeshBuilder(true), 커튼월: new MeshBuilder(true) };
+  const walls = new Map(); // 텍스처 키 → MeshBuilder
+  const wallsFor = (key) => {
+    if (!walls.has(key)) walls.set(key, new MeshBuilder(true));
+    return walls.get(key);
+  };
   const plain = new MeshBuilder(false);
   const entrance = new THREE.Color(ENTRANCE_COLOR);
 
   for (const b of list) {
     const o = b.outline;
     if (o.length < 3) continue;
+    const st = b.style || {};
     const k = hash(b.id);
-    const facade = FACADE_COLORS[b.facade] ? b.facade : '콘크리트';
-    // 외벽색: csv에 적은 색 > 외관 종류 기본색 > 건물마다 정해진 색. 지붕색: csv(정사영상) > 건물마다 정해진 색
-    const wall = new THREE.Color(b.wallColor || FACADE_COLORS[facade] || WALL_COLORS[k % WALL_COLORS.length]);
-    const roof = new THREE.Color(b.roofColor || ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]);
-    if (!b.inCampus) {
-      wall.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
-      roof.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
-    }
+    const want = st.facade || b.facade;
+    const facade = FACADE_COLORS[want] || want === '콘크리트' ? want : '콘크리트';
+    const tint = (c) => (b.inCampus ? c : c.lerp(OUTSIDE_TINT, OUTSIDE_MIX));
+    const wall = tint(new THREE.Color(st.wallColor || b.wallColor || FACADE_COLORS[facade] || WALL_COLORS[k % WALL_COLORS.length]));
+    const roof = tint(new THREE.Color(st.roofColor || b.roofColor || ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]));
+    const look = { facade, windows: st.windows || (facade === '커튼월' ? '전면유리' : '개별창'), bands: st.bands !== false, bay: st.bay || BAY_M };
     // 외곽선 안 가장 낮은 땅에서 시작하고, 벽은 그보다 더 내려 비탈 쪽이 뜨지 않게 묻는다
     const base = heightRange(o).lo;
     b.base = base;
-    const h = base + b.height;
-    const sign = area(o) > 0 ? 1 : -1;
-    let longest = null;
+    const mainH = st.mainFloors ? st.mainFloors * FLOOR_M + 1 : b.height;
+    let top = 0;
 
-    for (let i = 0; i < o.length; i++) {
-      const p1 = o[i], p2 = o[(i + 1) % o.length];
-      const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-      if (len < 1e-6) continue;
-      // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
-      const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
-      // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
-      walls[facade].wall(p1, p2, base - BURY_M, h, n, wall, Math.max(1, Math.round(len / BAY_M)), base);
-      if (!longest || len > longest.len) longest = { p1, p2, n, len };
+    if (!st.skipMain) {
+      const longest = extrude(o, base, base + mainH, look, wall, roof, { wallsFor, plain });
+      top = mainH;
+      // 가장 긴 벽 가운데 1층에 어두운 입구
+      if (longest && longest.len >= 6 && mainH >= 3.5) {
+        const { p1, p2, n, len } = longest;
+        const w = Math.min(6, len * 0.4) / 2 / len;
+        const off = 0.06;
+        const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
+        // 입구는 그 자리 땅 높이에서 (언덕 쪽이면 그만큼 위에)
+        const gy = heightAt(...q(0.5));
+        plain.wall(q(0.5 - w), q(0.5 + w), gy - 0.3, gy + 3, n, entrance);
+        // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
+        b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2], y: gy };
+      }
     }
-
-    const contour = o.map(([x, z]) => new THREE.Vector2(x, z));
-    for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, [])) {
-      plain.tri([o[i][0], h, o[i][1]], [o[j][0], h, o[j][1]], [o[m][0], h, o[m][1]], [0, 1, 0], roof);
+    // 따로 세우는 덩어리 (저층부·고층부, 원통, 유리 아트리움, 우진각 지붕 동 등)
+    for (const part of st.parts || []) {
+      const po = part.circle ? circleOutline(part.circle.c, part.circle.r) : part.outline;
+      const fh = part.floorHeight || FLOOR_M;
+      const h = part.floors * fh + 1;
+      const pf = part.facade || facade;
+      const plook = { facade: pf, windows: part.windows || (pf === '커튼월' ? '전면유리' : look.windows), bands: look.bands, bay: look.bay, floorH: fh };
+      const pw = part.wallColor ? tint(new THREE.Color(part.wallColor)) : (pf === facade ? wall : tint(new THREE.Color(FACADE_COLORS[pf] || '#d9d6cc')));
+      const pr = tint(new THREE.Color(part.roofColor || st.roofColor || b.roofColor || '#c3c5c1'));
+      const longest = extrude(po, base, base + h, plook, pw, pr, { wallsFor, plain, roof: part.roof, roofH: part.roofH });
+      top = Math.max(top, h + (part.roof === 'hip' ? part.roofH || 3 : 0));
+      if (st.skipMain && longest && !b.entrance) {
+        const { p1, p2, n } = longest;
+        const ex = (p1[0] + p2[0]) / 2, ez = (p1[1] + p2[1]) / 2;
+        b.entrance = { x: ex, z: ez, nx: n[0], nz: n[2], y: heightAt(ex, ez) };
+      }
     }
-
-    // 가장 긴 벽 가운데 1층에 어두운 입구
-    if (longest && longest.len >= 6 && b.height >= 3.5) {
-      const { p1, p2, n, len } = longest;
-      const w = Math.min(6, len * 0.4) / 2 / len;
-      const off = 0.06;
-      const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
-      // 입구는 그 자리 땅 높이에서 (언덕 쪽이면 그만큼 위에)
-      const gy = heightAt(...q(0.5));
-      plain.wall(q(0.5 - w), q(0.5 + w), gy - 0.3, gy + 3, n, entrance);
-      // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
-      b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2], y: gy };
+    // 모서리 세로 띠 (생활관 계단실처럼 다른 색): 외곽선 꼭짓점 몇 곳에 1.8m 폭 기둥
+    if (st.accent) {
+      const ac = tint(new THREE.Color(st.accent.color));
+      const stepI = Math.max(1, Math.round(o.length / st.accent.every));
+      o.forEach(([x, z], i) => {
+        if (i % stepI === 0) box(plain, circleOutline([x, z], 0.9, 6), base - BURY_M, base + mainH + 0.6, ac);
+      });
     }
+    // 옥상 구조물 (옥탑, 원형 단 등)
+    for (const f of st.features || []) {
+      const fo = f.type === 'cylinder' ? circleOutline(f.c, f.r) : f.outline;
+      const on = f.on === 'main' ? mainH : 0;
+      box(plain, fo, base + on - 0.2, base + on + f.h, tint(new THREE.Color(f.color)));
+      top = Math.max(top, on + f.h);
+    }
+    b.height = top || b.height; // 이름표·미니맵이 쓰는 가장 높은 곳
   }
 
-  const tex = (draw) => facadeTexture(draw, anisotropy);
-  const materials = {
-    콘크리트: new THREE.MeshLambertMaterial({ vertexColors: true, map: makeWindowTexture(anisotropy) }),
-    벽돌: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawBrick) }),
-    타일: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawTile) }),
-    // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임, 얇은 멀리언
-    커튼월: new THREE.MeshPhongMaterial({ vertexColors: true, map: tex(drawGlass), shininess: 90, specular: '#ffffff' }),
-  };
-  const meshes = Object.entries(walls).filter(([, w]) => w.pos.length)
-    .map(([type, w]) => new THREE.Mesh(w.geometry(), materials[type]));
+  const meshes = [...walls.entries()].map(([key, w]) => {
+    const glass = key.startsWith('커튼월') || key.includes('전면유리');
+    const map = facadeTexture(key, anisotropy);
+    // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임
+    const mat = glass ? new THREE.MeshPhongMaterial({ vertexColors: true, map, shininess: 90, specular: '#ffffff' })
+      : new THREE.MeshLambertMaterial({ vertexColors: true, map });
+    return new THREE.Mesh(w.geometry(), mat);
+  });
   meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
   for (const m of meshes) {
     m.castShadow = true;
     m.receiveShadow = true;
   }
   return meshes;
+}
+
+// 외곽선을 y0~y1로 세움: 벽(외관 텍스처) + 지붕(평지붕 또는 우진각). 가장 긴 벽 정보를 돌려줌
+function extrude(o, base, y1, look, wallColor, roofColor, { wallsFor, plain, roof = 'flat', roofH = 3 }) {
+  const wb = wallsFor(`${look.facade}|${look.windows}|${look.bands ? 1 : 0}`);
+  const floorH = look.floorH || FLOOR_M;
+  const sign = area(o) > 0 ? 1 : -1;
+  let longest = null;
+  for (let i = 0; i < o.length; i++) {
+    const p1 = o[i], p2 = o[(i + 1) % o.length];
+    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    if (len < 1e-6) continue;
+    // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
+    const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
+    // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
+    wb.wall(p1, p2, base - BURY_M, y1, n, wallColor, Math.max(1, Math.round(len / look.bay)), base, floorH);
+    if (!longest || len > longest.len) longest = { p1, p2, n, len };
+  }
+  if (roof === 'hip') hipRoof(plain, o, y1, roofH, roofColor);
+  else flatTop(plain, o, y1, roofColor);
+  return longest;
+}
+
+function flatTop(plain, o, y, color) {
+  const contour = o.map(([x, z]) => new THREE.Vector2(x, z));
+  for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, [])) {
+    plain.tri([o[i][0], y, o[i][1]], [o[j][0], y, o[j][1]], [o[m][0], y, o[m][1]], [0, 1, 0], color);
+  }
+}
+
+// 텍스처 없는 덩어리 (옥상 구조물·모서리 띠): 옆면 + 윗면
+function box(plain, o, y0, y1, color) {
+  const sign = area(o) > 0 ? 1 : -1;
+  for (let i = 0; i < o.length; i++) {
+    const p1 = o[i], p2 = o[(i + 1) % o.length];
+    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    if (len < 1e-6) continue;
+    plain.wall(p1, p2, y0, y1, [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign], color);
+  }
+  flatTop(plain, o, y1, color);
+}
+
+// 우진각 지붕: 외곽선을 감싸는 회전 사각형 위에, 긴 변 방향 용마루(높이 h)
+function hipRoof(plain, o, y, h, color) {
+  const r = orientedRect(o);
+  const P = (u, v, yy) => { const [x, z] = rectPoint(r, u, v); return [x, yy, z]; };
+  const L = r.L / 2, W = r.W / 2, ridge = Math.max(0, L - W);
+  const a = P(-L, -W, y), b = P(L, -W, y), c = P(L, W, y), d = P(-L, W, y);
+  const e = P(-ridge, 0, y + h), f = P(ridge, 0, y + h);
+  for (const [p, q, s] of [[a, b, f], [a, f, e], [c, d, e], [c, e, f], [b, c, f], [d, a, e]]) {
+    const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2], vx = s[0] - p[0], vy = s[1] - p[1], vz = s[2] - p[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } // 바깥(위)을 보게
+    const l = Math.hypot(nx, ny, nz) || 1;
+    plain.tri(p, q, s, [nx / l, ny / l, nz / l], color);
+  }
+}
+
+function circleOutline([cx, cz], r, n = 40) {
+  return Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cz + Math.sin((i / n) * Math.PI * 2) * r]);
 }
 
 // ---------- 나무 ----------
