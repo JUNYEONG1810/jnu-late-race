@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>키아트 렌더링 (발표·공유 카드용)</title>
+<!-- 제목 글꼴: Black Han Sans (SIL Open Font License, 무료) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #20242c; color: #eee; font: 14px sans-serif; }
+  #game { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; visibility: hidden; }
+  #out { position: relative; z-index: 1; max-width: 100%; }
+  #log { position: relative; z-index: 1; padding: 8px; }
+</style>
+</head>
+<body>
+<!--
+  발표용 키아트·공유 카드 렌더링 페이지. 게임 코드는 바꾸지 않는다:
+  실제 게임(index.html)을 숨긴 iframe으로 띄워 그 장면에서 굴착기·교수님·카메라만 놓고 한 장 그린 뒤,
+  이 페이지의 2D 캔버스에서 제목·부제·지도 출처를 얹는다.
+  사용: http://localhost:8000/docs/keyart/render.html?v=1  (v = 구도 시안 1·2·3)
+  결과는 화면에 보이고, ?save=경로 를 주면 로컬 캡처 수신기(127.0.0.1:8765, 커밋 안 함)로 보낸다.
+-->
+<iframe id="game"></iframe>
+<div id="log">불러오는 중…</div>
+<canvas id="out"></canvas>
+<script type="module">
+const W = 1920, H = 1080;
+const q = new URLSearchParams(location.search);
+const variant = Number(q.get('v') || 1);
+const log = (t) => { document.getElementById('log').textContent = t; };
+try { localStorage.setItem('quality', 'high'); } catch {} // 그림자까지 그린 화면으로
+
+const frame = document.getElementById('game');
+frame.src = '../../index.html?keyart=1';
+await new Promise((r) => frame.addEventListener('load', r, { once: true }));
+const win = frame.contentWindow, doc = frame.contentDocument;
+while (!(win.game && !doc.getElementById('loading'))) await new Promise((r) => setTimeout(r, 100));
+// 게임과 같은 three.js 모듈을 iframe 안에서 받아 쓴다 (다른 사본을 섞지 않게)
+const s = doc.createElement('script');
+s.type = 'module';
+s.textContent = "import * as THREE from 'three'; window.__THREE = THREE;";
+doc.head.appendChild(s);
+while (!win.__THREE) await new Promise((r) => setTimeout(r, 50));
+const THREE = win.__THREE;
+const g = win.game, R = g.renderer, L = g.lateMode, car = g.car;
+R.setAnimationLoop(null); // 게임 루프를 멈추고 이 페이지가 한 장만 그린다
+// 한글 글꼴은 글자 묶음별로 나눠 받으므로 쓸 글자를 함께 넘겨야 다 받는다
+await document.fonts.load('120px "Black Han Sans"', '전남대 지각 레이스');
+await document.fonts.load('900 40px "Noto Sans KR"', '9시까지 공대 2호관으로!');
+await document.fonts.load('700 22px "Noto Sans KR"', '지도 데이터 © OpenStreetMap 기여자');
+log('장면 준비 중…');
+
+let scene = null;
+g.world.group.traverseAncestors((o) => { if (o.isScene) scene = o; });
+const camera = g.rig.camera;
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// 구도 시안: 교수님(공과대 2호관 입구 앞)을 배경에 두고, 카메라와 교수님 사이에 굴착기를 놓는다.
+// 굴착기는 카메라 쪽(아래)과 화면 왼쪽으로 동시에 달려, 화면 오른쪽 위 → 왼쪽 아래로 돌진해 보인다.
+const S = L.stage;               // { to: 교수님 자리, n: 입구 바깥 방향 }
+const n = V(S.n.x, 0, S.n.z), side = V(-S.n.z, 0, S.n.x);
+// back: 교수님에서 카메라까지 거리, off: 옆으로 비킴, h: 카메라 높이, car: 카메라에서 굴착기까지 거리,
+// right: 굴착기를 화면 오른쪽으로 비킴, slant: 왼쪽으로 꺾는 정도, fov, profLeft: 교수님을 화면 왼쪽으로
+const VARIANTS = {
+  1: { back: 13, off: 4, h: 1.8, car: 7, right: 1.7, slant: 0.9, fov: 48, profLeft: 2.6, lookUp: 1.2 },     // 낮은 앵글, 굴착기 크게, 교수님 바로 뒤
+  2: { back: 24, off: 9, h: 8.5, car: 12, right: 2.2, slant: 1.0, fov: 40, profLeft: 3.0, lookUp: 0.6 },   // 높은 앵글, 불꽃 꼬리 길게
+  3: { back: 15, off: 3, h: 2.6, car: 10.5, right: 3.2, slant: 0.7, fov: 46, profLeft: 4.2, lookUp: 1.6 }, // 교수님 크게, 굴착기는 오른쪽 위
+  9: { back: 4, off: 0.5, h: 1.6, car: 30, right: 30, slant: 0.7, fov: 40, profLeft: 0, lookUp: 1.0 },     // 확인용: 교수님 가까이
+};
+const C = VARIANTS[variant] || VARIANTS[1];
+const PP = S.to.clone().addScaledVector(side, 0);                       // 교수님 자리
+const camPos = S.to.clone().addScaledVector(n, C.back).addScaledVector(side, C.off);
+camPos.y = S.to.y + C.h;
+const dir = PP.clone().sub(camPos).setY(0).normalize();                  // 카메라 → 교수님 (수평)
+const right = V(-dir.z, 0, dir.x);                                       // 카메라 기준 화면 오른쪽
+// 교수님은 화면 왼쪽으로 조금 비켜 서게
+PP.addScaledVector(right, -C.profLeft);
+// 굴착기 자리와 진행 방향: 카메라 쪽(−dir) + 화면 왼쪽(−right)
+const P = camPos.clone().addScaledVector(dir, C.car).addScaledVector(right, C.right).setY(0);
+const fv = dir.clone().multiplyScalar(-1).addScaledVector(right, -C.slant).normalize();
+const fx = fv.x, fz = fv.z;
+car.place(P.x, P.z, fx, fz);
+P.y = car.object.position.y;
+car.boost = 1;
+for (let i = 0; i < 90; i++) { // 불꽃·연기가 충분히 뿜어지도록 제자리에서 부스트를 돌림
+  car.boost = 1;
+  car.update(1 / 60, { up: true, boost: true, left: false, right: false, down: false, drift: false }, null);
+  car.place(P.x, P.z, fx, fz);
+  car.vel.set(fx * 30, fz * 30);
+}
+car.update(1 / 60, { up: true, boost: true }, null);
+car.place(P.x, P.z, fx, fz);
+
+// 흙먼지: 궤도 뒤로 퍼지는 흙빛 연기 (이 페이지에서만 더함)
+const dust = new THREE.Group();
+const dot = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+let seed = 7;
+const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+for (let i = 0; i < 70; i++) {
+  const back = 1.5 + rnd() * 9, lat = (rnd() - 0.5) * (2.6 + back * 0.5);
+  const m = new THREE.SpriteMaterial({ map: dot, color: rnd() < 0.5 ? '#b59b78' : '#a2865f', transparent: true, depthWrite: false, opacity: 0.55 * (1 - back / 12) });
+  const sp = new THREE.Sprite(m);
+  const sz = 0.8 + back * 0.35 + rnd() * 0.8;
+  sp.scale.set(sz, sz, 1);
+  sp.position.set(P.x - fx * back + fz * lat, P.y + 0.3 + rnd() * (0.4 + back * 0.15), P.z - fz * back - fx * lat);
+  dust.add(sp);
+}
+scene.add(dust);
+
+// 교수님: 입구 앞에서 카메라 쪽을 보고, 한쪽 날개를 앞으로 든 "손목"을 다른 날개 깃털 끝으로 가리킴(지각!)
+const prof = L.professor;
+prof.object.visible = true;
+prof.place(PP.x, PP.z, camPos.x - PP.x, camPos.z - PP.z);
+prof.walking = false; prof.talking = false; prof.pose = 'rest';
+prof.update(1 / 60);
+const [wR, wL] = [prof.wings.find((w) => w.side < 0), prof.wings.find((w) => w.side > 0)];
+wL.pivot.rotation.set(-0.45, 0, 1.25);           // 왼쪽 날개를 옆으로 들어 "손목(시계)"을 보여 줌
+wR.pivot.rotation.set(-1.3, -0.55, 0.6);           // 오른쪽 날개를 몸 앞으로 가로질러 깃털 끝으로 그 손목을 가리킴
+for (const f of wR.fan) f.mesh.rotation.x = f.a * 0.15;
+for (const f of wL.fan) f.mesh.rotation.x = f.a * 0.35;
+// 손목시계 (이 페이지에서만 붙임)
+const watch = new THREE.Group();
+const face = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.025, 24), new THREE.MeshLambertMaterial({ color: '#f4f1e6' }));
+const rim = new THREE.Mesh(new THREE.TorusGeometry(0.072, 0.015, 8, 24), new THREE.MeshLambertMaterial({ color: '#c9a44a' }));
+const hand1 = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.05, 0.004), new THREE.MeshBasicMaterial({ color: '#222222' }));
+const hand2 = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.035, 0.004), new THREE.MeshBasicMaterial({ color: '#222222' }));
+hand1.position.set(0, 0.022, 0.014); hand2.position.set(0.015, 0.0, 0.014); hand2.rotation.z = -1.4;
+face.rotation.x = Math.PI / 2; watch.add(face, rim, hand1, hand2);
+watch.position.set(0, -0.4, 0.09);
+wL.pivot.children[0].add(watch);
+prof.object.updateMatrixWorld(true);
+
+// 카메라·햇빛
+camera.position.copy(camPos);
+camera.fov = C.fov;
+camera.aspect = W / H;
+camera.near = 0.1;
+camera.updateProjectionMatrix();
+const lookAt = variant === 9 ? PP.clone() : P.clone().lerp(PP, 0.35); lookAt.y = S.to.y + C.lookUp;
+camera.lookAt(lookAt);
+const sun = scene.children.find((o) => o.isDirectionalLight);
+const mid = P.clone().lerp(PP, 0.5);
+if (sun) {
+  sun.target.position.copy(mid);
+  sun.position.copy(mid).add(V(70, 120, 50));
+  sun.target.updateMatrixWorld();
+}
+R.setPixelRatio(1);
+R.setSize(W, H, false);
+R.render(scene, camera);
+const shot = document.createElement('canvas'); // 그린 직후 같은 순간에 옮겨 둔다 (WebGL 화면은 다음 프레임에 지워짐)
+shot.width = W; shot.height = H;
+shot.getContext('2d').drawImage(R.domElement, 0, 0, W, H);
+
+// ---- 2D 합성: 속도선·가장자리 어둡게·제목·부제·출처 ----
+const out = document.getElementById('out');
+out.width = W; out.height = H;
+const x = out.getContext('2d');
+x.drawImage(shot, 0, 0, W, H);
+// 돌진 방향(오른쪽 위 → 왼쪽 아래)을 따라 옅은 속도선
+x.save();
+x.globalAlpha = 0.18; x.strokeStyle = '#ffffff'; x.lineCap = 'round';
+for (let i = 0; i < 26; i++) {
+  const t = rnd(), len = 120 + rnd() * 260, w = 2 + rnd() * 4;
+  const sx = W * (0.35 + t * 0.7), sy = H * (-0.1 + rnd() * 0.8);
+  x.lineWidth = w; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + len * 0.82, sy - len * 0.57); x.stroke();
+}
+x.restore();
+const vg = x.createRadialGradient(W * 0.5, H * 0.55, H * 0.35, W * 0.5, H * 0.55, H * 0.95);
+vg.addColorStop(0, 'rgba(10,14,30,0)'); vg.addColorStop(1, 'rgba(10,14,30,0.45)');
+x.fillStyle = vg; x.fillRect(0, 0, W, H);
+// 제목: 굵은 한글 + 남색 두꺼운 테두리 + 노랑 밑줄 띠 (우리만의 단순한 글자 디자인)
+const titleX = 88, titleY = 210;
+x.save();
+x.translate(titleX, titleY);
+x.transform(1, 0, -0.12, 1, 0, 0); // 앞으로 기운 글자 (달리는 느낌)
+x.font = '150px "Black Han Sans"';
+x.textBaseline = 'alphabetic';
+x.lineJoin = 'round';
+const title = '전남대 지각 레이스';
+const tw = x.measureText(title).width;
+x.fillStyle = '#ffcc33';
+x.fillRect(-14, 22, tw + 40, 26);         // 노랑 띠
+x.lineWidth = 22; x.strokeStyle = '#1d2a4d'; x.strokeText(title, 0, 0);
+x.fillStyle = '#ffffff'; x.fillText(title, 0, 0);
+x.restore();
+// 부제: 노랑 알약
+x.font = '900 52px "Noto Sans KR"';
+const sub = '9시까지 공대 2호관으로!';
+const sw = x.measureText(sub).width;
+x.fillStyle = '#ffcc33';
+x.beginPath(); x.roundRect(titleX + 6, titleY + 74, sw + 56, 84, 42); x.fill();
+x.fillStyle = '#1d2a4d'; x.textBaseline = 'middle'; x.fillText(sub, titleX + 34, titleY + 118);
+// 지도 출처 (작게, 오른쪽 아래)
+x.font = '700 22px "Noto Sans KR"';
+x.textAlign = 'right'; x.textBaseline = 'alphabetic';
+x.fillStyle = 'rgba(255,255,255,0.85)';
+x.fillText('지도 데이터 © OpenStreetMap 기여자', W - 28, H - 24);
+log(`시안 ${variant} 완성 (${W}×${H})`);
+
+// 저장 (로컬 캡처 수신기, 커밋 안 함): ?save=keyart/keyart-1920x1080.png&og=keyart/og.jpg
+const post = (path, url) => fetch('http://127.0.0.1:8765/' + encodeURIComponent(path), { method: 'POST', body: url, mode: 'no-cors', headers: { 'Content-Type': 'text/plain' } });
+if (q.get('save')) await post(q.get('save'), out.toDataURL('image/png'));
+if (q.get('draft')) {
+  const d = document.createElement('canvas'); d.width = 960; d.height = 540;
+  d.getContext('2d').drawImage(out, 0, 0, 960, 540);
+  await post(q.get('draft'), d.toDataURL('image/jpeg', 0.85));
+}
+if (q.get('og')) { // 공유 카드 1200×630: 가운데를 잘라 줄임, JPEG 품질을 낮춰 300KB 이하로
+  const o = document.createElement('canvas'); o.width = 1200; o.height = 630;
+  const sh = W * 630 / 1200; // 1920 × 1008: 위쪽(제목)부터 잘라 줄이고, 잘린 지도 출처는 카드에 다시 씀
+  const ox = o.getContext('2d');
+  ox.drawImage(out, 0, 0, W, sh, 0, 0, 1200, 630);
+  ox.font = '700 16px "Noto Sans KR"'; ox.textAlign = 'right'; ox.fillStyle = 'rgba(255,255,255,0.9)';
+  ox.fillText('지도 데이터 © OpenStreetMap 기여자', 1200 - 16, 630 - 14);
+  let qual = 0.86, url = o.toDataURL('image/jpeg', qual);
+  while (url.length * 0.75 > 290 * 1024 && qual > 0.4) { qual -= 0.06; url = o.toDataURL('image/jpeg', qual); }
+  await post(q.get('og'), url);
+  log(`시안 ${variant} 완성, 공유 카드 JPEG 품질 ${qual.toFixed(2)}, 약 ${Math.round(url.length * 0.75 / 1024)}KB`);
+}
+window.__done = true;
+</script>
+</body>
+</html>
