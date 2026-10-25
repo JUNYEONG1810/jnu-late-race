@@ -38,6 +38,7 @@ const PARKING_COLOR = '#6b6e73'; // 주차장 바닥 (짙은 회색)
 const MARK_COLOR = '#f6f6f0';    // 주차선·코트 라인
 const WATER_COLOR = '#6cb8dc';
 const WATER_EDGE_COLOR = '#b9b2a4'; // 연못 가장자리 돌
+const BANK_COLOR = '#a99f86';     // 평평하게 고른 연못의 드러난 둑 (젖은 흙빛)
 // 운동장 종류별 바닥색 [잔디·우레탄 등, 흙]
 const SPORT_COLORS = {
   soccer: ['#5aa94f', '#d2b384'], futsal: ['#4f9e62', '#d2b384'], baseball: ['#62ad55', '#d2b384'],
@@ -145,7 +146,8 @@ function paintGround(canvas, campus, bounds) {
   for (const x of sorted) P.polygon(x.outline, groundColor(x));
   paintLawns(P, campus.lawns);
   for (const w of campus.greens.filter((x) => x.kind === 'water')) {
-    P.polygon(w.outline, WATER_COLOR);
+    // 수면을 평평하게 고른 물(용지)은 물 메시가 따로 덮으므로, 수면보다 높은 둑이 드러나는 곳은 물빛 대신 물가 흙빛
+    P.polygon(w.outline, w.level !== undefined ? BANK_COLOR : WATER_COLOR);
     P.ribbon([...w.outline, w.outline[0]], 1.1, WATER_EDGE_COLOR);
   }
 

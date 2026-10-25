@@ -17,36 +17,36 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=102">
+  <link rel="stylesheet" href="assets/css/style.css?v=106">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=102",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=102",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=102",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=102",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=102",
-      "./assets/js/life.js": "./assets/js/life.js?v=102",
-      "./assets/js/music.js": "./assets/js/music.js?v=102",
-      "./assets/js/route.js": "./assets/js/route.js?v=102",
-      "./assets/js/surface.js": "./assets/js/surface.js?v=102",
-      "./assets/js/play.js": "./assets/js/play.js?v=102",
-      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=102",
-      "./assets/js/records.js": "./assets/js/records.js?v=102",
-      "./assets/js/dressup.js": "./assets/js/dressup.js?v=102",
-      "./assets/js/car.js": "./assets/js/car.js?v=102",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=102",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=102",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=102",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=102",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=102",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=102",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=102",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=102",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=102",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=102",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=102"
+      "./assets/js/map.js": "./assets/js/map.js?v=106",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=106",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=106",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=106",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=106",
+      "./assets/js/life.js": "./assets/js/life.js?v=106",
+      "./assets/js/music.js": "./assets/js/music.js?v=106",
+      "./assets/js/route.js": "./assets/js/route.js?v=106",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=106",
+      "./assets/js/play.js": "./assets/js/play.js?v=106",
+      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=106",
+      "./assets/js/records.js": "./assets/js/records.js?v=106",
+      "./assets/js/dressup.js": "./assets/js/dressup.js?v=106",
+      "./assets/js/car.js": "./assets/js/car.js?v=106",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=106",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=106",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=106",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=106",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=106",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=106",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=106",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=106",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=106",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=106",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=106"
     }
   }
   </script>
@@ -113,14 +113,15 @@
     <div id="help" class="panel">
       <div><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 운전</div>
       <div><kbd>Space</kbd> 브레이크·드리프트 &nbsp; <kbd>Shift</kbd> 부스터 (게이지 사용)</div>
-      <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>M</kbd> 소리 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
-      <div><kbd>E</kbd> 내려서 걷기 (자유 주행에서 멈췄을 때)</div>
+      <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>M</kbd> 소리 &nbsp; <kbd>H</kbd> 조작법 다시 보기 &nbsp; <kbd>L</kbd> 지각 모드</div>
+      <div><kbd>E</kbd> 내려서 걷기 (멈췄을 때) &nbsp; <kbd>G</kbd> 창밖으로 고개 &nbsp; <kbd>Q</kbd> 버킷 &nbsp; <kbd>P</kbd> 사진 모드</div>
+      <div><kbd>T</kbd> 시간대 &nbsp; <kbd>Y</kbd> 계절 &nbsp; 대운동장 축구 · 주차장 드리프트 · 초록 게이트 타임어택</div>
     </div>
 
     <!-- 학생이 내려서 걸을 때 -->
     <div id="walk-hint" class="panel">
       <span class="wh-board"><kbd>E</kbd> 타기</span> · <kbd>Shift</kbd> 달리기 · <kbd>Space</kbd> 점프 · <kbd>R</kbd> 굴착기 부르기 · 마우스 끌기 시점 · <kbd>V</kbd> 시점 초기화<br>
-      <kbd>H</kbd> 음메 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 감정 표현
+      <kbd>H</kbd> 음메 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 감정 표현 · <kbd>G</kbd> 인사 · <kbd>E</kbd> 고양이 쓰다듬기·벤치 앉기 · 🏅 도장판
     </div>
     <div id="student-bubble" class="hidden"></div>
     <div id="npc-bubble" class="hidden"><div class="npc-name"></div><div class="npc-text"></div></div>
@@ -189,7 +190,8 @@
         </div>
         <div class="title-keys">
           <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
-          <kbd>E</kbd> 미션 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지
+          <kbd>E</kbd> 미션·내리기 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지<br>
+          <kbd>Q</kbd> 버킷 · <kbd>P</kbd> 사진 · <kbd>T</kbd> 시간대 · <kbd>Y</kbd> 계절 · <kbd>G</kbd> 고개 내밀기·인사
         </div>
         <button id="btn-dress" class="title-link">꾸미기</button>
         <button id="btn-titles" class="title-link">칭호</button>
@@ -254,7 +256,8 @@
           <span class="credit-en">Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration;
           GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey.</span></p>
         <p>3D 캠퍼스 아이디어: SMASH 대학교(<a href="https://hong-iron.github.io/SMASH/" target="_blank" rel="noopener">hong-iron.github.io/SMASH</a>)에서 영감</p>
-        <p>소리와 목소리는 Web Audio로 직접 합성 (소리 파일 없음)</p>
+        <p>소리·목소리·배경음악은 Web Audio로 직접 합성 (소리 파일 없음)</p>
+        <p>공유 카드·키 아트 제목 글꼴: Black Han Sans (SIL Open Font License)</p>
         <p>Claude Code와 함께 제작</p>
         <button data-act="close">닫기</button>
       </div>
@@ -263,6 +266,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=102"></script>
+  <script type="module" src="assets/js/main.js?v=106"></script>
 </body>
 </html>

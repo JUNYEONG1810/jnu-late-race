@@ -1,10 +1,12 @@
-# 전남대 지각 레이스 (JNU Late Race)
+# 포크레이트 — 전남대 지각 레이스 (JNU Late Race)
 
 전남대학교 광주캠퍼스를 3D로 만들고, 자동차로 돌아다니는 브라우저 게임.
 수업 과제 "GitHub에서 찾아본 오픈소스로 흥미로운 프로그램 만들기" 발표용. **발표는 월요일, 제작 기한은 일요일 밤.**
 
 - 저장소: `JUNYEONG1810/jnu-late-race` (공개), 배포: GitHub Pages (`main` 브랜치 루트)
 - 대상: **노트북 전용** (키보드 조작). 휴대폰 대응 없음. 1366×768 ~ 1920×1080.
+- 게임 이름은 **"포크레이트"**(포크레인 + late), 부제 "9시까지 공대 2호관으로!" (밤샘 6단계). 저장소·주소는 그대로.
+- 밤샘 작업(night 브랜치, 태그 night-1~14)으로 더한 기능은 아래 "밤샘 추가 기능"과 `docs/밤샘-작업-보고.md`에 정리. main(v7-bull)에는 사용자가 확인한 단계만 합친다.
 
 ## 게임 구성
 
@@ -89,7 +91,9 @@
 - **물리: 직접 만든 아케이드 주행**(속도, 가속, 브레이크, 조향, 가벼운 드리프트). 무거운 물리 엔진은 쓰지 않는다 (시간 절약, 조작감 조절 쉬움).
 - 충돌: 차를 원 하나로 보고, 건물 외곽선(2D 다각형)과 부딪히면 밀어내고 감속. 높이 방향 충돌은 없음.
 - 지형(terrain 브랜치): AWS Terrain Tiles를 5m 격자로 구운 `data/terrain.json`(`scripts/build_terrain.py`, 정문 앞 출발점 = 0m). `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px, 이방성 필터 장치 최대)에 그려 지형 메시 텍스처로 입힌다. 차도와 차선만 가까이서 선명하도록 지형을 따라 휘는 별도 메시(깊이 테스트 + polygonOffset, 땅에서 7cm·11cm)로 그린다. 포장면은 따뜻한 연회색(#dbd7cd). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 크레딧에 Terrain Tiles 출처(ETOPO1 NOAA, GMTED2010·SRTM USGS). main에는 아직 합치지 않음.
-- 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
+- 조작(겹치지 않게): 방향키/WASD 운전·걷기, Space 브레이크·드리프트/점프, Shift 부스터/달리기, E 지각 모드 미션·자유 주행 타기/내리기·벤치·고양이, G 운전 중 고개 내밀기/걷는 중 인사, H 조작법/걷는 중 음메, Q 버킷, R 굴착기 부르기, V 걷기 시점 초기화, 1·2·3 감정 표현, T 시간대, Y 계절, P 사진 모드, C 시점, L 지각 모드, M 소리, Esc 일시정지·건너뛰기.
+- 가벼운 모드(⚙ 설정 스위치 하나): 먼 산, 나무 다양화, 도로 표시, 셔틀버스, 오리·고양이·동물 학생·산책 교수님, 얼굴 창, 고스트를 한꺼번에 끈다. 새 장식을 더하면 `main.js`의 `applyLight()`에 같이 넣는다.
+- 밤샘 성능 한도(v7-bull 대비 누적): 삼각형 +10만, 그리기 호출 +100, JS 메모리 +120MB. 단계마다 `docs/성능-측정.md`에 기록.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 주소 뒤 `?fps=1`이면 왼쪽 위 구석에 fps 표시(기본 숨김).
 - 성능: 내장 그래픽 노트북에서 60fps 목표. 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위). 기본값은 "높음" (정문 출발 화면 1366×768 품질 높음 60fps 측정, 50 미만이면 "낮음"으로 바꾼다).
@@ -146,6 +150,17 @@ assets/js/voice.js             꿍싯꿍싯 목소리 + 효과음 합성
 assets/js/missions-data.js     미션 데이터
 assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
+assets/js/driver.js, driver-config.js   운전사 황소 학생 (표정 FACES, 고개 내밀기, 별)
+assets/js/walker.js            내려서 걷기, 귀여운 동작, 벤치·풍덩
+assets/js/play.js              놀거리: 축구·타임어택·드리프트
+assets/js/campus-life.js       캠퍼스 산책: 오리·고양이·동물 학생·산책 교수님·도장·물보라
+assets/js/records.js           칭호·첫 A+ 엔딩·고스트·무작위 사건
+assets/js/dressup.js           꾸미기 (머리·얼굴·목 옷)
+assets/js/life.js              셔틀버스
+assets/js/music.js             배경음악 (Web Audio)
+assets/js/route.js             차도 그래프 A* 길 안내 (막힌 길 반영)
+assets/js/surface.js           잔디·흙 위 70% 속도
+assets/js/roadmarks.js, surroundings.js   도로 표시, 먼 산 능선
 data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, data/building-looks-auto.json
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
@@ -153,6 +168,16 @@ scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.
 scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
 README.md, 제작로그.md, CLAUDE.md
 ```
+
+## 밤샘 추가 기능 (night 브랜치)
+
+- 놀거리(자유 주행): 대운동장 축구(공 1·골대 2), 타임어택 3코스(초록 출발·체크 무늬 도착 게이트, 90m 확인점), 넓은 주차장 드리프트 점수, 사진 모드 P(HUD 숨김·자유 카메라·PNG), 결과 "이미지로 저장", Q 버킷.
+- 캠퍼스 산책(걷기만): 벤치 E, 용지 오리 5, 고양이 4(E 쓰다듬기), 산책하는 교수님(자유 주행만, 지각 모드에서는 지각 모드가 맡음), 동물 학생 6(토끼·곰·다람쥐·너구리·펭귄·토끼, 미리 비킴, G 인사), 명소 도장 9곳, 풍덩 물보라. 5·18 기념물·인물상 둘레 45m에는 두지 않는다.
+- 운전 표정·몸짓: 부스터 깜짝, 충돌 어질+별, 마지막 30초 울먹, 미션 완료 휴~+발굽 흔들기, 뒤돌아보기, 서 있으면 고개 내밀기, 바람에 눌린 볼, 왼쪽 아래 2D 얼굴 창.
+- 기록: 칭호 13개(첫 화면 "칭호"), 첫 A+ 엔딩(22초, 건너뛰기), 최고 기록 고스트(메시 1), 판마다 무작위 사건(공사·셔틀버스 고장, 미션 장소 60m 밖, 길 안내 반영).
+- 꾸미기(첫 화면): 같은 카메라가 굴착기 옆 황소에게 다가감(렌더러 추가 없음), 고른 옷만 만들어 머리·몸에 붙임, 운전석 지붕에 닿지 않게.
+- T 시간대(아침·낮·노을·밤, 색만, 밤은 창 1/3 불빛 셰이더), Y 계절(나무 색만). 지각 모드는 언제나 아침.
+- 용지 수면은 불러올 때 물 안쪽 지형을 한 높이로 평평하게(근거 없음, 보기용). 굴착기는 물에 못 들어감.
 
 ## 작업 원칙
 

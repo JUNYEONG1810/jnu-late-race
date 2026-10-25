@@ -14,7 +14,7 @@ export const LIFE = {
   duck: { speed: 0.5, flee: 1.8, fear: 9, back: 5 },   // 오리: 헤엄, 도망, 겁먹는 거리, 돌아오기까지 (초)
   cat: { pet: 2.4 },                                      // 쓰다듬을 수 있는 거리
   student: { speed: 1.05, dodge: 9, dodgeWalk: 3, minWalker: 1.2, minCar: 3.6, side: 2.4, sideWalk: 1.1, greet: 5 }, // 굴착기는 멀리서·크게, 걷는 황소는 가까이서·살짝 비킴
-  prof: { meet: 5, again: 25, pace: 12 },                 // 교수님: 말 거는 거리, 다시 말하기까지, 앞뒤로 걷는 거리
+  prof: { meet: 5, again: 25, pace: 12, show: 80 },       // 교수님: 말 거는 거리, 다시 말하기까지, 앞뒤로 걷는 거리, 이 안에서만 보임 (메시 105개라 가까이에서만)
   bench: { reach: 2.0, seat: 0.42 },
   stamp: { near: 14 },
   splash: 10,                                             // 물보라 조각 수
@@ -75,7 +75,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
       enabled = on;
       ducks.mesh.visible = cats.fur.visible = cats.face.visible = on;
       for (const s of students.list) s.object.visible = on;
-      if (!on && lateMode.professor && !lateMode.active) lateMode.professor.object.visible = false;
+      if (!on && prof.proxy) { prof.proxy.visible = false; prof.on = false; }
     },
     // E: 고양이 쓰다듬기 > 벤치에 앉기. 했으면 true
     interact() {
@@ -142,15 +142,18 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
       this.updateProfessor(dt, camera, focus, free);
     },
 
+    // 산책하는 교수님: 지각 모드 교수님(메시 105개)을 그대로 쓰면 그리기 호출이 크게 늘어서, 서 있는 모습을 메시 하나로 합친
+    // 가벼운 대역(정점 색)을 걷게 한다. 몸 전체를 뒤뚱뒤뚱 흔들고, 말할 때 끄덕임. 지각 모드는 원래 교수님 그대로.
     updateProfessor(dt, camera, focus, free) {
       const P = lateMode.professor;
       if (!P) return;
-      const show = free && enabled && Math.hypot(paceA.x - focus.x, paceA.y - focus.y) < LIFE.far + 40;
-      if (!free) { prof.on = false; return; } // 지각 모드: 지각 모드가 교수님을 맡음
-      if (!show) { if (prof.on) P.object.visible = false; prof.on = false; return; }
-      if (!prof.on) { prof.on = true; P.object.visible = true; P.pose = 'rest'; P.place(paceA.x, paceA.y, side.x, side.y); prof.t = 0; }
+      if (!prof.proxy) { prof.proxy = professorProxy(P); prof.proxy.visible = false; group.add(prof.proxy); }
+      const Q = prof.proxy;
+      const show = free && enabled && Math.hypot(paceA.x - focus.x, paceA.y - focus.y) < LIFE.prof.show;
+      if (!show) { Q.visible = false; prof.on = false; return; }
+      if (!prof.on) { prof.on = true; Q.visible = true; prof.t = 0; prof.ph = 0; }
       const who = walker.active ? walker.pos : car.pos;
-      const here = new THREE.Vector2(P.object.position.x, P.object.position.z);
+      const here = new THREE.Vector2(Q.position.x, Q.position.z);
       const d = here.distanceTo(who);
       prof.talkT = Math.max(0, prof.talkT - dt);
       if (d < LIFE.prof.meet && prof.talkT === 0) { // 만나면 멈춰서 한마디
@@ -160,9 +163,11 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
         if (i === prof.lineI) i = (i + 1) % LIFE_LINES.professor.length;
         prof.lineI = i;
         const line = LIFE_LINES.professor[i];
-        P.talking = true;
-        hud.sayNpc(line, speak(line), () => P.headTop(), '교수님');
+        const voice = speak(line);
+        prof.talk = voice.duration;
+        hud.sayNpc(line, voice, () => Q.position.clone().setY(Q.position.y + Q.userData.top + 0.25), '교수님');
       }
+      prof.talk = Math.max(0, (prof.talk || 0) - dt);
       if (d < 1.6 && prof.wait <= 0) prof.wait = 1; // 황소·굴착기와 부딪히지 않게 잠깐 멈춤
       // 굴착기(3.6m)·황소(1.2m)보다 가까워지면 그만큼 옆으로 비켜 서고, 멀어지면 천천히 제자리로
       const base = paceA.clone().lerp(paceB, prof.t);
@@ -175,26 +180,62 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
       }
       prof.push.copy(away).sub(base);
       if (!pushed) prof.push.multiplyScalar(Math.exp(-dt * 0.8));
+      let walking = false, yaw = Q.rotation.y;
       if (prof.wait > 0) {
-        P.object.position.set(away.x, heightAt(away.x, away.y), away.y);
+        Q.position.set(away.x, heightAt(away.x, away.y), away.y);
         prof.wait -= dt;
-        P.walking = false;
-        P.face(who.x - here.x, who.y - here.y);
-        if (prof.wait <= 0) P.talking = false;
+        yaw = Math.atan2(who.x - here.x, who.y - here.y);
       } else {
         const L = paceA.distanceTo(paceB);
         prof.t += prof.dir * dt * 0.55 / Math.max(1, L);
         if (prof.t > 1 || prof.t < 0) { prof.t = THREE.MathUtils.clamp(prof.t, 0, 1); prof.dir *= -1; prof.wait = 1.5; }
         const p = paceA.clone().lerp(paceB, prof.t).add(prof.push);
-        P.walking = true;
-        P.object.position.set(p.x, heightAt(p.x, p.y), p.y);
+        Q.position.set(p.x, heightAt(p.x, p.y), p.y);
         const dir = paceB.clone().sub(paceA).multiplyScalar(prof.dir);
-        P.face(dir.x, dir.y);
+        yaw = Math.atan2(dir.x, dir.y);
+        walking = true;
       }
-      P.update(dt);
+      prof.ph = (prof.ph || 0) + dt * (walking ? 7 : 2);
+      const nod = prof.talk > 0 ? Math.sin(prof.ph * 3) * 0.05 : 0;
+      Q.rotation.set(nod, yaw, walking ? Math.sin(prof.ph) * 0.07 : 0); // 뒤뚱뒤뚱
+      Q.position.y += walking ? Math.abs(Math.sin(prof.ph)) * 0.03 : Math.sin(prof.ph) * 0.005; // 숨쉬기
     },
   };
   return api;
+}
+
+// 교수님을 서 있는 모습 그대로 메시 하나로 (재질 색 × 정점 색 → 정점 색). 투명한 안경알 등은 뺌
+function professorProxy(P) {
+  P.walking = false; P.talking = false; P.pose = 'rest';
+  P.update(0);
+  P.object.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(P.object.matrixWorld).invert(), m = new THREE.Matrix4();
+  const pos = [], nor = [], col = [], c = new THREE.Color();
+  P.object.traverse((o) => {
+    if (!o.isMesh || o.material.transparent || !o.geometry.attributes.position) return;
+    for (let q = o; q && q !== P.object; q = q.parent) if (!q.visible) return;
+    const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
+    g.applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld));
+    if (!g.attributes.normal) g.computeVertexNormals();
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    const vc = o.material.vertexColors && g.attributes.color;
+    for (let k = 0; k < g.attributes.position.count; k++) {
+      c.copy(o.material.color);
+      if (vc) c.multiply(new THREE.Color(vc.getX(k), vc.getY(k), vc.getZ(k)));
+      col.push(c.r, c.g, c.b);
+    }
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeBoundingBox();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.scale.copy(P.object.scale);
+  mesh.castShadow = true;
+  mesh.userData.top = geo.boundingBox.max.y * P.object.scale.y;
+  return mesh;
 }
 
 // 벤치 방향 (landscape.js와 같은 방식: 가장 가까운 길을 바라봄) 대신 간단히: 가까운 길 쪽 → 걷는 학생은 그쪽을 보고 앉음
