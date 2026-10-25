@@ -4,12 +4,17 @@
 - 먼저 scripts/fetch_vworld.py로 data/raw/vworld_buildings.json을 받아 둔다(없으면 브이월드 단계는 건너뜀).
 - 짝짓기: OSM 건물 안에 점을 고르게 찍어, 그 점을 품은 브이월드 건물을 센다(겹치는 면적).
   가장 많이 겹친 브이월드 건물이 OSM 건물 면적의 30% 이상을 덮으면 짝.
-- 층수 우선순위: csv에 직접 적은 값 > 브이월드 > OSM building:levels > 기본 4층.
+- 층수 우선순위: csv에 직접 적은 값 > 브이월드 > OSM building:levels > 수치지도 > 기본 4층.
+  수치지도(국토지리정보원 2025 1:5,000, scripts/ngii_buildings.py → data/raw/ngii_buildings.json) 층수는
+  브이월드 일괄값이나 기본값인 건물에만 채운다(출처 "수치지도").
   단, 브이월드에서 같은 이름의 건물 20동 이상이 모두(95%+) 같은 층수면 단지 대표값으로 보고 OSM 다음으로 미룬다.
   (전남대학교 이름의 123동 중 122동이 4층 → 진리관 9층, 교육융합관 10층 같은 OSM 값을 덮지 않게)
   이 대표값을 쓴 건물은 csv 출처 열에 "브이월드(일괄값)"으로 따로 표시한다 (실제 층수를 고쳐 넣을 건물 찾기용).
   csv의 층수 칸을 고치면(출처는 무엇이든) "직접"으로 보고 다시 실행해도 유지한다.
 - 높이 = 층수 × 4m + 옥상 난간 1m.
+- 외관 칸(외관·외벽색·지붕색): 비우면 게임 기본(콘크리트, 건물마다 정해진 색). 외관은 커튼월/벽돌/콘크리트/타일.
+  자동값은 지붕색(정사영상)과 외관(규칙으로 추정, 외관출처 "추정"). csv에서 값을 고치면 외관출처가 "직접"이 되고 다시 실행해도 유지.
+  자동값을 지워 기본으로 되돌리려면 칸을 비우고 외관출처에 "직접"을 적는다.
 - scripts/build_map.py도 끝에서 apply_floors()를 불러, 지도를 다시 만들어도 층수가 유지된다.
 Python 표준 라이브러리만 사용.
 """
@@ -21,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = ROOT / "data" / "building-floors.csv"
 VWORLD_PATH = ROOT / "data" / "raw" / "vworld_buildings.json"
+NGII_PATH = ROOT / "data" / "raw" / "ngii_buildings.json"
 CAMPUS_PATH = ROOT / "data" / "campus.json"
 EARTH_R = 6378137.0
 MISSIONS = ["농생대 1호관", "중앙도서관", "제1학생마루", "생활관 9C동 예향학사", "공과대 2호관"]
@@ -30,7 +36,8 @@ DEFAULT_FLOORS = 4
 MIN_COVER = 0.3
 BULK_LABEL = "브이월드(일괄값)"
 BULK_MIN = 20  # 대표값 판단: 같은 이름 건물 수
-HEADER = ["건물 이름", "지금 높이(m)", "층수", "출처", "osm_id", "바닥면적(m2)"]
+HEADER = ["건물 이름", "지금 높이(m)", "층수", "출처", "osm_id", "바닥면적(m2)", "외관", "외벽색", "지붕색", "외관출처"]
+FACADES = ("커튼월", "벽돌", "콘크리트", "타일")
 
 
 def area(o):
@@ -118,6 +125,15 @@ def match_vworld(buildings, vw):
     return result
 
 
+def read_looks():
+    """csv의 외관 칸: osm_id → (외관, 외벽색, 지붕색, 외관출처)"""
+    if not CSV_PATH.exists():
+        return {}
+    with CSV_PATH.open(encoding="utf-8-sig", newline="") as f:
+        return {row["osm_id"]: tuple((row.get(k) or "").strip() for k in ("외관", "외벽색", "지붕색", "외관출처"))
+                for row in csv.DictReader(f)}
+
+
 def read_manual():
     """csv에 채워진 층수: osm_id → (층수, 출처)"""
     if not CSV_PATH.exists():
@@ -142,7 +158,9 @@ def apply_floors(campus, verbose=True):
     vw = load_vworld(campus)
     matched = match_vworld(buildings, vw) if vw else {}
     previous = read_manual()
-    rows, stats = [], {"직접": 0, "브이월드": 0, BULK_LABEL: 0, "OSM": 0, "없음": 0}
+    looks_prev = read_looks()
+    ngii = json.loads(NGII_PATH.read_text(encoding="utf-8")) if NGII_PATH.exists() else {}
+    rows, stats = [], {"직접": 0, "브이월드": 0, BULK_LABEL: 0, "OSM": 0, "수치지도": 0, "없음": 0}
     overridden = 0
     for b in buildings:
         osm = b.get("osmLevels")
@@ -156,30 +174,53 @@ def apply_floors(campus, verbose=True):
             b.pop("levels", None)
         vw_floors = matched[b["id"]][0] if b["id"] in matched else None
         bulk = b["id"] in matched and matched[b["id"]][2]
-        if vw_floors and not (bulk and osm):
-            src, floors = (BULK_LABEL if bulk else "브이월드"), vw_floors
+        ng = ngii.get(b["id"], {})
+        map_floors = ng.get("mapFloors")
+        if vw_floors and not bulk:
+            src, floors = "브이월드", vw_floors
+        elif osm:
+            src, floors = "OSM", osm
+        elif map_floors:  # 브이월드 일괄값·기본값이던 건물만 수치지도로
+            src, floors = "수치지도", map_floors
+        elif vw_floors:
+            src, floors = BULK_LABEL, vw_floors
         else:
-            src, floors = ("OSM", osm) if osm else ("없음", None)
+            src, floors = "없음", None
         # csv 값이 그 출처가 자동으로 주는 값과 다르면 사람이 고친 값
         if bulk and osm and vw_floors != osm and b["inCampus"]:
             overridden += 1
         prev = previous.get(b["id"])
-        if prev and prev[0] != floors and prev[0] != {"브이월드": vw_floors, BULK_LABEL: vw_floors, "OSM": osm}.get(prev[1]):
+        if prev and prev[0] != floors and prev[0] != {"브이월드": vw_floors, BULK_LABEL: vw_floors, "OSM": osm,
+                                                       "수치지도": map_floors}.get(prev[1]):
             src, floors = "직접", prev[0]
         b["floors"] = floors or DEFAULT_FLOORS
         b["floorsSource"] = src
         b["height"] = height_of(b["floors"])
+        # 외관: 자동값(외관 추정, 지붕색 정사영상) vs csv. 외관출처가 "직접"이거나 자동값과 다르면 사람이 고친 값
+        auto = (ng.get("facade", ""), "", ng.get("roof", ""))
+        old = looks_prev.get(b["id"])
+        if old and (old[3] == "직접" or (any(old[:3]) and old[:3] != auto)):
+            look, look_src = old[:3], "직접"
+        else:
+            look, look_src = auto, ("추정" if auto[0] else "")
+        for key, v in zip(("facade", "wallColor", "roofColor"), look):
+            if v:
+                b[key] = v
+            else:
+                b.pop(key, None)
+        if b.get("facade") and b["facade"] not in FACADES:
+            b.pop("facade")
         if b["inCampus"]:
             stats[src] += 1
             rows.append({"name": b["name"], "height": b["height"], "floors": floors or "", "source": src,
-                         "id": b["id"], "area": round(area(b["outline"]))})
+                         "id": b["id"], "area": round(area(b["outline"])), "look": look, "lookSrc": look_src})
     order = {n: i for i, n in enumerate(MISSIONS)}
     rows.sort(key=lambda r: (order.get(r["name"], len(order)), -r["area"]))
     with CSV_PATH.open("w", encoding="utf-8-sig", newline="") as f:  # 엑셀에서 한글이 깨지지 않게 BOM
         w = csv.writer(f)
         w.writerow(HEADER)
         for r in rows:
-            w.writerow([r["name"] or "(이름 없음)", r["height"], r["floors"], r["source"], r["id"], r["area"]])
+            w.writerow([r["name"] or "(이름 없음)", r["height"], r["floors"], r["source"], r["id"], r["area"], *r["look"], r["lookSrc"]])
     if verbose:
         print(f"브이월드 건물 {len(vw)}동 중 OSM 건물과 짝 {len(matched)}동 (전체 지도 {len(buildings)}동 기준)")
         print(f"캠퍼스 안 {len(rows)}동 층수 출처: " + ", ".join(f"{k} {v}" for k, v in stats.items()))
