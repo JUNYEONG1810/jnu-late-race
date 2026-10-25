@@ -1,11 +1,13 @@
 // 부엉이 교수님: 도형으로 만든 3등신 캐릭터. 몸 위에 셔츠·배바지·재킷을 따로 만든 껍데기로 입힌다.
-// 맑은 눈(거의 안 깜빡임)·잔잔한 미소, 뒤뚱 걷기·숨쉬기·말할 때 몸짓, 그리고 말풍선. 캐릭터의 앞은 로컬 +z.
+// 얼굴은 시안 A/B/C (주소 ?face=), 뒤뚱 걷기·숨쉬기·말할 때 몸짓, 그리고 말풍선. 캐릭터의 앞은 로컬 +z.
 import * as THREE from 'three';
 import { PROFESSOR as P } from './professor-config.js';
 import { speak } from './voice.js';
 
 export class Professor {
-  constructor() {
+  // face: 얼굴 시안 'A' | 'B' | 'C' (생략하면 주소 ?face= 또는 기본값)
+  constructor(face = defaultFace()) {
+    this.faceStyle = face;
     this.object = new THREE.Group();   // 위치·방향
     this.object.scale.setScalar(P.scale);
     this.body = new THREE.Group();     // 뒤뚱·통통 (다리 + 윗몸)
@@ -162,36 +164,76 @@ export class Professor {
       return { pivot, thumb, side: s, rx: 0, rz: s * P.arm.rest };
     });
 
-    // ---- 머리 (끄덕임 축): 평범한 부엉이 얼굴 ----
+    // ---- 머리 (끄덕임 축): 얼굴은 시안(A/B/C)에 따라 buildHead에서 ----
     this.head = new THREE.Group();
-    const HR = P.head.radius, HX = 1.06; // 머리는 옆으로 살짝 넓은 구
+    const HR = P.head.radius;
     this.head.position.set(0, uy(cy + R * SY + HR * 0.88), 0.02);
     U.add(this.head);
-    const h = this.head, E = P.eye;
-    ball(HR, C.feather, 0, 0, 0, [HX, 1, 1], h);
-    // 머리 구 표면 앞쪽의 z (k: 머리보다 몇 배 바깥)
+    this.buildHead({ mat, add, ball, box });
+    this.headTopY = cy + R * SY + HR * 0.88 + HR + 0.2;
+  }
+
+  // 갈색 둥근 머리 + 시안별 얼굴 + 공통(호박색 눈, 은색 사각 안경, 작고 둥근 귀깃)
+  buildHead({ mat, add, ball, box }) {
+    const C = P.colors, E = P.eye, F = P.faces[this.faceStyle], h = this.head;
+    const HR = P.head.radius, HX = P.head.hx;
+    // 머리 구를 k배 키운 표면의 앞쪽 z
     const surfZ = (x, y, k = 1) => HR * k * Math.sqrt(Math.max(0, 1 - (x / (HR * HX * k)) ** 2 - (y / (HR * k)) ** 2));
-    // 얼굴판: 둥근 하트 모양 하나를 머리 표면에서 살짝 띄워 감싼다 (같은 자리에 겹쳐 깜빡이지 않게)
-    h.add(faceDisc(P.face, HR, HX, mat(C.face)));
-    const faceZ = (x, y) => surfZ(x, y, P.face.lift);
+    // 머리 표면에 감싸 붙이는 단색 타원 패치. 면마다 lift를 달리해 겹쳐도 깜빡이지 않게
+    const patch = (cx, cy, rx, ry, lift, color) =>
+      h.add(wrapPatch((t) => [cx + rx * Math.cos(t), cy + ry * Math.sin(t)], cx, cy, HR * lift, HX, mat(color)));
+
+    ball(HR, C.feather, 0, 0, 0, [HX, 1, 1], h);
+
+    let eyeLift = 1, beakLift = 1, beakY = E.y - 0.1, beakColor = C.beak, hook = false;
+    if (this.faceStyle === 'A') {
+      // 두 눈 주변만 크림색 동그라미 2개, 가운데서 살짝 겹침 (오른쪽 것을 조금 더 띄움)
+      patch(-E.x, E.y, F.ring, F.ring, F.lift, C.cream);
+      patch(E.x, E.y, F.ring, F.ring, F.lift + 0.004, C.cream);
+      eyeLift = F.lift + 0.004;
+      beakColor = C.beakGray;
+      hook = true;
+    } else if (this.faceStyle === 'B') {
+      // 눈은 갈색 머리 위, 얼굴 아래쪽 절반에 크림색 가로 타원(주둥이) + 그 안의 작은 주황 부리
+      patch(0, F.muzzleY, F.rx, F.ry, F.lift, C.cream);
+      beakY = F.muzzleY + 0.01;
+      beakLift = F.lift;
+    } else {
+      // 세로로 긴 크림색 타원 하나 + 진한 갈색 테두리, 이마에 짧은 깃털 결
+      patch(0, F.cy, F.rx + F.border, F.ry + F.border, F.lift - 0.006, C.rim);
+      patch(0, F.cy, F.rx, F.ry, F.lift, C.cream);
+      eyeLift = beakLift = F.lift;
+      F.lines.forEach(([x, y, rz]) => {
+        const line = box(0.009, 0.05, 0.006, C.featherLine, x, y, surfZ(x, y, F.lift) + 0.004, h);
+        line.rotation.order = 'YXZ';
+        line.rotation.x = -Math.asin(y / (HR * F.lift)); // 이마 곡면에 눕힘
+        line.rotation.z = rz;
+      });
+    }
+
+    // 공통: 호박색 홍채 + 검은 눈동자 + 작은 흰 반짝임 1개, 깜빡임용 눈꺼풀
     this.lids = [];
     for (const s of [-1, 1]) {
-      const ex = s * E.x, ez = faceZ(ex, E.y);
-      ball(E.radius, C.eye, ex, E.y, ez - 0.004, [1, 1, 0.35], h);                       // 노랑·주황 홍채
-      ball(E.pupil, C.pupil, ex, E.y, ez + E.radius * 0.3, [1, 1, 0.45], h);               // 검은 눈동자
-      ball(0.011, '#ffffff', ex - 0.018, E.y + 0.02, ez + E.radius * 0.3 + 0.016, [1, 1, 0.5], h); // 작은 반짝임
-      const lid = ball(E.radius * 1.12, C.feather, ex, E.y, ez - 0.002, [1, 1, 0.6], h);    // 깜빡임용 눈꺼풀
+      const ex = s * E.x, ez = surfZ(ex, E.y, eyeLift);
+      ball(E.radius, C.iris, ex, E.y, ez - 0.004, [1, 1, 0.35], h);
+      ball(E.pupil, C.pupil, ex, E.y, ez + E.radius * 0.3, [1, 1, 0.45], h);
+      ball(0.011, '#ffffff', ex - 0.018, E.y + 0.02, ez + E.radius * 0.3 + 0.016, [1, 1, 0.5], h);
+      const lid = ball(E.radius * 1.12, C.feather, ex, E.y, ez - 0.002, [1, 1, 0.6], h);
       lid.visible = false;
       this.lids.push(lid);
-      const tuft = add(new THREE.ConeGeometry(0.05, 0.13, 6), C.tuft, s * 0.2, HR * 0.9, 0, h); // 작은 깃털 뿔
-      tuft.rotation.z = -s * 0.45;
+      // 작고 둥근 귀깃
+      const tuft = ball(0.06, C.tuft, s * 0.22, HR * 0.86, 0, [0.8, 1.3, 0.7], h);
+      tuft.rotation.z = -s * 0.4;
     }
-    const by = E.y - 0.1, beakZ = faceZ(0, by);
-    const beak = add(new THREE.ConeGeometry(0.028, 0.065, 8), C.beak, 0, by, beakZ + 0.012, h); // 작은 주황 부리
-    beak.rotation.x = Math.PI / 2 + 0.6;
-    // 은색 작은 사각테 돋보기: 부리 쪽으로 내려 걸침
+
+    // 부리: A는 작은 회색 갈고리, B·C는 작은 주황 부리
+    const beak = add(new THREE.ConeGeometry(0.028, hook ? 0.08 : 0.065, 8), beakColor, 0, beakY, surfZ(0, beakY, beakLift) + 0.012, h);
+    beak.rotation.x = Math.PI / 2 + (hook ? 1.05 : 0.6); // 갈고리는 더 아래로 휨
+    if (hook) ball(0.026, beakColor, 0, beakY + 0.02, surfZ(0, beakY + 0.02, beakLift) + 0.006, [1, 0.8, 0.9], h);
+
+    // 공통: 은색 작은 사각 안경 (부리 쪽에 걸침)
     const G = { y: E.y - 0.075, w: 0.11, h: 0.06, t: 0.009 };
-    G.z = faceZ(E.x, G.y) + 0.04;
+    G.z = surfZ(E.x, G.y, Math.max(eyeLift, beakLift)) + 0.04;
     const lensMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, depthWrite: false });
     for (const s of [-1, 1]) {
       const gx = s * E.x;
@@ -207,7 +249,6 @@ export class Professor {
       temple.rotation.x = -Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z));
     }
     box(2 * (E.x - G.w / 2), G.t, G.t, C.glasses, 0, G.y + 0.018, G.z, h); // 코걸이 다리
-    this.headTopY = cy + R * SY + HR * 0.88 + HR + 0.2;
   }
 
   nextBlink() {
@@ -288,25 +329,15 @@ export class Professor {
   }
 }
 
-// 둥근 하트 모양 얼굴판. 하트 곡선을 중심에서 바깥으로 고리 모양으로 잘게 나눈 뒤,
-// 머리 구(가로 hx배)보다 cfg.lift배 바깥 표면에 감싸 붙인다 → 머리와 같은 자리에서 겹치지 않음.
-function faceDisc(cfg, HR, hx, material, rings = 10, segs = 72) {
-  const heart = (t) => { // 위가 오목하고 아래가 둥근 하트 (sin 지수를 낮춰 아래 끝을 둥글게)
-    const s = Math.sin(t);
-    return [16 * Math.sign(s) * Math.abs(s) ** 2.4,
-      13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)];
-  };
-  const R = HR * cfg.lift;
-  const toHead = (px, py) => {
-    const x = px * cfg.sx, y = py * cfg.sy + cfg.oy;
-    const z = R * Math.sqrt(Math.max(0, 1 - (x / (R * hx)) ** 2 - (y / R) ** 2));
-    return [x, y, z];
-  };
-  const pos = [...toHead(0, 0)];
+// 머리 구(가로 hx배, 반지름 R) 표면에 감싸 붙이는 단색 패치.
+// boundary(t) → [x, y] 경계 곡선을 중심 (cx, cy)에서 바깥으로 고리 모양으로 잘게 나눠 곡면에 딱 붙게 한다.
+function wrapPatch(boundary, cx, cy, R, hx, material, rings = 10, segs = 64) {
+  const toHead = (x, y) => [x, y, R * Math.sqrt(Math.max(0, 1 - (x / (R * hx)) ** 2 - (y / R) ** 2))];
+  const pos = [...toHead(cx, cy)];
   for (let i = 1; i <= rings; i++) {
     for (let j = 0; j < segs; j++) {
-      const [bx, by] = heart((j / segs) * Math.PI * 2);
-      pos.push(...toHead((bx * i) / rings, (by * i) / rings));
+      const [bx, by] = boundary((j / segs) * Math.PI * 2);
+      pos.push(...toHead(cx + ((bx - cx) * i) / rings, cy + ((by - cy) * i) / rings));
     }
   }
   const idx = [];
@@ -330,6 +361,12 @@ function faceDisc(cfg, HR, hx, material, rings = 10, segs = 72) {
   const mesh = new THREE.Mesh(geo, material);
   mesh.castShadow = true;
   return mesh;
+}
+
+// 얼굴 시안: 주소 ?face=A|B|C, 없으면 config 기본값
+function defaultFace() {
+  const q = (new URLSearchParams(location.search).get('face') || '').toUpperCase();
+  return ['A', 'B', 'C'].includes(q) ? q : P.faces.default;
 }
 
 // ---------- 말풍선 ----------
