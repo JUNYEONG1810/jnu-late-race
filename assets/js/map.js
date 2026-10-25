@@ -18,6 +18,8 @@ const OUTSIDE_MIX = 0.45;
 const FLOOR_M = 4; // 층 높이 (campus.json 높이 = 층수 × 4m + 난간 1m)
 const BAY_M = 3;     // 창문 하나의 가로 폭
 const BURY_M = 1.5;  // 벽을 가장 낮은 땅보다 더 내려 묻는 깊이
+// 가벼운 앰비언트 오클루전(미리 구움): 벽 아래쪽은 땅·옆 건물에 가려 어둡게, 바닥 그림엔 건물 둘레 접지 그림자
+const AO = { wallDark: 0.68, wallH: 6, groundAlpha: 0.3, groundBlur: 3.2 }; // 벽 바닥 밝기 비율, 어두워지는 높이(m), 바닥 그림자 진하기·번짐(m)
 
 const GROUND_COLOR = '#c9c5bc';
 const CAMPUS_COLOR = '#dbd7cd'; // 따뜻한 연회색 포장면 (눈부시지 않게)
@@ -126,6 +128,21 @@ function paintGround(canvas, campus, bounds) {
   for (const x of sorted) if ((x.kind === 'pitch' || x.kind === 'dirt') && Math.abs(area(x.outline)) > 150) courtLines(P, x, MARK_COLOR);
 
   for (const r of campus.roads) if (!r.car) P.ribbon(r.points, r.width, FOOT_COLOR);
+  // 건물 둘레 접지 그림자 (앰비언트 오클루전): 외곽선을 조금 넓혀 흐리게 칠함. 건물 사이 좁은 곳은 겹쳐서 더 어두움
+  g.save();
+  g.filter = `blur(${Math.max(1, AO.groundBlur * P.s)}px)`;
+  g.globalAlpha = AO.groundAlpha;
+  g.lineJoin = 'round';
+  for (const b of campus.buildings) {
+    if (b.style?.canopy) continue;
+    P.path(b.outline, true);
+    g.fillStyle = '#2a2a24';
+    g.fill();
+    g.lineWidth = AO.groundBlur * P.s;
+    g.strokeStyle = '#2a2a24';
+    g.stroke();
+  }
+  g.restore();
   for (const r of campus.roads) if (r.car) P.ribbon(r.points, Math.max(1, r.width - 1), ASPHALT_COLOR);
   for (const r of campus.roads) if (r.type === 'steps') P.dashes(r.points, r.width, 0.3, 0.45, STEP_COLOR);
 
@@ -664,25 +681,42 @@ class MeshBuilder {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
-    let pts = [a, b, c], tuv = uvs;
+    let pts = [a, b, c], tuv = uvs, cols = Array.isArray(color) ? color : [color, color, color]; // 정점마다 색을 줄 수도 있음
     if (cx * n[0] + cy * n[1] + cz * n[2] < 0) {
       pts = [a, c, b];
       tuv = uvs && [uvs[0], uvs[2], uvs[1]];
+      cols = [cols[0], cols[2], cols[1]];
     }
     pts.forEach((p, i) => {
       this.pos.push(p[0], p[1], p[2]);
       this.nor.push(n[0], n[1], n[2]);
-      this.col.push(color.r, color.g, color.b);
+      this.col.push(cols[i].r, cols[i].g, cols[i].b);
       if (this.uv) this.uv.push(tuv[i][0], tuv[i][1]);
     });
   }
 
-  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다
-  wall(p1, p2, y0, y1, n, color, u1 = 0, base = 0, floorH = FLOOR_M) {
+  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다.
+  // 아래 AO.wallH m는 따로 나눠 땅 쪽으로 갈수록 어둡게(앰비언트 오클루전)
+  wall(p1, p2, y0, y1, n, color, u1 = 0, base = null, floorH = FLOOR_M) {
+    if (base === null) return this.wallPart(p1, p2, y0, y1, n, color, u1, null, floorH); // 입구·옥상 구조물: 그늘 없음
+    const ym = Math.min(y1, base + AO.wallH);
+    if (ym > y0 + 0.1 && ym < y1 - 0.1) {
+      this.wallPart(p1, p2, y0, ym, n, color, u1, base, floorH);
+      this.wallPart(p1, p2, ym, y1, n, color, u1, base, floorH);
+    } else this.wallPart(p1, p2, y0, y1, n, color, u1, base, floorH);
+  }
+
+  wallPart(p1, p2, y0, y1, n, color, u1, base, floorH) {
     const a = [p1[0], y0, p1[1]], b = [p2[0], y0, p2[1]], c = [p2[0], y1, p2[1]], d = [p1[0], y1, p1[1]];
-    const v0 = (y0 - base) / floorH, v1 = (y1 - base) / floorH;
-    this.tri(a, b, c, n, color, [[0, v0], [u1, v0], [u1, v1]]);
-    this.tri(a, c, d, n, color, [[0, v0], [u1, v1], [0, v1]]);
+    const v0 = (y0 - (base ?? 0)) / floorH, v1 = (y1 - (base ?? 0)) / floorH;
+    const shade = (y) => {
+      if (base === null) return color;
+      const k = Math.min(1, Math.max(0, (y - base) / AO.wallH));
+      return color.clone().multiplyScalar(AO.wallDark + (1 - AO.wallDark) * Math.sqrt(k));
+    };
+    const lo = shade(y0), hi = shade(y1);
+    this.tri(a, b, c, n, [lo, lo, hi], [[0, v0], [u1, v0], [u1, v1]]);
+    this.tri(a, c, d, n, [lo, hi, hi], [[0, v0], [u1, v1], [0, v1]]);
   }
 
   geometry() {

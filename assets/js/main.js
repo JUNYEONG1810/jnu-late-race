@@ -9,8 +9,11 @@ import { Hud } from './hud.js';
 import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
 
-const SKY_TOP = new THREE.Color('#6fb4f0');
-const SKY_HORIZON = new THREE.Color('#e4f3ff');
+const SKY_TOP = new THREE.Color('#5ea8ec');
+const SKY_HORIZON = new THREE.Color('#e6f1fb');
+// 햇빛: 오전 9시쯤(수업 시작) 동남동 하늘 약 35° (방위 125°). 실제 날짜·시각 계산이 아니라 그 무렵의 방향으로 정한 값(추정)
+const SUN_DIR = new THREE.Vector3(0.67, 0.57, 0.47).normalize();
+const SUN_COLOR = '#ffeccf';
 // 주소 뒤에 ?fps=1 을 붙이면 왼쪽 위 구석에 fps 표시 (기본은 숨김)
 const SHOW_FPS = ['1', 'true', ''].includes(new URLSearchParams(location.search).get('fps'));
 // 굴착기 색 (첫 화면에서 고름)
@@ -27,7 +30,7 @@ const LANDMARKS = [
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 부드러운 그림자 가장자리 (품질 높음에서만 그림자)
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -35,9 +38,9 @@ scene.fog = new THREE.Fog(SKY_HORIZON, 700, 3000);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 5000);
 
-scene.add(new THREE.HemisphereLight('#dceeff', '#b8b2a2', 1.6));
-const sun = new THREE.DirectionalLight('#fff6e8', 2.2);
-const SUN_OFFSET = new THREE.Vector3(70, 120, 50);
+scene.add(new THREE.HemisphereLight('#d9ebff', '#b3ab98', 1.55)); // 하늘빛(위) · 땅에서 튀는 빛(아래)
+const sun = new THREE.DirectionalLight(SUN_COLOR, 2.35);
+const SUN_OFFSET = SUN_DIR.clone().multiplyScalar(170);
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 400 });
 sun.shadow.bias = -0.0003;
@@ -51,11 +54,18 @@ function makeSky() {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: { top: { value: SKY_TOP }, horizon: { value: SKY_HORIZON } },
+    uniforms: { top: { value: SKY_TOP }, horizon: { value: SKY_HORIZON }, sunDir: { value: SUN_DIR }, sunColor: { value: new THREE.Color('#fff1d6') } },
     vertexShader: `varying vec3 vDir;
       void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 vDir;
-      void main() { float t = pow(clamp(vDir.y, 0.0, 1.0), 0.6); gl_FragColor = vec4(mix(horizon, top, t), 1.0);
+    // 위는 진한 하늘색 → 지평선은 옅은 안개색, 해 쪽은 따뜻하게 밝음(해 둘레 빛 + 그 방향 지평선 노을기)
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 sunColor; varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float t = pow(clamp(d.y, 0.0, 1.0), 0.55);
+        vec3 c = mix(horizon, top, t);
+        float s = max(dot(d, sunDir), 0.0);
+        c += sunColor * (pow(s, 600.0) * 1.2 + pow(s, 40.0) * 0.28 + pow(s, 6.0) * 0.08 * (1.0 - t));
+        gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
   });
