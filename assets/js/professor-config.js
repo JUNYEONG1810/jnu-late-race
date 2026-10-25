@@ -4,13 +4,11 @@ export const PROFESSOR = {
   scale: 1.05,
   colors: {
     feather: '#8b5e3c',     // 맑은 갈색 깃털
-    face: '#efdfbd',        // 얼굴판 베이지
+    face: '#f1e2c2',        // 얼굴판 아이보리 (단색)
     tuft: '#5e3b22',        // 깃털 뿔
-    eyeWhite: '#ffffff',    // 아주 맑은 흰자
-    eyeRim: '#3b2a1e',      // 눈 테두리
-    pupil: '#141417',       // 가운데 작은 점 눈동자
-    beak: '#f08a24',
-    mouth: '#4a3324',       // 잔잔한 미소 선
+    eye: '#f5a623',         // 노랑·주황 홍채
+    pupil: '#141417',       // 검은 눈동자
+    beak: '#f08a24',        // 작은 주황 부리
     glasses: '#c9ced6',     // 은색 작은 사각테 돋보기
     shirt: '#f6f6f2',
     button: '#d6d6d6',
@@ -33,11 +31,13 @@ export const PROFESSOR = {
   head: { radius: 0.35 },                     // 머리 지름 0.7 (= 1)
   waist: 1.25,     // 바지 허리선 (몸통 위에서부터 각도, 1.57이 배 한가운데. 작을수록 높다)
   shell: { shirt: 1.03, pants: 1.055, jacket: 1.12 }, // 옷 껍데기 크기 (몸통 대비)
-  eye: { radius: 0.12, x: 0.13, y: 0.0, pupil: 0.026 }, // 크게 뜬 맑은 눈, 가운데 작은 점
-  blink: { min: 5, max: 8, time: 0.12 },   // 5~8초에 한 번, 아주 빠르게
+  // 둥근 하트 얼굴판: 하트 곡선(가로 ±16, 세로 -17~12)을 sx·sy배 + oy만큼 내림, 머리보다 lift배 바깥에
+  face: { sx: 0.016, sy: 0.0125, oy: -0.06, lift: 1.012 },
+  eye: { radius: 0.075, x: 0.12, y: 0.0, pupil: 0.038 }, // 보통 크기의 부엉이 눈
+  blink: { min: 3, max: 6, time: 0.18 },   // 보통 속도로 가끔
   posture: { hunch: 0.05, headDown: 0.0 }, // 등 굽힘, 고개 숙임 (rad)
-  arm: { rest: 0.4 },                      // 팔을 몸 옆으로 벌린 각도 (소매가 재킷에 박히지 않게)
-  talk: { tiltRate: 1.3, tilt: 0.16, lean: 0.09 }, // 말할 때 천천히 갸웃, "Serious"에서 고개를 앞으로
+  arm: { x: 0.36, rest: 0.38 },            // 어깨 관절은 재킷 안쪽(x), 팔을 몸 옆으로 내린 각도
+  talk: { nodRate: 9, nod: 0.07 },          // 말할 때 가볍게 끄덕임
   walk: {
     speed: 1.6,      // 걷는 속도 (m/s, scale 반영 전)
     stepRate: 7,     // 한 걸음 박자 (rad/s)

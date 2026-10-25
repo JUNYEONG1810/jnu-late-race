@@ -144,55 +144,54 @@ export class Professor {
     // 뒤트임 (등 가운데 밑단)
     stick(box(0.008, 0.2, 0.01, C.seam, 0, 0, 0, U), 2.25, Math.PI, jk);
 
-    // ---- 팔(날개): 날개 + 재킷 소매 통(어깨 솔기·소매 단추) + 셔츠 소맷단 + 깃털 손 — 모두 팔 그룹의 자식 ----
+    // ---- 팔(날개): 어깨 관절은 재킷 안쪽에. 소매 통·소매 단추·셔츠 소맷단·깃털 손은 모두 팔 그룹의 자식 ----
     const shoulderY = cy + R * SY * 0.62;
     this.wings = [-1, 1].map((s) => {
       const pivot = new THREE.Group();
-      pivot.position.set(s * 0.46, uy(shoulderY), 0);
-      add(new THREE.CylinderGeometry(0.06, 0.07, 0.4, 10), C.feather, 0, -0.2, 0, pivot);   // 날개 (팔)
-      add(new THREE.CylinderGeometry(0.095, 0.11, 0.4, 14), C.jacket, 0, -0.185, 0, pivot); // 소매 (날개 윗면보다 살짝 높게: 깜빡임 방지)
-      add(new THREE.TorusGeometry(0.097, 0.007, 6, 20).rotateX(Math.PI / 2), C.seam, 0, -0.012, 0, pivot); // 어깨 솔기
-      for (const y of [-0.3, -0.335]) ball(0.012, C.jacketButton, s * 0.106, y, 0.015, [0.5, 1, 1], pivot); // 소매 단추
-      add(new THREE.CylinderGeometry(0.082, 0.082, 0.05, 14), C.shirt, 0, -0.4, 0, pivot);  // 셔츠 소맷단
-      ball(0.1, C.feather, 0, -0.5, 0, [0.6, 1.1, 0.85], pivot);                            // 깃털 손
-      const thumb = ball(0.05, C.feather, -s * 0.06, -0.45, 0.05, [1, 1.6, 1], pivot);      // 엄지 (엄지 척일 때만)
+      pivot.position.set(s * P.arm.x, uy(shoulderY), 0);
+      add(new THREE.CylinderGeometry(0.06, 0.07, 0.42, 10), C.feather, 0, -0.21, 0, pivot);  // 날개 (팔)
+      add(new THREE.CylinderGeometry(0.1, 0.11, 0.44, 14), C.jacket, 0, -0.2, 0, pivot);     // 소매 (위쪽은 어깨 덮개 속으로)
+      for (const y of [-0.34, -0.375]) ball(0.012, C.jacketButton, s * 0.107, y, 0.015, [0.5, 1, 1], pivot); // 소매 단추
+      add(new THREE.CylinderGeometry(0.082, 0.082, 0.05, 14), C.shirt, 0, -0.44, 0, pivot);  // 셔츠 소맷단
+      ball(0.1, C.feather, 0, -0.54, 0, [0.6, 1.1, 0.85], pivot);                            // 깃털 손
+      const thumb = ball(0.05, C.feather, -s * 0.06, -0.49, 0.05, [1, 1.6, 1], pivot);       // 엄지 (엄지 척일 때만)
       thumb.visible = false;
       U.add(pivot);
+      // 재킷 어깨의 둥근 덮개: 소매와 몸통의 이음매를 감춘다 (팔이 돌아도 제자리)
+      ball(0.13, C.jacket, s * P.arm.x, uy(shoulderY) + 0.01, 0, [1, 0.85, 1.05], U);
       return { pivot, thumb, side: s, rx: 0, rz: s * P.arm.rest };
     });
 
-    // ---- 머리 (갸웃·내밀기 축): 맑은 눈, 잔잔한 미소 ----
+    // ---- 머리 (끄덕임 축): 평범한 부엉이 얼굴 ----
     this.head = new THREE.Group();
-    const HR = P.head.radius;
-    this.headBase = new THREE.Vector3(0, uy(cy + R * SY + HR * 0.88), 0.02);
-    this.head.position.copy(this.headBase);
+    const HR = P.head.radius, HX = 1.06; // 머리는 옆으로 살짝 넓은 구
+    this.head.position.set(0, uy(cy + R * SY + HR * 0.88), 0.02);
     U.add(this.head);
     const h = this.head, E = P.eye;
-    ball(HR, C.feather, 0, 0, 0, [1.06, 1, 1], h);
-    ball(HR * 0.78, C.face, 0, -0.02, HR * 0.58, [1.12, 0.97, 0.5], h);  // 얼굴판
-    const faceZ = HR * 0.58 + HR * 0.78 * 0.5;                           // 얼굴판 앞면
+    ball(HR, C.feather, 0, 0, 0, [HX, 1, 1], h);
+    // 머리 구 표면 앞쪽의 z (k: 머리보다 몇 배 바깥)
+    const surfZ = (x, y, k = 1) => HR * k * Math.sqrt(Math.max(0, 1 - (x / (HR * HX * k)) ** 2 - (y / (HR * k)) ** 2));
+    // 얼굴판: 둥근 하트 모양 하나를 머리 표면에서 살짝 띄워 감싼다 (같은 자리에 겹쳐 깜빡이지 않게)
+    h.add(faceDisc(P.face, HR, HX, mat(C.face)));
+    const faceZ = (x, y) => surfZ(x, y, P.face.lift);
     this.lids = [];
     for (const s of [-1, 1]) {
-      const ex = s * E.x;
-      add(new THREE.TorusGeometry(E.radius, 0.009, 8, 32), C.eyeRim, ex, E.y, faceZ + 0.005, h);         // 눈 테두리
-      ball(E.radius, C.eyeWhite, ex, E.y, faceZ - 0.02, [1, 1, 0.42], h);                                 // 크게 뜬 맑은 흰자
-      ball(E.pupil, C.pupil, ex, E.y, faceZ + 0.032, [1, 1, 0.5], h);                                     // 가운데 작은 점
-      ball(0.011, '#ffffff', ex - 0.012, E.y + 0.013, faceZ + 0.045, [1, 1, 0.5], h);                     // 또렷한 반짝임 1개
-      // 깜빡임용 눈꺼풀 (평소엔 숨김)
-      const lid = ball(E.radius * 1.08, C.feather, ex, E.y, faceZ - 0.015, [1, 1, 0.5], h);
+      const ex = s * E.x, ez = faceZ(ex, E.y);
+      ball(E.radius, C.eye, ex, E.y, ez - 0.004, [1, 1, 0.35], h);                       // 노랑·주황 홍채
+      ball(E.pupil, C.pupil, ex, E.y, ez + E.radius * 0.3, [1, 1, 0.45], h);               // 검은 눈동자
+      ball(0.011, '#ffffff', ex - 0.018, E.y + 0.02, ez + E.radius * 0.3 + 0.016, [1, 1, 0.5], h); // 작은 반짝임
+      const lid = ball(E.radius * 1.12, C.feather, ex, E.y, ez - 0.002, [1, 1, 0.6], h);    // 깜빡임용 눈꺼풀
       lid.visible = false;
       this.lids.push(lid);
-      const tuft = add(new THREE.ConeGeometry(0.07, 0.2, 6), C.tuft, s * 0.21, HR * 0.86, 0, h); // 깃털 뿔
-      tuft.rotation.z = -s * 0.5;
+      const tuft = add(new THREE.ConeGeometry(0.05, 0.13, 6), C.tuft, s * 0.2, HR * 0.9, 0, h); // 작은 깃털 뿔
+      tuft.rotation.z = -s * 0.45;
     }
-    const beak = add(new THREE.ConeGeometry(0.03, 0.07, 8), C.beak, 0, E.y - 0.13, faceZ + 0.01, h);
+    const by = E.y - 0.1, beakZ = faceZ(0, by);
+    const beak = add(new THREE.ConeGeometry(0.028, 0.065, 8), C.beak, 0, by, beakZ + 0.012, h); // 작은 주황 부리
     beak.rotation.x = Math.PI / 2 + 0.6;
-    // 부리 아래 잔잔하게 올라간 미소 (∪ 모양 호)
-    const arc = 1.6;
-    const smile = add(new THREE.TorusGeometry(0.05, 0.006, 6, 20, arc), C.mouth, 0, E.y - 0.16, faceZ - 0.008, h);
-    smile.rotation.z = -Math.PI / 2 - arc / 2;
     // 은색 작은 사각테 돋보기: 부리 쪽으로 내려 걸침
-    const G = { y: E.y - 0.085, z: faceZ + 0.05, w: 0.11, h: 0.06, t: 0.009 };
+    const G = { y: E.y - 0.075, w: 0.11, h: 0.06, t: 0.009 };
+    G.z = faceZ(E.x, G.y) + 0.04;
     const lensMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, depthWrite: false });
     for (const s of [-1, 1]) {
       const gx = s * E.x;
@@ -257,14 +256,10 @@ export class Professor {
       if (k >= 1) this.blinkT = -1;
     }
 
-    // 고개: 말할 때 천천히 갸웃, "Serious"에서는 미소 그대로 앞으로 쑥, stern이면 숙임
-    const tiltZ = this.talking ? Math.sin(t * T.tiltRate) * T.tilt : 0;
+    // 고개: 말할 때 가볍게 끄덕임만, stern이면 숙임
+    const nod = this.talking ? Math.sin(t * T.nodRate) * T.nod : 0;
     const tiltX = P.posture.headDown + (this.pose === 'stern' ? 0.16 : 0);
-    const lean = this.gesture === 'emphasis' ? T.lean : 0;
-    const kh = Math.min(1, dt * 6);
-    this.head.rotation.z += (tiltZ - this.head.rotation.z) * kh;
-    this.head.rotation.x += (tiltX - this.head.rotation.x) * kh;
-    this.head.position.z += (this.headBase.z + lean - this.head.position.z) * kh;
+    this.head.rotation.x += (nod + tiltX - this.head.rotation.x) * Math.min(1, dt * 12);
 
     // 팔(날개). rx: 앞뒤(음수 = 앞으로 듦), rz: 옆으로 벌림 (side 방향이 바깥)
     // 오른쪽 날개 = 로컬 -x (side -1)가 손짓·가리키기·엄지를 맡는다
@@ -291,6 +286,50 @@ export class Professor {
       w.thumb.visible = right && this.pose === 'thumbsUp';
     }
   }
+}
+
+// 둥근 하트 모양 얼굴판. 하트 곡선을 중심에서 바깥으로 고리 모양으로 잘게 나눈 뒤,
+// 머리 구(가로 hx배)보다 cfg.lift배 바깥 표면에 감싸 붙인다 → 머리와 같은 자리에서 겹치지 않음.
+function faceDisc(cfg, HR, hx, material, rings = 10, segs = 72) {
+  const heart = (t) => { // 위가 오목하고 아래가 둥근 하트 (sin 지수를 낮춰 아래 끝을 둥글게)
+    const s = Math.sin(t);
+    return [16 * Math.sign(s) * Math.abs(s) ** 2.4,
+      13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)];
+  };
+  const R = HR * cfg.lift;
+  const toHead = (px, py) => {
+    const x = px * cfg.sx, y = py * cfg.sy + cfg.oy;
+    const z = R * Math.sqrt(Math.max(0, 1 - (x / (R * hx)) ** 2 - (y / R) ** 2));
+    return [x, y, z];
+  };
+  const pos = [...toHead(0, 0)];
+  for (let i = 1; i <= rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const [bx, by] = heart((j / segs) * Math.PI * 2);
+      pos.push(...toHead((bx * i) / rings, (by * i) / rings));
+    }
+  }
+  const idx = [];
+  const v = (i, j) => (i === 0 ? 0 : 1 + (i - 1) * segs + (j % segs));
+  const tri = (a, b, c) => { // 앞(+z)을 보도록 감기 방향 맞춤
+    const [ax, ay] = [pos[a * 3], pos[a * 3 + 1]];
+    const cross = (pos[b * 3] - ax) * (pos[c * 3 + 1] - ay) - (pos[b * 3 + 1] - ay) * (pos[c * 3] - ax);
+    idx.push(...(cross >= 0 ? [a, b, c] : [a, c, b]));
+  };
+  for (let j = 0; j < segs; j++) {
+    tri(0, v(1, j), v(1, j + 1));
+    for (let i = 1; i < rings; i++) {
+      tri(v(i, j), v(i, j + 1), v(i + 1, j + 1));
+      tri(v(i, j), v(i + 1, j + 1), v(i + 1, j));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.castShadow = true;
+  return mesh;
 }
 
 // ---------- 말풍선 ----------
