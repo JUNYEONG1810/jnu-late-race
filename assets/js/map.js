@@ -707,6 +707,7 @@ function buildBuildings(list, anisotropy) {
   };
   const plain = new MeshBuilder(false);
   const entrance = new THREE.Color(ENTRANCE_COLOR);
+  const clocks = []; // 시계탑 (옥상 구조물 clock: true)
 
   for (const b of list) {
     const o = b.outline;
@@ -784,6 +785,7 @@ function buildBuildings(list, anisotropy) {
       const on = f.on === 'main' ? mainH : 0;
       box(plain, fo, base + on - 0.2, base + on + f.h, tint(new THREE.Color(f.color)));
       top = Math.max(top, on + f.h);
+      if (f.clock) clocks.push({ outline: fo, top: base + on + f.h });
     }
     b.height = top || b.height; // 이름표·미니맵이 쓰는 가장 높은 곳
   }
@@ -797,11 +799,72 @@ function buildBuildings(list, anisotropy) {
     return new THREE.Mesh(w.geometry(), mat);
   });
   meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+  if (clocks.length) meshes.push(clockFaces(clocks));
   for (const m of meshes) {
     m.castShadow = true;
     m.receiveShadow = true;
   }
   return meshes;
+}
+
+// 시계탑 네 면의 둥근 시계판: 흰 바탕 + 짙은 테두리 + 시곗바늘 2개 (시각은 임의: 8시 58분, 지각 직전)
+const CLOCK = { r: 0.32, ring: 0.06, below: 0.3, time: [8, 58] }; // r·ring은 면 폭 비율, below는 꼭대기에서 아래로(면 폭 비율)
+function clockFaces(list) {
+  const pos = [], nor = [], col = [];
+  const white = new THREE.Color('#f4f2ea'), dark = new THREE.Color('#2b2e33');
+  for (const { outline: o, top } of list) {
+    const sign = area(o) > 0 ? 1 : -1;
+    for (let i = 0; i < o.length; i++) {
+      const p1 = o[i], p2 = o[(i + 1) % o.length];
+      const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+      if (len < 2) continue;
+      const nx = ((p2[1] - p1[1]) / len) * sign, nz = (-(p2[0] - p1[0]) / len) * sign;
+      const ux = nz, uz = -nx; // 밖에서 볼 때 오른쪽
+      const R = len * CLOCK.r, cy = top - len * CLOCK.below;
+      const cx = (p1[0] + p2[0]) / 2, cz = (p1[1] + p2[1]) / 2;
+      // 면 위 점 (u 오른쪽, v 위, d 바깥으로 띄움)
+      const P = (u, v, d) => [cx + ux * u + nx * d, cy + v, cz + uz * u + nz * d];
+      const tri = (a, b, c, color) => {
+        for (const q of [a, b, c]) { pos.push(...q); nor.push(nx, 0, nz); col.push(color.r, color.g, color.b); }
+      };
+      const disc = (r0, r1, d, color, n = 40) => {
+        for (let k = 0; k < n; k++) {
+          const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
+          const o0 = P(Math.cos(a0) * r1, Math.sin(a0) * r1, d), o1 = P(Math.cos(a1) * r1, Math.sin(a1) * r1, d);
+          if (r0 === 0) tri(P(0, 0, d), o1, o0, color);
+          else {
+            const i0 = P(Math.cos(a0) * r0, Math.sin(a0) * r0, d), i1 = P(Math.cos(a1) * r0, Math.sin(a1) * r0, d);
+            tri(i0, o1, o0, color);
+            tri(i0, i1, o1, color);
+          }
+        }
+      };
+      const bar = (ang, L, w, d, color) => { // 가운데에서 시계 방향 ang(12시 = 0) 쪽으로 길이 L
+        const sx = Math.sin(ang), sy = Math.cos(ang), px = -sy * w / 2, py = sx * w / 2;
+        const a = P(px - sx * L * 0.12, py - sy * L * 0.12, d), b = P(-px - sx * L * 0.12, -py - sy * L * 0.12, d);
+        const c = P(-px + sx * L, -py + sy * L, d), e = P(px + sx * L, py + sy * L, d);
+        tri(a, c, b, color);
+        tri(a, e, c, color);
+      };
+      disc(0, R, 0.05, white);
+      disc(R, R + len * CLOCK.ring, 0.06, dark);
+      for (let h = 0; h < 12; h++) { // 시 눈금
+        const a = (h / 12) * Math.PI * 2, r0 = R * 0.82;
+        const sx = Math.sin(a), sy = Math.cos(a), w = R * 0.035;
+        tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), P(sx * R * 0.95 - sy * w, sy * R * 0.95 + sx * w, 0.07), dark);
+        tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * r0 + sy * w, sy * r0 - sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), dark);
+      }
+      const [hh, mm] = CLOCK.time;
+      bar(((hh % 12) + mm / 60) / 12 * Math.PI * 2, R * 0.55, R * 0.09, 0.08, dark); // 시침
+      bar((mm / 60) * Math.PI * 2, R * 0.85, R * 0.06, 0.09, dark);                // 분침
+      disc(0, R * 0.07, 0.1, dark, 12);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
 }
 
 // 외곽선을 y0~y1로 세움: 벽(외관 텍스처) + 지붕(평지붕 또는 우진각). 가장 긴 벽 정보를 돌려줌

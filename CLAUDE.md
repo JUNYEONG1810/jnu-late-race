@@ -89,7 +89,7 @@
 - **물리: 직접 만든 아케이드 주행**(속도, 가속, 브레이크, 조향, 가벼운 드리프트). 무거운 물리 엔진은 쓰지 않는다 (시간 절약, 조작감 조절 쉬움).
 - 충돌: 차를 원 하나로 보고, 건물 외곽선(2D 다각형)과 부딪히면 밀어내고 감속. 높이 방향 충돌은 없음.
 - 기념물·조형물은 부딪히면 튕김·소리·화면 흔들림 없이 조용히 멈춘다(`addObstacle(..., { quiet: true })`). 흉상·동상은 옆선을 돌려 만든 매끈한 고전 비례(부드러운 음영), 이목구비 없음. 마네킹 같은 인물 형상·실루엣은 어디에도 쓰지 않는다(임을 위한 행진은 받침 + 이름 새긴 판석). 이름표는 OSM 공식 이름만.
-- 지형: 국토지리정보원 수치지도(2020 1:1,000 우선, 2025 1:5,000) 등고선·표고점·옹벽으로 만든 5m 격자 `data/terrain.json`(`scripts/build_terrain_ngii.py`, 바탕·바깥은 AWS Terrain Tiles `scripts/build_terrain.py`의 사본 data/raw/terrain_aws.json, 정문 앞 출발점 = 0m). 옹벽·석축·제방·법면 선에서는 매끄러움 조건을 끊어 단차를 남긴다. 떼어 둔 표고점으로 검증해 AWS보다 나쁘면 바꾸지 않는다(docs/지형-수치지도.md). `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px, 이방성 필터 장치 최대)에 그려 지형 메시 텍스처로 입힌다. 차도와 차선만 가까이서 선명하도록 지형을 따라 휘는 별도 메시(깊이 테스트 + polygonOffset, 땅에서 7cm·11cm)로 그린다. 포장면은 따뜻한 연회색(#dbd7cd). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 굴착기는 옹벽 단차에서 튀지 않게 높이·기울기(18°)·속도용 경사(25%)만 부드럽게 보정. 크레딧 "지형: 국토지리정보원 수치지도(등고선·표고점)" + 바깥 구역 Terrain Tiles 출처.
+- 지형: 국토지리정보원 수치지도(2020 1:1,000 우선, 2025 1:5,000) 등고선·표고점·옹벽으로 만든 5m 격자 `data/terrain.json`(`scripts/build_terrain_ngii.py`, 바탕·바깥은 AWS Terrain Tiles `scripts/build_terrain.py`의 사본 data/raw/terrain_aws.json, 정문 앞 출발점 = 0m). 옹벽·석축·제방·법면 선에서는 매끄러움 조건을 끊어 단차를 남긴다. 떼어 둔 표고점으로 검증해 AWS보다 나쁘면 바꾸지 않는다(docs/지형-수치지도.md). 그다음 `scripts/smooth_road_terrain.py`가 차도 범위(반폭 + 3.5m)만 길이 방향으로 부드럽게(최대 경사 약 12%), 폭 방향은 평평하게 고친다(원본 사본 data/raw/terrain_ngii.json). 옹벽·단차는 도로 밖에만. `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px, 이방성 필터 장치 최대)에 그려 지형 메시 텍스처로 입힌다. 차도와 차선만 가까이서 선명하도록 지형을 따라 휘는 별도 메시(깊이 테스트 + polygonOffset, 땅에서 7cm·11cm)로 그린다. 포장면은 따뜻한 연회색(#dbd7cd). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 굴착기는 옹벽 단차에서 튀지 않게 높이·기울기(18°)·속도용 경사(25%)만 부드럽게 보정. 크레딧 "지형: 국토지리정보원 수치지도(등고선·표고점)" + 바깥 구역 Terrain Tiles 출처.
 - 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 주소 뒤 `?fps=1`이면 왼쪽 위 구석에 fps 표시(기본 숨김).
@@ -155,7 +155,7 @@ data/monuments.json            기념물 27곳 형태·크기·재료·근거 �
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)
-scripts/build_terrain_ngii.py, terrain_steps_check.py   수치지도 지형 + 검증
+scripts/build_terrain_ngii.py, terrain_steps_check.py, smooth_road_terrain.py   수치지도 지형 + 검증 + 차도 단차 정리
 scripts/ngii_building_crops.py, ngii_contact.py   건물 외관 근거용 정사영상 조각 (ref/e, ref/e2)
 data/building-styles.json   건물별 외관 지정 (가장 우선)
 scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
