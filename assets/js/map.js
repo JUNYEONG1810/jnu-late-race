@@ -112,6 +112,7 @@ function paintGround(canvas, campus, bounds) {
   const sorted = campus.greens.filter((x) => GREEN_COLORS[x.kind] && x.kind !== 'water')
     .sort((a, b) => Math.abs(area(b.outline)) - Math.abs(area(a.outline)));
   for (const x of sorted) P.polygon(x.outline, groundColor(x));
+  paintLawns(P, campus.lawns);
   for (const w of campus.greens.filter((x) => x.kind === 'water')) {
     P.polygon(w.outline, WATER_COLOR);
     P.ribbon([...w.outline, w.outline[0]], 1.1, WATER_EDGE_COLOR);
@@ -129,6 +130,23 @@ function paintGround(canvas, campus, bounds) {
   g.strokeStyle = GROUND_COLOR;
   g.lineWidth = 6;
   g.strokeRect(0, 0, canvas.width, canvas.height);
+}
+
+// 정사영상에서 찾은 잔디밭(data/lawns.json, 2m 칸): 칸마다 조금씩 다른 초록 원을 겹쳐 칠해 미세한 얼룩과 부드러운 가장자리
+const LAWN_BASE = [159, 208, 122]; // GREEN_COLORS.grass와 같은 색
+function paintLawns(P, lawns) {
+  if (!lawns) return;
+  const { g, bounds: b, s } = P;
+  const r = lawns.cell * 0.78 * s;
+  for (const [i, j] of lawns.cells) {
+    const x = lawns.x0 + (i + 0.5) * lawns.cell, z = lawns.z0 + (j + 0.5) * lawns.cell;
+    const n = (hash(`${i},${j}`) % 1000) / 1000 - 0.5; // -0.5~0.5
+    const k = 1 + n * 0.12;
+    g.fillStyle = `rgb(${Math.round(LAWN_BASE[0] * k)},${Math.round(LAWN_BASE[1] * (1 + n * 0.08))},${Math.round(LAWN_BASE[2] * k)})`;
+    g.beginPath();
+    g.arc((x - b.x0) * s, (z - b.z0) * s, r, 0, Math.PI * 2);
+    g.fill();
+  }
 }
 
 // 바닥 좌표(m)로 캔버스에 그리는 붓. 아주 가는 선도 1픽셀 이상으로
