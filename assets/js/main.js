@@ -11,7 +11,8 @@ import { LateMode } from './late-mode.js';
 
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
-const SHOW_FPS = new URLSearchParams(location.search).has('fps');
+// 주소 뒤에 ?fps=1 을 붙이면 왼쪽 위 구석에 fps 표시 (기본은 숨김)
+const SHOW_FPS = ['1', 'true', ''].includes(new URLSearchParams(location.search).get('fps'));
 // 굴착기 색 (첫 화면에서 고름)
 const CAR_COLORS = ['#f5b82e', '#e8503a', '#3a7be8', '#4cb15a', '#f08a24', '#e86fa8'];
 // 기본 그래픽 품질 (정문 출발 화면에서 품질 높음 fps를 재서 정함)
@@ -203,7 +204,7 @@ let lateMode = null;
 async function start() {
   const [campus] = await Promise.all([loadCampus('data/campus.json?v=3'), loadTerrain('data/terrain.json?v=1')]);
   world = buildMap(scene, campus, {
-    anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+    anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,
   });
   collider = new Collider(campus);

@@ -7,6 +7,7 @@
 - 층수 우선순위: csv에 직접 적은 값 > 브이월드 > OSM building:levels > 기본 4층.
   단, 브이월드에서 같은 이름의 건물 20동 이상이 모두(95%+) 같은 층수면 단지 대표값으로 보고 OSM 다음으로 미룬다.
   (전남대학교 이름의 123동 중 122동이 4층 → 진리관 9층, 교육융합관 10층 같은 OSM 값을 덮지 않게)
+  이 대표값을 쓴 건물은 csv 출처 열에 "브이월드(일괄값)"으로 따로 표시한다 (실제 층수를 고쳐 넣을 건물 찾기용).
   csv의 층수 칸을 고치면(출처는 무엇이든) "직접"으로 보고 다시 실행해도 유지한다.
 - 높이 = 층수 × 4m + 옥상 난간 1m.
 - scripts/build_map.py도 끝에서 apply_floors()를 불러, 지도를 다시 만들어도 층수가 유지된다.
@@ -27,6 +28,7 @@ FLOOR_M = 4.0
 PARAPET_M = 1.0
 DEFAULT_FLOORS = 4
 MIN_COVER = 0.3
+BULK_LABEL = "브이월드(일괄값)"
 BULK_MIN = 20  # 대표값 판단: 같은 이름 건물 수
 HEADER = ["건물 이름", "지금 높이(m)", "층수", "출처", "osm_id", "바닥면적(m2)"]
 
@@ -140,7 +142,7 @@ def apply_floors(campus, verbose=True):
     vw = load_vworld(campus)
     matched = match_vworld(buildings, vw) if vw else {}
     previous = read_manual()
-    rows, stats = [], {"직접": 0, "브이월드": 0, "OSM": 0, "없음": 0}
+    rows, stats = [], {"직접": 0, "브이월드": 0, BULK_LABEL: 0, "OSM": 0, "없음": 0}
     overridden = 0
     for b in buildings:
         osm = b.get("osmLevels")
@@ -155,14 +157,14 @@ def apply_floors(campus, verbose=True):
         vw_floors = matched[b["id"]][0] if b["id"] in matched else None
         bulk = b["id"] in matched and matched[b["id"]][2]
         if vw_floors and not (bulk and osm):
-            src, floors = "브이월드", vw_floors
+            src, floors = (BULK_LABEL if bulk else "브이월드"), vw_floors
         else:
             src, floors = ("OSM", osm) if osm else ("없음", None)
         # csv 값이 그 출처가 자동으로 주는 값과 다르면 사람이 고친 값
         if bulk and osm and vw_floors != osm and b["inCampus"]:
             overridden += 1
         prev = previous.get(b["id"])
-        if prev and prev[0] != floors and prev[0] != {"브이월드": vw_floors, "OSM": osm}.get(prev[1]):
+        if prev and prev[0] != floors and prev[0] != {"브이월드": vw_floors, BULK_LABEL: vw_floors, "OSM": osm}.get(prev[1]):
             src, floors = "직접", prev[0]
         b["floors"] = floors or DEFAULT_FLOORS
         b["floorsSource"] = src

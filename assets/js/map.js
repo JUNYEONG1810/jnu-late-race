@@ -17,15 +17,15 @@ const FLOOR_M = 4; // 층 높이 (campus.json 높이 = 층수 × 4m + 난간 1m)
 const BAY_M = 3;     // 창문 하나의 가로 폭
 const BURY_M = 1.5;  // 벽을 가장 낮은 땅보다 더 내려 묻는 깊이
 
-const GROUND_COLOR = '#d3d2cd';
-const CAMPUS_COLOR = '#e4e3de'; // 연한 회색 포장면
+const GROUND_COLOR = '#c9c5bc';
+const CAMPUS_COLOR = '#dbd7cd'; // 따뜻한 연회색 포장면 (눈부시지 않게)
 const GROUND_MARGIN = 80;       // 바닥 그림이 덮는 범위: 캠퍼스 경계 사각형 + 80m
 // park(광장·조경 구역)는 칠하지 않는다 → 포장면 위에 나무만
 const GREEN_COLORS = {
   grass: '#9fd07a', pitch: '#7cc46a', forest: '#5e9e4f',
   farm: '#c4a676', dirt: '#d9bf92', track: '#c9735a', water: '#8fd0ee',
 };
-const FOOT_COLOR = '#e6ddcf';    // 밝은 보도블록
+const FOOT_COLOR = '#dcd2c2';    // 밝은 보도블록
 const STEP_COLOR = '#b5a993';    // 계단 줄무늬
 const ASPHALT_COLOR = '#5b5f66';
 const LANE_COLOR = '#f2f2ec';
@@ -52,6 +52,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}
   const ground = buildGround(campus, groundPx, anisotropy);
   group.add(ground.mesh);
   group.add(buildWater(campus.greens.filter((g) => g.kind === 'water')));
+  group.add(...buildRoadMeshes(campus));
 
   const buildings = buildBuildings(campus.buildings, anisotropy);
   group.add(...buildings);
@@ -99,7 +100,8 @@ function buildGround(campus, px, anisotropy) {
   };
 }
 
-// 바닥 그림 순서: 땅 → 캠퍼스 포장면 → 녹지·운동장(큰 것부터) → 물 → 주차장 → 주차선·코트 라인 → 보행로 → 차도 → 차선·계단
+// 바닥 그림 순서: 땅 → 캠퍼스 포장면 → 녹지·운동장(큰 것부터) → 물 → 주차장 → 주차선·코트 라인 → 보행로 → 차도 → 계단
+// 차도는 지형 메시(buildRoadMeshes)가 위를 덮으므로 가장자리 계단이 삐져나오지 않게 조금 좁게 칠하고, 차선은 메시로만 그린다.
 function paintGround(canvas, campus, bounds) {
   const g = canvas.getContext('2d');
   const P = new GroundPainter(g, bounds, canvas.width / (bounds.x1 - bounds.x0));
@@ -120,8 +122,7 @@ function paintGround(canvas, campus, bounds) {
   for (const x of sorted) if ((x.kind === 'pitch' || x.kind === 'dirt') && Math.abs(area(x.outline)) > 150) courtLines(P, x, MARK_COLOR);
 
   for (const r of campus.roads) if (!r.car) P.ribbon(r.points, r.width, FOOT_COLOR);
-  for (const r of campus.roads) if (r.car) P.ribbon(r.points, r.width, ASPHALT_COLOR);
-  for (const r of campus.roads) if (r.car) P.dashes(r.points, 0.3, 3, 4, LANE_COLOR);
+  for (const r of campus.roads) if (r.car) P.ribbon(r.points, Math.max(1, r.width - 1), ASPHALT_COLOR);
   for (const r of campus.roads) if (r.type === 'steps') P.dashes(r.points, r.width, 0.3, 0.45, STEP_COLOR);
 
   // 가장자리를 땅 색으로 → 그림 밖 지형(텍스처 가장자리 색이 늘어남)도 땅 색
@@ -183,6 +184,132 @@ class GroundPainter {
     g.strokeStyle = color;
     g.stroke();
     g.setLineDash([]);
+  }
+}
+
+// ---------- 차도·차선 (지형을 따라 휘는 메시) ----------
+
+// 바닥 그림은 1픽셀이 약 0.4m라 가까이서 도로 가장자리가 계단처럼 보인다.
+// 차도와 차선만 지형 위에 얇게 얹은 메시로 다시 그린다. 깊이 테스트를 켜서 언덕 뒤에선 가려지고,
+// polygonOffset + 살짝 띄운 높이로 바닥 위에 그려 깜빡이지 않는다. (바닥 그림의 차도는 조금 좁게 칠해 밑에 깔아 둠)
+const ROAD_LIFT = 0.07, LANE_LIFT = 0.11; // 땅에서 띄우는 높이 (m)
+const DRAPE_STEP = 2.5;                     // 지형을 따라가도록 나누는 간격 (m)
+const JOINT_ANGLE = 0.14;                   // 이보다 많이 꺾이는 곳(약 8°)에만 둥근 이음
+
+function buildRoadMeshes(campus) {
+  const road = new DrapeBuilder(ROAD_LIFT), lane = new DrapeBuilder(LANE_LIFT);
+  for (const r of campus.roads) {
+    if (!r.car) continue;
+    const pts = r.points, h = r.width / 2;
+    for (let i = 0; i < pts.length - 1; i++) road.strip(pts[i], pts[i + 1], h);
+    pts.forEach((p, i) => {
+      const end = i === 0 || i === pts.length - 1;
+      if (end || turnAngle(pts[i - 1], p, pts[i + 1]) > JOINT_ANGLE) road.disc(p, h);
+    });
+    forEachDash(pts, 3, 4, (a, b) => lane.strip(a, b, 0.15));
+  }
+  const mat = (color, units) => new THREE.MeshLambertMaterial({
+    color, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: units,
+  });
+  const roads = road.mesh(mat(ASPHALT_COLOR, -2));
+  const lanes = lane.mesh(mat(LANE_COLOR, -4));
+  roads.receiveShadow = lanes.receiveShadow = true;
+  return [roads, lanes];
+}
+
+class DrapeBuilder {
+  constructor(lift) {
+    this.lift = lift;
+    this.pos = [];
+    this.index = [];
+  }
+
+  vertex(x, z) {
+    this.pos.push(x, heightAt(x, z) + this.lift, z);
+    return this.pos.length / 3 - 1;
+  }
+
+  // a→b 선분을 반폭 h로, 길이·폭 방향 모두 DRAPE_STEP 간격으로 나눈 띠
+  strip(a, b, h) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 1e-6) return;
+    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
+    const nu = Math.max(1, Math.ceil(len / DRAPE_STEP)), nv = Math.max(1, Math.ceil((2 * h) / DRAPE_STEP));
+    const first = this.pos.length / 3;
+    for (let i = 0; i <= nu; i++) {
+      for (let j = 0; j <= nv; j++) {
+        const t = (len * i) / nu, s = -h + (2 * h * j) / nv;
+        this.vertex(a[0] + ux * t - uz * s, a[1] + uz * t + ux * s);
+      }
+    }
+    for (let i = 0; i < nu; i++) {
+      for (let j = 0; j < nv; j++) {
+        const k = first + i * (nv + 1) + j;
+        this.quad(k, k + nv + 1, k + nv + 2, k + 1);
+      }
+    }
+  }
+
+  // 꺾이는 곳·끝을 메우는 둥근 판 (가운데에서 바깥으로 고리 몇 개)
+  disc([x, z], r) {
+    const seg = 12, rings = Math.max(1, Math.ceil(r / DRAPE_STEP));
+    const center = this.vertex(x, z);
+    const ring = (k) => Array.from({ length: seg }, (_, i) => {
+      const a = (i / seg) * Math.PI * 2, rr = (r * k) / rings;
+      return this.vertex(x + Math.cos(a) * rr, z + Math.sin(a) * rr);
+    });
+    let prev = ring(1);
+    for (let i = 0; i < seg; i++) this.tri(center, prev[i], prev[(i + 1) % seg]);
+    for (let k = 2; k <= rings; k++) {
+      const cur = ring(k);
+      for (let i = 0; i < seg; i++) this.quad(prev[i], cur[i], cur[(i + 1) % seg], prev[(i + 1) % seg]);
+      prev = cur;
+    }
+  }
+
+  // 위(+y)를 보도록 감기 방향을 맞춘 삼각형
+  tri(a, b, c) {
+    const P = this.pos;
+    const cross = (P[b * 3 + 2] - P[a * 3 + 2]) * (P[c * 3] - P[a * 3]) - (P[b * 3] - P[a * 3]) * (P[c * 3 + 2] - P[a * 3 + 2]);
+    if (cross < 0) this.index.push(a, c, b);
+    else this.index.push(a, b, c);
+  }
+
+  quad(a, b, c, d) {
+    this.tri(a, b, c);
+    this.tri(a, c, d);
+  }
+
+  mesh(material) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    geo.setIndex(this.index);
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    return new THREE.Mesh(geo, material);
+  }
+}
+
+function turnAngle(a, b, c) {
+  const a1 = Math.atan2(b[1] - a[1], b[0] - a[0]), a2 = Math.atan2(c[1] - b[1], c[0] - b[0]);
+  return Math.abs(Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)));
+}
+
+// 선을 따라 dash m 칠하고 gap m 비우는 점선의 칠하는 구간마다 cb(시작점, 끝점)
+function forEachDash(points, dash, gap, cb) {
+  let phase = 0; // 지금 칸(dash+gap) 안에서 간 거리
+  for (let i = 0; i < points.length - 1; i++) {
+    const [x1, z1] = points[i], [x2, z2] = points[i + 1];
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    if (len < 1e-6) continue;
+    const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
+    let t = 0;
+    while (t < len) {
+      const step = Math.min(len - t, (phase < dash ? dash : dash + gap) - phase);
+      if (phase < dash) cb([x1 + ux * t, z1 + uz * t], [x1 + ux * (t + step), z1 + uz * (t + step)]);
+      t += step;
+      phase = (phase + step) % (dash + gap);
+    }
   }
 }
 

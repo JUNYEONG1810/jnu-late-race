@@ -132,7 +132,20 @@ canvas { display: block; }
   cursor: pointer;
 }
 #quality button.on { background: #ff8a7a; color: #fff; }
-#fps { color: #8a93a6; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 주소 뒤 ?fps=1 일 때만 보이는 fps (왼쪽 위 품질 버튼 아래 구석) */
+#fps {
+  position: fixed;
+  top: 62px;
+  left: 16px;
+  z-index: 50;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: rgba(20, 26, 38, 0.6);
+  color: #e8ecf3;
+  font: 600 12px/1.4 ui-monospace, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 
 #toast {
   top: 70px;
