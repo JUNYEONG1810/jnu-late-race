@@ -99,7 +99,8 @@
 - 출처: **OpenStreetMap** (ODbL). Overpass API로 전남대 광주캠퍼스 경계와 그 주변 건물·도로·녹지를 받는다. 캠퍼스 경계는 OSM way `105125653`(전남대학교) 기준, 주변 여유 50m.
 - `scripts/fetch_osm.py`(Python 표준 라이브러리만) → `data/raw/`(커밋 안 함) → `scripts/build_map.py` → `data/campus.json`(커밋함)
 - 좌표: 캠퍼스 중심 기준 미터(x 동쪽, z 남쪽).
-- 건물 높이: `height` 태그 > `building:levels` × 3.5m > 기본 4층(14m).
+- 건물 높이 = 층수 × 4m + 옥상 난간 1m. 층수 우선순위: `data/building-floors.csv`에 직접 적은 값 > 브이월드 지상층수(`scripts/fetch_vworld.py`, 키는 `.env`의 `VWORLD_KEY`, 출력·커밋 금지) > OSM `building:levels` > 기본 4층. csv를 고치고 `scripts/building_floors.py`(또는 `build_map.py`)를 다시 돌리면 반영. 크레딧에 "건물 층수: 국토교통부 브이월드".
+- 조경(OSM 그대로): 연못(반짝이는 수면 + 가장자리 돌), 운동장 종류별 색·라인, 주차장(짙은 회색 + 주차선), 밝은 보행로, 계단 줄무늬, 벤치·자전거 보관소·버스정류장, 조형물·기념물(이름표 + 단정한 비석·받침대·탑, 인물 모양 금지). 가로등은 OSM에 없어 주요 차도 양옆 약 30m 간격으로 배치, 품질 "낮음"에서 숨김.
 - 도로: `highway` 선을 종류별 폭(주도로 8m, 일반 6m, 보행로 3m)의 띠로.
 - **화면 구석에 항상 표시:** "지도 데이터 © OpenStreetMap 기여자"
 - 다른 사람의 코드를 복사하지 않는다. 특히 SMASH 대학교(hong-iron.github.io/SMASH)는 코드 재배포 금지 라이선스이므로 **참고만 하고 코드는 새로 작성**한다. 크레딧 화면에 "3D 캠퍼스 아이디어: SMASH 대학교에서 영감"을 적는다.
@@ -128,7 +129,8 @@
 index.html
 assets/css/style.css
 assets/js/main.js              시작, 화면 전환, 루프
-assets/js/map.js               campus.json → 건물·도로·녹지 3D
+assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
+assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
 assets/js/hud.js               속도계, 타이머, 미션 목록, 미니맵, 건물 이름
@@ -140,7 +142,8 @@ assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
 data/campus.json
 scripts/fetch_osm.py, scripts/build_map.py
-scripts/fetch_terrain.py, terrain_report.py, building_floors.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
+scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
+scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
 README.md, 제작로그.md, CLAUDE.md
 ```
 

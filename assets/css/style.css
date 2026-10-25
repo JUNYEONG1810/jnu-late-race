@@ -90,6 +90,8 @@ canvas { display: block; }
   box-shadow: 0 3px 10px rgba(20, 30, 50, 0.25);
 }
 .label::before { content: "📍 "; }
+.label.small { padding: 3px 9px 4px; font-size: 13px; background: rgba(70, 70, 66, 0.82); }
+.label.small::before { content: ""; }
 
 #building-name {
   top: 18px;

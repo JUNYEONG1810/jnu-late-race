@@ -187,12 +187,13 @@ export class Hud {
   }
 
   // 주요 건물 위에 항상 보이는 이름표. 멀어질수록 작아진다.
-  addLabel(text, x, y, z) {
+  // maxDist: 이만큼 가까이 와야 보이는 작은 이름표 (조형물·기념물)
+  addLabel(text, x, y, z, { maxDist = Infinity, small = false } = {}) {
     const el = document.createElement('div');
-    el.className = 'label';
+    el.className = small ? 'label small' : 'label';
     el.textContent = text;
     document.getElementById('labels').appendChild(el);
-    this.labels.push({ el, pos: new THREE.Vector3(x, y, z) });
+    this.labels.push({ el, pos: new THREE.Vector3(x, y, z), maxDist });
   }
 
   // 가까운 이름표부터 놓고, 이미 놓인 이름표나 HUD와 겹치면 위·아래로 비켜 보고, 그래도 겹치면 숨긴다
@@ -210,6 +211,7 @@ export class Hud {
       tmp.copy(label.pos).project(camera);
       if (tmp.z > 1) { label.el.style.display = 'none'; continue; } // 카메라 뒤
       const dist = camera.position.distanceTo(label.pos);
+      if (dist > label.maxDist) { label.el.style.display = 'none'; continue; }
       items.push({ label, dist, x: tmp.x * w + w, y: -tmp.y * h + h });
     }
     items.sort((a, b) => a.dist - b.dist);

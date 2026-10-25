@@ -10,7 +10,7 @@ const ENTRANCE_COLOR = '#3a3f47';
 const OUTSIDE_TINT = new THREE.Color('#eceef0');
 const OUTSIDE_MIX = 0.45;
 
-const FLOOR_M = 3.5; // 층 높이
+const FLOOR_M = 4; // 층 높이 (campus.json 높이 = 층수 × 4m + 난간 1m)
 const BAY_M = 3;     // 창문 하나의 가로 폭
 
 const GROUND_COLOR = '#d3d2cd';
@@ -20,9 +20,20 @@ const GREEN_COLORS = {
   grass: '#9fd07a', pitch: '#7cc46a', forest: '#5e9e4f',
   farm: '#c4a676', dirt: '#d9bf92', track: '#c9735a', water: '#8fd0ee',
 };
-const FOOT_COLOR = '#d9c8b2';    // 보도블록
+const FOOT_COLOR = '#e6ddcf';    // 밝은 보도블록
+const STEP_COLOR = '#b5a993';    // 계단 줄무늬
 const ASPHALT_COLOR = '#5b5f66';
 const LANE_COLOR = '#f2f2ec';
+const PARKING_COLOR = '#6b6e73'; // 주차장 바닥 (짙은 회색)
+const MARK_COLOR = '#f6f6f0';    // 주차선·코트 라인
+const WATER_COLOR = '#6cb8dc';
+const WATER_EDGE_COLOR = '#b9b2a4'; // 연못 가장자리 돌
+// 운동장 종류별 바닥색 [잔디·우레탄 등, 흙]
+const SPORT_COLORS = {
+  soccer: ['#5aa94f', '#d2b384'], futsal: ['#4f9e62', '#d2b384'], baseball: ['#62ad55', '#d2b384'],
+  multi: ['#5aa66a', '#d4b98c'], tennis: ['#3f7fa6', '#c8744f'], basketball: ['#c47f52', '#cfae80'],
+  volleyball: ['#4a85a6', '#cfae80'],
+};
 
 export async function loadCampus(url) {
   const res = await fetch(url);
@@ -45,12 +56,25 @@ export function buildMap(scene, campus, { anisotropy = 1 } = {}) {
   campusArea.polygon(campus.boundary, new THREE.Color(CAMPUS_COLOR));
   group.add(campusArea.mesh(-4));
 
-  // 큰 녹지를 먼저, 작은 녹지를 나중에 (겹치면 작은 것이 위에 보이도록)
+  // 큰 녹지를 먼저, 작은 녹지를 나중에 (겹치면 작은 것이 위에 보이도록). 물은 따로
   const greens = new FlatBuilder();
-  const sorted = campus.greens.filter((g) => GREEN_COLORS[g.kind])
+  const sorted = campus.greens.filter((g) => GREEN_COLORS[g.kind] && g.kind !== 'water')
     .sort((a, b) => Math.abs(area(b.outline)) - Math.abs(area(a.outline)));
-  for (const g of sorted) greens.polygon(g.outline, new THREE.Color(GREEN_COLORS[g.kind]));
+  for (const g of sorted) greens.polygon(g.outline, new THREE.Color(groundColor(g)));
   group.add(greens.mesh(-3));
+
+  group.add(...buildWater(campus.greens.filter((g) => g.kind === 'water')));
+
+  // 주차장 바닥 → 주차선·코트 라인 → 도로
+  const parking = new FlatBuilder();
+  for (const o of campus.parking || []) parking.polygon(o, new THREE.Color(PARKING_COLOR));
+  group.add(parking.mesh(-2.6));
+
+  const marks = new FlatBuilder();
+  const mark = new THREE.Color(MARK_COLOR);
+  for (const o of campus.parking || []) parkingLines(marks, o, mark);
+  for (const g of sorted) if ((g.kind === 'pitch' || g.kind === 'dirt') && Math.abs(area(g.outline)) > 150) courtLines(marks, g, mark);
+  group.add(marks.mesh(-2.5));
 
   // 보행로를 먼저, 차도를 위에
   const roads = new FlatBuilder();
@@ -59,9 +83,11 @@ export function buildMap(scene, campus, { anisotropy = 1 } = {}) {
   for (const r of campus.roads) if (r.car) roads.ribbon(r.points, r.width, asphalt);
   group.add(roads.mesh(-2));
 
+  // 차선 점선 + 계단 줄무늬
   const lanes = new FlatBuilder();
-  const lane = new THREE.Color(LANE_COLOR);
+  const lane = new THREE.Color(LANE_COLOR), step = new THREE.Color(STEP_COLOR);
   for (const r of campus.roads) if (r.car) lanes.dashes(r.points, 0.3, 3, 4, lane);
+  for (const r of campus.roads) if (r.type === 'steps') lanes.dashes(r.points, r.width, 0.18, 0.5, step);
   group.add(lanes.mesh(-1));
 
   const buildings = buildBuildings(campus.buildings, anisotropy);
@@ -151,17 +177,194 @@ class FlatBuilder {
     }
   }
 
-  mesh(renderOrder) {
+  // uvScale: 텍스처를 쓸 때 바닥 좌표(m) × uvScale = uv
+  mesh(renderOrder, material = flatMaterial({ vertexColors: true }), uvScale = 0) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     const normals = new Float32Array(this.pos.length);
     for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
     geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-    const mesh = new THREE.Mesh(geo, flatMaterial({ vertexColors: true }));
+    if (uvScale) {
+      const uv = new Float32Array((this.pos.length / 3) * 2);
+      for (let i = 0, j = 0; i < this.pos.length; i += 3, j += 2) { uv[j] = this.pos[i] * uvScale; uv[j + 1] = this.pos[i + 2] * uvScale; }
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    }
+    const mesh = new THREE.Mesh(geo, material);
     mesh.renderOrder = renderOrder;
     mesh.receiveShadow = true;
     return mesh;
+  }
+}
+
+// ---------- 물·주차장·운동장 ----------
+
+function groundColor(g) {
+  const sport = SPORT_COLORS[g.sport];
+  if (sport) return sport[g.kind === 'dirt' ? 1 : 0];
+  return GREEN_COLORS[g.kind];
+}
+
+// 연못: 살짝 반짝이는 수면(잔물결 텍스처가 천천히 흐름) + 가장자리 돌
+function buildWater(list) {
+  const water = new FlatBuilder(), edge = new FlatBuilder();
+  const white = new THREE.Color('#ffffff'), stone = new THREE.Color(WATER_EDGE_COLOR);
+  for (const g of list) {
+    water.polygon(g.outline, white);
+    edge.ribbon([...g.outline, g.outline[0]], 1.1, stone);
+  }
+  const tex = makeRippleTexture();
+  const mat = new THREE.MeshPhongMaterial({
+    color: WATER_COLOR, map: tex, shininess: 80, specular: '#cfe6f2', depthWrite: false,
+  });
+  const surface = water.mesh(-2.95, mat, 1 / 9);
+  surface.onBeforeRender = () => {
+    const t = performance.now() / 1000;
+    tex.offset.set(t * 0.012, t * 0.007);
+  };
+  return [surface, edge.mesh(-2.9)];
+}
+
+function makeRippleTexture() {
+  const S = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#e4eef4';
+  g.fillRect(0, 0, S, S);
+  const rand = mulberry32(7);
+  g.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const x = rand() * S, y = rand() * S, w = 10 + rand() * 26;
+    g.strokeStyle = rand() < 0.5 ? 'rgba(255,255,255,0.95)' : 'rgba(120,160,190,0.75)';
+    g.lineWidth = 1.5 + rand() * 2;
+    for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) { // 이음매 없이 반복되게
+      g.beginPath();
+      g.moveTo(x + dx, y + dy);
+      g.quadraticCurveTo(x + dx + w / 2, y + dy - 3, x + dx + w, y + dy);
+      g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// 다각형을 가장 작게 감싸는 회전 사각형: 중심, 긴 변 방향(u), 길이 L(긴 변)·W(짧은 변)
+function orientedRect(o) {
+  let best = null;
+  for (let i = 0; i < o.length; i++) {
+    const [x1, z1] = o[i], [x2, z2] = o[(i + 1) % o.length];
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    if (len < 1e-6) continue;
+    const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (const [x, z] of o) {
+      const u = x * ux + z * uz, v = -x * uz + z * ux;
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    const a = (u1 - u0) * (v1 - v0);
+    if (!best || a < best.a) best = { a, ux, uz, u0, u1, v0, v1 };
+  }
+  let { ux, uz, u0, u1, v0, v1 } = best;
+  if (v1 - v0 > u1 - u0) { // u를 긴 변으로 (축을 90° 돌림: 새 u = 옛 v, 새 v = -옛 u)
+    [ux, uz] = [-uz, ux];
+    [u0, u1, v0, v1] = [v0, v1, -u1, -u0];
+  }
+  const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
+  return { cx: cu * ux - cv * uz, cz: cu * uz + cv * ux, ux, uz, L: u1 - u0, W: v1 - v0 };
+}
+
+// 회전 사각형의 (u, v) 좌표 → 바닥 좌표
+function rectPoint(r, u, v) {
+  return [r.cx + u * r.ux - v * r.uz, r.cz + u * r.uz + v * r.ux];
+}
+
+// 주차 칸: 긴 변을 따라 2.5m 간격, 깊이 5m 선 (넓으면 양쪽 줄)
+function parkingLines(b, o, color) {
+  if (Math.abs(area(o)) < 60) return;
+  const r = orientedRect(o);
+  if (r.W < 5.5) return;
+  const rows = r.W >= 13 ? [-1, 1] : [-1];
+  for (const side of rows) {
+    const v0 = side * (r.W / 2 - 0.3), v1 = side * (r.W / 2 - 5.3);
+    for (let u = -r.L / 2 + 1.5; u <= r.L / 2 - 1.5; u += 2.5) {
+      const a = rectPoint(r, u, v0), c = rectPoint(r, u, v1);
+      if (pointInPolygon(...a, o) && pointInPolygon(...c, o)) b.quad(...a, ...c, 0.07, color);
+    }
+  }
+}
+
+// 운동장 라인: 종류별로 단순한 코트 그림. 큰 테니스장·농구장은 여러 면으로 나눈다
+function courtLines(b, g, color) {
+  const r = orientedRect(g.outline);
+  if (r.W < 6) return;
+  const w = 0.09; // 선 굵기의 절반
+  const line = (u1, v1, u2, v2) => b.quad(...rectPoint(r, u1, v1), ...rectPoint(r, u2, v2), w, color);
+  const box = (L, W, du = 0, dv = 0) => {
+    const a = L / 2, c = W / 2;
+    line(du - a, dv - c, du + a, dv - c); line(du + a, dv - c, du + a, dv + c);
+    line(du + a, dv + c, du - a, dv + c); line(du - a, dv + c, du - a, dv - c);
+  };
+  const arc = (cu, cv, rad, from = 0, to = Math.PI * 2) => {
+    const n = Math.max(8, Math.round((rad * 4 * (to - from)) / Math.PI));
+    for (let i = 0; i < n; i++) {
+      const a0 = from + ((to - from) * i) / n, a1 = from + ((to - from) * (i + 1)) / n;
+      line(cu + Math.cos(a0) * rad, cv + Math.sin(a0) * rad, cu + Math.cos(a1) * rad, cv + Math.sin(a1) * rad);
+    }
+  };
+  // 한 면의 크기(바깥 여유 포함)로 몇 면이 들어가는지 정하고, 면마다 draw(du, dv, s) 호출
+  const tile = (cellL, cellW, draw) => {
+    const nu = Math.max(1, Math.round(r.L / cellL)), nv = Math.max(1, Math.round(r.W / cellW));
+    const s = Math.min(1, r.L / nu / cellL, r.W / nv / cellW);
+    for (let i = 0; i < nu; i++) {
+      for (let j = 0; j < nv; j++) draw(-r.L / 2 + (i + 0.5) * (r.L / nu), -r.W / 2 + (j + 0.5) * (r.W / nv), s);
+    }
+  };
+  switch (g.sport) {
+    case 'tennis':
+      tile(36, 18, (du, dv, s) => {
+        box(23.77 * s, 10.97 * s, du, dv);
+        line(du, dv - 6.4 * s, du, dv + 6.4 * s); // 네트
+        for (const k of [-1, 1]) {
+          line(du - 11.88 * s, dv + k * 4.11 * s, du + 11.88 * s, dv + k * 4.11 * s); // 단식 사이드라인
+          line(du + k * 6.4 * s, dv - 4.11 * s, du + k * 6.4 * s, dv + 4.11 * s);     // 서비스 라인
+        }
+        line(du - 6.4 * s, dv, du + 6.4 * s, dv);
+      });
+      break;
+    case 'basketball':
+      tile(32, 19, (du, dv, s) => {
+        box(28 * s, 15 * s, du, dv);
+        line(du, dv - 7.5 * s, du, dv + 7.5 * s);
+        arc(du, dv, 1.8 * s);
+        for (const k of [-1, 1]) {
+          const end = du + k * 14 * s;
+          box(5.8 * s, 4.9 * s, end - k * 2.9 * s, dv);
+          // 3점 라인: 골대 쪽에서 코트 안쪽으로 열린 반원
+          arc(end - k * 1.6 * s, dv, 6.75 * s, k > 0 ? Math.PI / 2 : -Math.PI / 2, k > 0 ? Math.PI * 1.5 : Math.PI / 2);
+        }
+      });
+      break;
+    case 'volleyball':
+      tile(24, 15, (du, dv, s) => {
+        box(18 * s, 9 * s, du, dv);
+        line(du, dv - 4.5 * s, du, dv + 4.5 * s);
+        for (const k of [-1, 1]) line(du + k * 3 * s, dv - 4.5 * s, du + k * 3 * s, dv + 4.5 * s);
+      });
+      break;
+    default: { // 축구·풋살·다목적·종류 없음: 테두리, 가운데 선과 원, 양쪽 골 구역
+      const L = r.L - 2.5, W = r.W - 2.5;
+      box(L, W);
+      line(0, -W / 2, 0, W / 2);
+      arc(0, 0, Math.min(9.15, W * 0.14));
+      for (const k of [-1, 1]) {
+        const pd = Math.min(16.5, L * 0.15), pw = Math.min(40, W * 0.6);
+        box(pd, pw, k * (L / 2 - pd / 2), 0);
+        box(pd / 3, pw / 2.2, k * (L / 2 - pd / 6), 0);
+      }
+    }
   }
 }
 
@@ -510,7 +713,7 @@ function makeTextTexture(text) {
 
 // ---------- 도우미 ----------
 
-function mulberry32(seed) {
+export function mulberry32(seed) {
   return () => {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;
@@ -520,14 +723,14 @@ function mulberry32(seed) {
   };
 }
 
-function distToSegment(px, pz, [x1, z1, x2, z2]) {
+export function distToSegment(px, pz, [x1, z1, x2, z2]) {
   const dx = x2 - x1, dz = z2 - z1;
   const L = dx * dx + dz * dz;
   const t = L === 0 ? 0 : Math.max(0, Math.min(1, ((px - x1) * dx + (pz - z1) * dz) / L));
   return Math.hypot(px - x1 - t * dx, pz - z1 - t * dz);
 }
 
-function pointInPolygon(x, z, poly) {
+export function pointInPolygon(x, z, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, zi] = poly[i], [xj, zj] = poly[j];
@@ -546,7 +749,7 @@ export function area(o) {
   return s / 2;
 }
 
-function hash(str) {
+export function hash(str) {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
   return h >>> 0;

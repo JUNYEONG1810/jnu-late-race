@@ -66,7 +66,7 @@ def main():
     w, e = min(lons) - dlon, max(lons) + dlon
     bbox = f"{s:.7f},{w:.7f},{n:.7f},{e:.7f}"
 
-    print("2/2 건물·도로·녹지·출입구 받는 중...")
+    print("2/2 건물·도로·녹지·출입구·조경 받는 중...")
     query = f"""[out:json][timeout:180][bbox:{bbox}];
 (
   way[building];
@@ -80,6 +80,11 @@ def main():
   relation[natural];
   node[barrier];
   node[entrance];
+  nwr[amenity~"^(parking|bench|bicycle_parking)$"];
+  node[leisure=picnic_table];
+  node[highway=bus_stop];
+  nwr[tourism=artwork];
+  nwr[historic~"^(memorial|monument)$"];
   nwr[name~"정문|후문|쪽문"];
 );
 out geom;"""

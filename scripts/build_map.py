@@ -9,6 +9,8 @@ import math
 import sys
 from pathlib import Path
 
+import building_floors
+
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
 OUT = ROOT / "data" / "campus.json"
@@ -31,7 +33,7 @@ FOOT_ROAD_WIDTHS = {"footway": 3, "path": 2.5, "pedestrian": 4, "steps": 3,
 # park/garden은 대부분 광장·조경 구역이라 게임에서 초록으로 칠하지 않고 나무만 심는다.
 # sports_centre·stadium·recreation_ground는 시설 전체 구역이라 넣지 않는다.
 GREEN_KINDS = {
-    "landuse": {"grass": "grass", "meadow": "grass", "village_green": "grass",
+    "landuse": {"reservoir": "water", "basin": "water", "grass": "grass", "meadow": "grass", "village_green": "grass",
                 "forest": "forest", "orchard": "farm",
                 "farmland": "farm", "allotments": "farm", "plant_nursery": "farm",
                 "greenhouse_horticulture": "farm", "flowerbed": "grass", "cemetery": "grass"},
@@ -41,7 +43,9 @@ GREEN_KINDS = {
                 "water": "water", "wetland": "water"},
 }
 DIRT_SURFACES = {"dirt", "ground", "sand", "clay", "gravel", "fine_gravel", "compacted", "earth"}
-SPAWN_BEFORE_GATE_M = 20  # 정문 바깥쪽에서 출발해 문을 지나 들어가게
+SPAWN_BEFORE_GATE_M = 20
+# 조형물·기념물 모양: 인물 모양은 만들지 않고 비석·받침대·기둥으로만
+TOWER_NAMES = {"용봉탑"}  # 정문 바깥쪽에서 출발해 문을 지나 들어가게
 
 
 # ---------- 좌표 변환과 기하 ----------
@@ -213,8 +217,10 @@ def main():
             b = {"id": f"{el['type'][0]}{el['id']}", "name": tags.get("name", ""),
                  "height": r1(h), "inCampus": in_campus(c),
                  "center": [r1(c[0]), r1(c[1])], "outline": rpts(ring)}
-            if src != "default":
-                b["levels"] = tags.get("building:levels")
+            try:
+                b["osmLevels"] = int(float(tags["building:levels"]))
+            except (KeyError, ValueError):
+                b["osmLevels"] = None
             buildings.append(b)
 
     # 도로: 영역 안 구간만 남기고, 끝에서 한 점씩 더 붙여 가장자리까지 이어지게
@@ -256,7 +262,62 @@ def main():
         for ring_ll in element_rings(el):
             ring = open_ring([proj(*p) for p in ring_ll])
             if len(ring) >= 3 and any(in_region(p) for p in ring):
-                greens.append({"id": f"{el['type'][0]}{el['id']}", "kind": kind, "outline": rpts(ring)})
+                g = {"id": f"{el['type'][0]}{el['id']}", "kind": kind, "outline": rpts(ring)}
+                if kind in ("pitch", "dirt") and tags.get("sport"):
+                    g["sport"] = tags["sport"].split(";")[0]
+                if kind == "water" and tags.get("name"):
+                    g["name"] = tags["name"]
+                greens.append(g)
+
+    # 주차장 바닥 (지하·건물 주차장 제외)
+    parking = []
+    for el in elements:
+        tags = el.get("tags", {})
+        if tags.get("amenity") != "parking" or tags.get("parking") in ("underground", "multi-storey") or "building" in tags:
+            continue
+        for ring_ll in element_rings(el):
+            ring = open_ring([proj(*p) for p in ring_ll])
+            if len(ring) >= 3 and any(in_region(p) for p in ring) and abs(signed_area(ring)) > 30:
+                parking.append(rpts(ring))
+
+    # 작은 소품(벤치·자전거 보관소·버스정류장)과 조형물·기념물
+    props, monuments = [], []
+    for el in elements:
+        tags = el.get("tags", {})
+        if el["type"] == "node":
+            p = proj(el["lat"], el["lon"])
+        else:
+            rings = element_rings(el)
+            if rings:
+                p = centroid(open_ring([proj(*q) for q in rings[0]]))
+            elif el.get("geometry"):
+                g = el["geometry"]
+                p = proj(sum(q["lat"] for q in g) / len(g), sum(q["lon"] for q in g) / len(g))
+            else:
+                continue
+        if not in_region(p):
+            continue
+        a = tags.get("amenity")
+        kind = ("bench" if a == "bench" or tags.get("leisure") == "picnic_table" else
+                "bike" if a == "bicycle_parking" else
+                "bus" if tags.get("highway") == "bus_stop" and el["type"] == "node" else None)
+        if kind:
+            props.append({"type": kind, "p": [r1(p[0]), r1(p[1])], **({"name": tags["name"]} if kind == "bus" and tags.get("name") else {})})
+            continue
+        if tags.get("tourism") == "artwork" or tags.get("historic") in ("memorial", "monument"):
+            name = tags.get("name", "")
+            art = tags.get("artwork_type", "")
+            if name in TOWER_NAMES:
+                shape = "tower"
+            elif art == "mural":
+                shape = "wall"
+            elif art in ("bust", "statue"):
+                shape = "pedestal"  # 인물상 자리: 단정한 받침대만
+            elif art in ("sculpture", "installation"):
+                shape = "sculpture"
+            else:
+                shape = "stele"
+            monuments.append({"name": name, "shape": shape, "p": [r1(p[0]), r1(p[1])]})
 
     # 정문 → 시작 위치
     spawn = find_spawn(elements, proj, boundary)
@@ -277,13 +338,18 @@ def main():
         "buildings": buildings,
         "roads": roads,
         "greens": greens,
+        "parking": parking,
+        "props": props,
+        "monuments": monuments,
     }
+    building_floors.apply_floors(campus)
     OUT.write_text(json.dumps(campus, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     # ---------- 요약 ----------
     print(f"건물 {len(buildings)}개 (캠퍼스 안 {sum(b['inCampus'] for b in buildings)}개)")
-    print(f"  높이 출처: height 태그 {height_src['height']}, 층수 {height_src['levels']}, 기본값 {height_src['default']}")
-    print(f"도로 {len(roads)}개 구간, 녹지 {len(greens)}개")
+    print("  높이: 층수 × 4m + 난간 1m (scripts/building_floors.py, data/building-floors.csv)")
+    print(f"도로 {len(roads)}개 구간, 녹지 {len(greens)}개, 주차장 {len(parking)}개")
+    print(f"소품 {len(props)}개 ({', '.join(f'{k} {sum(1 for q in props if q["type"] == k)}' for k in ('bench', 'bike', 'bus'))}), 조형물 {len(monuments)}개")
     print(f"캠퍼스 크기: 동서 {campus['size']['width']}m × 남북 {campus['size']['depth']}m")
     print(f"정문 {spawn['gate']}, 시작 {spawn['position']}, 방향 {spawn['dir']}")
     print(f"campus.json {OUT.stat().st_size / 1024:.0f} KB")

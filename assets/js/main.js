@@ -1,6 +1,7 @@
 // 시작(첫 화면), 화면 구성, 입력, 소리, 게임 루프.
 import * as THREE from 'three';
 import { loadCampus, buildMap } from './map.js';
+import { buildLandscape } from './landscape.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
@@ -75,6 +76,7 @@ function setQuality(q) {
   renderer.shadowMap.enabled = high;
   sun.castShadow = high;
   world.trees.setDensity(high ? 1 : 0.5);
+  world.landscape.lamps.visible = high; // 가로등은 품질 높음에서만
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
   try { localStorage.setItem('quality', q); } catch {}
@@ -197,10 +199,14 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const campus = await loadCampus('data/campus.json?v=2');
+  const campus = await loadCampus('data/campus.json?v=3');
   world = buildMap(scene, campus, { anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()) });
   collider = new Collider(campus);
+  world.landscape = buildLandscape(scene, campus);
   for (const o of world.gateObstacles) collider.addObstacle(o);
+  for (const o of world.landscape.obstacles) collider.addObstacle(o);
+  for (const l of world.landscape.labels) hud.addLabel(l.text, l.x, l.y, l.z, { maxDist: l.maxDist, small: true });
+  for (const m of campus.monuments || []) world.trees.clearAround(m.p[0], m.p[1], m.shape === 'tower' ? 6 : 3);
   for (const [osmName, label] of LANDMARKS) {
     const b = campus.buildings.find((x) => x.name === osmName);
     if (b) hud.addLabel(label || osmName, b.center[0], b.height + 5, b.center[1]);
