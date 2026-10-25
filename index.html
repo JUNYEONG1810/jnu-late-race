@@ -4,21 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전남대 지각 레이스</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=12">
+  <link rel="stylesheet" href="assets/css/style.css?v=13">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=12",
-      "./assets/js/car.js": "./assets/js/car.js?v=12",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=12",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=12",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=12",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=12",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=12",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=12",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=12",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=12"
+      "./assets/js/map.js": "./assets/js/map.js?v=13",
+      "./assets/js/car.js": "./assets/js/car.js?v=13",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=13",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=13",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=13",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=13",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=13",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=13",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=13",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=13"
     }
   }
   </script>
@@ -35,10 +35,13 @@
       <span id="speed">0</span><small>km/h</small>
     </div>
 
+    <canvas id="minimap"></canvas>
+
     <div id="quality" class="panel">
       <span>그래픽</span>
       <button data-q="low">낮음</button>
       <button data-q="high">높음</button>
+      <button id="sound-btn" title="소리 켜기/끄기 (M)">🔊</button>
       <span id="fps" class="hidden"></span>
     </div>
 
@@ -52,7 +55,7 @@
     <div id="help" class="panel">
       <div><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 운전</div>
       <div><kbd>Space</kbd> 브레이크·드리프트 &nbsp; <kbd>Shift</kbd> 부스터 (게이지 사용)</div>
-      <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
+      <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>M</kbd> 소리 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
     </div>
 
     <button id="late-start" class="panel">🏃 지각 모드 시작 <kbd>L</kbd></button>
@@ -97,9 +100,40 @@
       </div>
     </div>
 
+    <!-- 첫 화면 -->
+    <div id="title">
+      <div class="title-card panel">
+        <h1>전남대 지각 레이스</h1>
+        <p class="title-sub">미니 굴착기를 타고 캠퍼스를 달려, 9시 수업에 늦지 마세요!</p>
+        <div class="title-colors" aria-label="굴착기 색"></div>
+        <div class="title-buttons">
+          <button id="btn-free">자유 주행</button>
+          <button id="btn-late">지각 모드</button>
+        </div>
+        <div class="title-keys">
+          <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
+          <kbd>E</kbd> 미션 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지
+        </div>
+        <button id="btn-credits" class="title-link">크레딧</button>
+      </div>
+    </div>
+
+    <div id="credits" class="overlay hidden">
+      <div class="dialog panel credits-card">
+        <h2>크레딧</h2>
+        <p><b>사용한 오픈소스와 데이터</b><br>
+          <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT 라이선스)<br>
+          지도 데이터 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap 기여자</a> (ODbL)</p>
+        <p>3D 캠퍼스 아이디어: SMASH 대학교(<a href="https://hong-iron.github.io/SMASH/" target="_blank" rel="noopener">hong-iron.github.io/SMASH</a>)에서 영감</p>
+        <p>소리와 목소리는 Web Audio로 직접 합성 (소리 파일 없음)</p>
+        <p>Claude Code와 함께 제작</p>
+        <button data-act="close">닫기</button>
+      </div>
+    </div>
+
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=12"></script>
+  <script type="module" src="assets/js/main.js?v=13"></script>
 </body>
 </html>

@@ -111,7 +111,7 @@ canvas { display: block; }
 
 #quality {
   top: 16px;
-  right: 16px;
+  left: 16px;
   padding: 6px 8px 6px 14px;
   display: flex;
   align-items: center;
@@ -204,7 +204,7 @@ body.late #toast { top: 124px; }
 
 #mission-list {
   right: 16px;
-  top: 76px;
+  top: 214px;
   width: 250px;
   padding: 12px 14px;
   font-size: 14px;
@@ -388,3 +388,62 @@ body.shake { animation: shake 0.6s ease-out; }
   text-decoration: none;
   pointer-events: auto;
 }
+
+/* ---------- 소리 버튼, 게이지 충전 반짝임 ---------- */
+#sound-btn { min-width: 38px; }
+#sound-btn.off { background: #d8dce3; color: #8a93a6; }
+#boost-gauge.charged { animation: boost-charge 0.9s ease-out; }
+@keyframes boost-charge {
+  0% { box-shadow: 0 0 0 0 rgba(90, 210, 255, 0.95); }
+  40% { box-shadow: 0 0 26px 8px rgba(90, 210, 255, 0.85); }
+  100% { box-shadow: 0 4px 14px rgba(40, 60, 90, 0.18); }
+}
+
+/* ---------- 미니맵 (오른쪽 위 원형) ---------- */
+#minimap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 184px;
+  height: 184px;
+  border-radius: 50%;
+  box-shadow: 0 4px 16px rgba(40, 60, 90, 0.3);
+}
+
+/* ---------- 첫 화면 ---------- */
+#title {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: linear-gradient(180deg, rgba(20, 30, 50, 0.05), rgba(20, 30, 50, 0.35));
+  transition: opacity 0.4s;
+}
+#title.hidden { pointer-events: none; }
+.title-card { position: relative; width: min(520px, 92vw); padding: 26px 30px 18px; text-align: center; }
+.title-card h1 { margin: 0; font-size: 40px; font-weight: 900; letter-spacing: 0.02em; color: #2b3240; }
+.title-sub { margin: 8px 0 16px; color: #55607a; font-weight: 600; }
+.title-colors { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; }
+.title-colors button {
+  width: 34px; height: 34px; border-radius: 50%; border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #cfd6e2; cursor: pointer;
+}
+.title-colors button.on { box-shadow: 0 0 0 3px #2b3240; transform: scale(1.12); }
+.title-buttons { display: flex; gap: 12px; justify-content: center; }
+.title-buttons button {
+  flex: 1; padding: 14px 0; border: 0; border-radius: 12px; font: inherit; font-size: 20px; font-weight: 800;
+  cursor: pointer; background: #eef1f5; color: #2b3240;
+}
+.title-buttons #btn-late { background: #ff6b5a; color: #fff; }
+.title-keys { margin-top: 16px; font-size: 13px; line-height: 2; color: #55607a; }
+.title-link { margin-top: 8px; border: 0; background: none; font: inherit; font-size: 13px; color: #6b7385; text-decoration: underline; cursor: pointer; }
+.credits-card { max-width: 440px; text-align: left; line-height: 1.6; }
+.credits-card h2 { text-align: center; }
+.credits-card a { color: #3a6fd8; }
+
+/* 첫 화면에서는 게임 HUD를 숨긴다 */
+body.title #speedo, body.title #boost-gauge, body.title #help, body.title #late-start, body.title #labels,
+body.title #building-name, body.title #minimap, body.title #speedlines { display: none; }
+/* 화면이 낮으면 첫 화면 카드를 줄여서 다 보이게 */
+@media (max-height: 560px) { .title-card { transform: scale(0.72); } }

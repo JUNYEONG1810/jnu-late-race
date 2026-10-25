@@ -1,11 +1,16 @@
-// 화면 위 정보: 속도, 가까운 건물 이름, 주요 건물 이름표, 품질 버튼, 조작법, 알림.
+// 화면 위 정보: 속도, 가까운 건물 이름, 주요 건물 이름표, 미니맵, 품질·소리 버튼, 조작법, 알림.
 import * as THREE from 'three';
 
 const $ = (id) => document.getElementById(id);
 const tmp = new THREE.Vector3();
 
+// 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
+const MINIMAP = { radius: 260, res: 0.7 };
+// 이름표가 가리면 안 되는 HUD 요소들
+const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast'];
+
 export class Hud {
-  constructor({ onQuality }) {
+  constructor({ onQuality, onSound }) {
     this.speedEl = $('speed');
     this.buildingEl = $('building-name');
     this.toastEl = $('toast');
@@ -27,13 +32,126 @@ export class Hud {
     this.linesCtx = this.lines.getContext('2d');
     this.linesOn = false;
 
-    this.qualityButtons = [...document.querySelectorAll('#quality button')];
+    this.qualityButtons = [...document.querySelectorAll('#quality button[data-q]')];
     for (const btn of this.qualityButtons) {
       btn.addEventListener('click', () => {
         onQuality(btn.dataset.q);
         btn.blur(); // Space가 버튼을 다시 누르지 않도록
       });
     }
+    this.soundBtn = $('sound-btn');
+    this.soundBtn.addEventListener('click', () => { onSound(); this.soundBtn.blur(); });
+  }
+
+  setSound(on) {
+    this.soundBtn.textContent = on ? '🔊' : '🔇';
+    this.soundBtn.classList.toggle('off', !on);
+  }
+
+  // 미션 완료로 부스터 게이지가 찰 때 반짝
+  flashGauge() {
+    this.gaugeEl.classList.remove('charged');
+    void this.gaugeEl.offsetWidth;
+    this.gaugeEl.classList.add('charged');
+  }
+
+  // ---------- 미니맵 ----------
+
+  // 건물·차도·캠퍼스 경계를 한 번 그려 두고, 매 프레임 굴착기 주변만 잘라 원형으로 보여 준다
+  initMinimap(campus) {
+    const xs = [], zs = [];
+    for (const r of campus.roads) for (const [x, z] of r.points) { xs.push(x); zs.push(z); }
+    const pad = MINIMAP.radius;
+    this.mmBounds = { x0: Math.min(...xs) - pad, z0: Math.min(...zs) - pad, x1: Math.max(...xs) + pad, z1: Math.max(...zs) + pad };
+    const B = this.mmBounds, S = MINIMAP.res;
+    const off = document.createElement('canvas');
+    off.width = Math.ceil((B.x1 - B.x0) * S);
+    off.height = Math.ceil((B.z1 - B.z0) * S);
+    const g = off.getContext('2d');
+    const P = (x, z) => [(x - B.x0) * S, (z - B.z0) * S];
+    const poly = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](...P(x, z))); g.closePath(); };
+    g.fillStyle = '#d7d6d0';
+    g.fillRect(0, 0, off.width, off.height);
+    g.fillStyle = '#eceae4';
+    poly(campus.boundary);
+    g.fill();
+    g.fillStyle = '#b9dd98';
+    for (const gr of campus.greens) if (gr.kind !== 'park' && gr.kind !== 'water') { poly(gr.outline); g.fill(); }
+    g.lineCap = g.lineJoin = 'round';
+    g.strokeStyle = '#8f939a';
+    for (const r of campus.roads) {
+      if (!r.car) continue;
+      g.lineWidth = Math.max(2, r.width * S);
+      g.beginPath();
+      r.points.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](...P(x, z)));
+      g.stroke();
+    }
+    g.fillStyle = '#b4a48c';
+    for (const b of campus.buildings) { poly(b.outline); g.fill(); }
+    this.mmOff = off;
+    this.mmCanvas = $('minimap');
+    this.mmCtx = this.mmCanvas.getContext('2d');
+  }
+
+  // carPos: Vector2(x, z), heading: rad, target: {x, z} 또는 null
+  drawMinimap(carPos, heading, target) {
+    const c = this.mmCanvas, g = this.mmCtx;
+    const css = c.clientWidth || 184;
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    if (c.width !== css * dpr) { c.width = c.height = css * dpr; }
+    const W = c.width, R = W / 2, k = R / MINIMAP.radius; // px per m
+    const B = this.mmBounds, S = MINIMAP.res;
+    g.save();
+    g.clearRect(0, 0, W, W);
+    g.beginPath();
+    g.arc(R, R, R, 0, Math.PI * 2);
+    g.clip();
+    g.fillStyle = '#d7d6d0';
+    g.fillRect(0, 0, W, W);
+    const sx = (carPos.x - MINIMAP.radius - B.x0) * S, sz = (carPos.y - MINIMAP.radius - B.z0) * S;
+    g.drawImage(this.mmOff, sx, sz, MINIMAP.radius * 2 * S, MINIMAP.radius * 2 * S, 0, 0, W, W);
+
+    // 다음 미션 장소 (범위 밖이면 가장자리에)
+    if (target) {
+      let dx = (target.x - carPos.x) * k, dz = (target.z - carPos.y) * k;
+      const d = Math.hypot(dx, dz), max = R - 10 * dpr;
+      if (d > max) { dx *= max / d; dz *= max / d; }
+      const pulse = 1 + 0.25 * Math.sin(performance.now() / 180);
+      g.fillStyle = target.final ? '#3fb6ff' : '#ffc21a';
+      g.strokeStyle = '#2b3240';
+      g.lineWidth = 2 * dpr;
+      g.beginPath();
+      g.arc(R + dx, R + dz, 6 * dpr * pulse, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+    }
+
+    // 내 굴착기: 방향 화살표 (앞 = (sin h, cos h), 화면 x = 동쪽, y = 남쪽)
+    g.translate(R, R);
+    g.rotate(Math.atan2(Math.cos(heading), Math.sin(heading)));
+    g.fillStyle = '#ff5a3c';
+    g.strokeStyle = '#fff';
+    g.lineWidth = 2 * dpr;
+    g.beginPath();
+    g.moveTo(11 * dpr, 0);
+    g.lineTo(-7 * dpr, 7 * dpr);
+    g.lineTo(-3 * dpr, 0);
+    g.lineTo(-7 * dpr, -7 * dpr);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.restore();
+
+    // 테두리와 북쪽 표시
+    g.lineWidth = 4 * dpr;
+    g.strokeStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath();
+    g.arc(R, R, R - 2 * dpr, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = '#2b3240';
+    g.font = `800 ${12 * dpr}px sans-serif`;
+    g.textAlign = 'center';
+    g.fillText('N', R, 16 * dpr);
   }
 
   setQuality(q) {
@@ -77,15 +195,40 @@ export class Hud {
     this.labels.push({ el, pos: new THREE.Vector3(x, y, z) });
   }
 
+  // 가까운 이름표부터 놓고, 이미 놓인 이름표나 HUD와 겹치면 위·아래로 비켜 보고, 그래도 겹치면 숨긴다
   updateLabels(camera) {
     const w = innerWidth / 2, h = innerHeight / 2;
-    for (const { el, pos } of this.labels) {
-      const dist = camera.position.distanceTo(pos);
-      tmp.copy(pos).project(camera);
-      if (tmp.z > 1) { el.style.display = 'none'; continue; } // 카메라 뒤
-      const scale = Math.min(1, Math.max(0.45, 180 / dist));
+    const blocks = [];
+    for (const id of LABEL_BLOCKERS) {
+      const el = $(id);
+      if (!el || el.classList.contains('hidden')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width && r.height) blocks.push(r);
+    }
+    const items = [];
+    for (const label of this.labels) {
+      tmp.copy(label.pos).project(camera);
+      if (tmp.z > 1) { label.el.style.display = 'none'; continue; } // 카메라 뒤
+      const dist = camera.position.distanceTo(label.pos);
+      items.push({ label, dist, x: tmp.x * w + w, y: -tmp.y * h + h });
+    }
+    items.sort((a, b) => a.dist - b.dist);
+    const placed = [];
+    const hits = (r) => [...placed, ...blocks].some((o) => r.left < o.right && r.right > o.left && r.top < o.bottom && r.bottom > o.top);
+    for (const { label, dist, x, y } of items) {
+      const { el } = label;
       el.style.display = '';
-      el.style.transform = `translate(${tmp.x * w + w}px, ${-tmp.y * h + h}px) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
+      const scale = Math.min(1, Math.max(0.45, 180 / dist));
+      const lw = el.offsetWidth * scale, lh = el.offsetHeight * scale;
+      let spot = null;
+      for (const shift of [0, -1.15, 1.15, -2.3]) { // 제자리 → 위 → 아래 → 더 위
+        const top = y - lh + shift * lh;
+        const r = { left: x - lw / 2 - 4, right: x + lw / 2 + 4, top: top - 2, bottom: top + lh + 2 };
+        if (!hits(r)) { spot = { r, top }; break; }
+      }
+      if (!spot) { el.style.display = 'none'; continue; }
+      placed.push(spot.r);
+      el.style.transform = `translate(${x}px, ${spot.top + lh}px) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
       el.style.zIndex = String(10000 - Math.round(dist));
     }
   }

@@ -57,7 +57,12 @@ export class Car {
     this.boosting = false;
     this.boostLocked = false; // 게이지가 비면 Shift를 뗐다 다시 눌러야 함
     this.boostFx = 0;         // 효과 세기 0~1 (부드럽게 켜지고 꺼짐)
-    this.onBoostStart = null;
+    this.onBoostStart = null; // 소리 연결용 (부스터 시작·끝, 충돌)
+    this.onBoostEnd = null;
+    this.onHit = null;
+    this.throttle = false;
+    this.puffPending = false;
+    this.exhaust = new ExhaustFX(); // main에서 scene에 exhaust.group을 더한다
 
     this.prevSpeed = 0;
     this.accel = 0;
@@ -124,9 +129,9 @@ export class Car {
     pipe.position.set(-0.5, 1.95, -0.72);
     pipe.castShadow = true;
     this.body.add(pipe);
-    this.flame = this.buildFlame();
-    this.flame.position.set(-0.5, 2.33, -0.72);
-    this.body.add(this.flame);
+    this.exhaustTip = new THREE.Object3D(); // 불꽃·연기가 나오는 자리 (입자는 ExhaustFX가 월드에 뿌림)
+    this.exhaustTip.position.set(-0.5, 2.35, -0.72);
+    this.body.add(this.exhaustTip);
 
     // 브레이크등 (균형추 뒤)
     this.brakeMat = mat('#c0262c', { emissive: '#ff2020', emissiveIntensity: 0.15 });
@@ -152,23 +157,6 @@ export class Car {
     for (const sx of [-1, 1]) box(0.06, 0.36, 0.48, dark, sx * 0.36, 0.12, 0.22, this.bucketPivot); // 옆판
     for (let i = 0; i < 4; i++) box(0.08, 0.06, 0.14, steel, -0.27 + i * 0.18, -0.04, 0.53, this.bucketPivot); // 이빨
     this.poseArm();
-  }
-
-  buildFlame() {
-    const group = new THREE.Group();
-    group.rotation.x = -0.55; // 위·뒤로 기울여 뿜음
-    const fire = (r, h, c) => {
-      const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10).translate(0, h / 2, 0),
-        new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, depthWrite: false }));
-      group.add(m);
-      return m;
-    };
-    // 밝은 하늘 앞에서도 주황이 보이도록 일반 합성(가산 합성은 하얗게 날아감)
-    fire(0.3, 1.9, '#ff5a14');
-    fire(0.18, 1.2, '#ffb02e');
-    fire(0.09, 0.7, '#fff3a0');
-    group.visible = false;
-    return group;
   }
 
   setColor(color) {
@@ -215,6 +203,9 @@ export class Car {
     let lat = this.vel.dot(r);
 
     const throttle = input.up || this.boosting; // 부스터는 Shift만 눌러도 앞으로
+    // 멈춰 있다가 가속을 시작하는 순간 배기구에서 검은 디젤 연기 "푹"
+    if (throttle && !this.throttle && Math.abs(fs) < 1) this.puffPending = true;
+    this.throttle = throttle;
     const top = this.boosting ? D.boostSpeed : D.maxSpeed;
     this.braking = false;
 
@@ -260,6 +251,7 @@ export class Car {
         if (vn < 0) {
           this.vel.addScaledVector(n, -vn * 1.25); // 벽 쪽 속도를 없애고 살짝 튕김
           this.vel.multiplyScalar(0.8);
+          if (vn < -3 && this.hitTimer === 0) this.onHit?.(Math.min(1, -vn / 15)); // 충돌음 (세기 0~1)
           if (vn < -3) this.hitTimer = 0.3;
         }
       }
@@ -275,6 +267,7 @@ export class Car {
     this.hitTimer = Math.max(0, this.hitTimer - dt);
     this.animate(dt);
     this.syncObject();
+    this.updateExhaust(dt);
   }
 
   updateBoost(dt, held) {
@@ -287,7 +280,8 @@ export class Car {
     } else {
       this.boost = Math.min(1, this.boost + dt / BOOST.fillTime);
     }
-    if (this.boosting && !was && this.onBoostStart) this.onBoostStart();
+    if (this.boosting && !was) this.onBoostStart?.();
+    if (!this.boosting && was) this.onBoostEnd?.();
     // 효과는 빨리 켜지고 천천히 꺼진다
     const goal = this.boosting ? 1 : 0;
     this.boostFx += (goal - this.boostFx) * Math.min(1, dt * (this.boosting ? 6 : 2.2));
@@ -320,13 +314,15 @@ export class Car {
     this.body.rotation.x += (pitch - this.body.rotation.x) * Math.min(1, dt * 6);
     this.brakeMat.emissiveIntensity = this.braking ? 2.5 : 0.15;
 
-    // 배기구 불꽃: 부스터 세기만큼, 매 프레임 조금씩 일렁임
-    const fx = this.boostFx;
-    this.flame.visible = fx > 0.03;
-    if (this.flame.visible) {
-      const flick = 0.75 + Math.random() * 0.5;
-      this.flame.scale.set(fx * (0.8 + Math.random() * 0.3), fx * flick, fx * (0.8 + Math.random() * 0.3));
-    }
+  }
+
+  // 배기구 불꽃·연기 (syncObject 뒤에 불러야 배기구 위치가 맞다)
+  updateExhaust(dt) {
+    this.object.updateMatrixWorld(true);
+    this.exhaustTip.getWorldPosition(tmpVec);
+    const f = this.forward();
+    if (this.puffPending) { this.exhaust.puff(tmpVec, f); this.puffPending = false; }
+    this.exhaust.update(dt, tmpVec, f, this.boostFx);
   }
 
   poseArm() {
@@ -358,6 +354,110 @@ export class Car {
     this.object.position.set(this.pos.x, 0, this.pos.y);
     this.object.rotation.y = this.heading;
   }
+}
+
+// 배기구 불꽃·연기 입자. 월드 좌표에 뿌려서 굴착기가 달리면 뒤로 꼬리처럼 남는다.
+// 불꽃: 크기·밝기 무작위의 작은 조각(주황~노랑, 가산 혼합)이 깜빡이며 위·뒤로 → 끝에서 연한 연기로.
+// 디젤 연기: 정지 상태에서 가속을 시작할 때 검은 연기 "푹".
+class ExhaustFX {
+  constructor() {
+    this.group = new THREE.Group();
+    const tex = softDotTexture();
+    const pool = (n, blending) => Array.from({ length: n }, () => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending }));
+      s.visible = false;
+      s.userData = { life: 0, max: 1, vel: new THREE.Vector3(), size: 1, grow: 0 };
+      this.group.add(s);
+      return s;
+    });
+    this.fire = pool(36, THREE.AdditiveBlending);
+    this.smoke = pool(48, THREE.NormalBlending);
+    this.fireAcc = 0;
+  }
+
+  take(list) {
+    return list.find((s) => !s.visible) || list[Math.floor(Math.random() * list.length)];
+  }
+
+  spawnSmoke(pos, vel, color, size, grow, life, opacity) {
+    const s = this.take(this.smoke);
+    Object.assign(s.userData, { life: 0, max: life, size, grow, opacity });
+    s.userData.vel.copy(vel);
+    s.position.copy(pos);
+    s.material.color.set(color);
+    s.visible = true;
+  }
+
+  puff(pos, forward) {
+    for (let i = 0; i < 10; i++) {
+      tmpV.set(-forward.x * 1.5 + rnd(1), 2 + Math.random() * 1.5, -forward.y * 1.5 + rnd(1));
+      this.spawnSmoke(pos, tmpV, i % 3 ? '#2a2a2a' : '#454545', 0.5 + Math.random() * 0.3, 1.8, 0.9 + Math.random() * 0.5, 0.85);
+    }
+  }
+
+  update(dt, pos, forward, boostFx) {
+    this.fireAcc += dt * 80 * boostFx;
+    while (this.fireAcc >= 1) {
+      this.fireAcc -= 1;
+      const s = this.take(this.fire);
+      const u = s.userData;
+      Object.assign(u, { life: 0, max: 0.12 + Math.random() * 0.22, size: 0.25 + Math.random() * 0.45, bright: 0.6 + Math.random() * 0.4 });
+      u.vel.set(-forward.x * (3 + Math.random() * 3) + rnd(1.2), 4 + Math.random() * 4, -forward.y * (3 + Math.random() * 3) + rnd(1.2));
+      s.position.set(pos.x + rnd(0.08), pos.y, pos.z + rnd(0.08));
+      u.hue = Math.random(); // 0 주황 ~ 1 노랑
+      s.visible = true;
+    }
+    for (const s of this.fire) {
+      if (!s.visible) continue;
+      const u = s.userData;
+      u.life += dt;
+      const k = u.life / u.max;
+      if (k >= 1) { // 끝에서 연기로 흩어짐
+        s.visible = false;
+        if (Math.random() < 0.5) {
+          tmpV.copy(u.vel).multiplyScalar(0.25);
+          tmpV.y += 1;
+          this.spawnSmoke(s.position, tmpV, '#8f8f8f', u.size * 1.2, 1.4, 0.7 + Math.random() * 0.4, 0.4);
+        }
+        continue;
+      }
+      s.position.addScaledVector(u.vel, dt);
+      const flicker = 0.7 + Math.random() * 0.6;
+      s.scale.setScalar(u.size * (1 + k * 0.6) * flicker);
+      s.material.color.copy(FIRE_ORANGE).lerp(FIRE_YELLOW, u.hue * (1 - k * 0.7));
+      s.material.opacity = u.bright * (1 - k) * flicker;
+    }
+    for (const s of this.smoke) {
+      if (!s.visible) continue;
+      const u = s.userData;
+      u.life += dt;
+      const k = u.life / u.max;
+      if (k >= 1) { s.visible = false; continue; }
+      u.vel.multiplyScalar(Math.exp(-dt * 1.5));
+      s.position.addScaledVector(u.vel, dt);
+      s.scale.setScalar(u.size * (1 + k * u.grow));
+      s.material.opacity = u.opacity * (1 - k) * Math.min(1, k * 8);
+    }
+  }
+}
+
+const FIRE_ORANGE = new THREE.Color('#ff5a10');
+const FIRE_YELLOW = new THREE.Color('#ffd23a');
+const tmpV = new THREE.Vector3();
+const rnd = (a) => (Math.random() - 0.5) * 2 * a;
+
+// 가운데가 진하고 가장자리가 투명한 동그라미 (입자 모양)
+function softDotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.75)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
 }
 
 const tmpMatrix = new THREE.Matrix4();

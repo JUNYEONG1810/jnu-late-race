@@ -6,7 +6,7 @@ import { MISSIONS } from './missions-data.js';
 import { DIALOGUE, SPEAKER } from './dialogue-data.js';
 import { Professor, SpeechBubble } from './professor.js';
 import { PROFESSOR } from './professor-config.js';
-import { playDing, playBeep } from './voice.js';
+import { playDing, playBeep, playMissionRise, playCharge } from './voice.js';
 
 // 제한 시간(초). 참고: 차도 최단 경로는 3,861m라 부스터와 지름길이 필요하다
 export const TIME_LIMIT = 180;
@@ -187,6 +187,7 @@ export class LateMode {
     this.state = 'mission';
     this.progress = 0;
     this.hud.setHint(null);
+    playMissionRise(MISSION_SECONDS); // 진행 막대 동안 "뚜루루루↗"
   }
 
   update(dt) {
@@ -317,7 +318,9 @@ export class LateMode {
   completeMission() {
     const t = this.target;
     playDing();
+    playCharge(); // 부스터 게이지 충전 "슈웅↑"
     this.car.addBoost(BOOST_REWARD);
+    this.hud.flashGauge();
     this.hud.toast(`${t.emoji} ${t.title} 완료! 부스터 +50%`, 2200);
     this.index++;
     this.hud.setMissions(this.targets, this.index);
