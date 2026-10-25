@@ -461,7 +461,7 @@ function makeRippleTexture() {
 }
 
 // 다각형을 가장 작게 감싸는 회전 사각형: 중심, 긴 변 방향(u), 길이 L(긴 변)·W(짧은 변)
-function orientedRect(o) {
+export function orientedRect(o) {
   let best = null;
   for (let i = 0; i < o.length; i++) {
     const [x1, z1] = o[i], [x2, z2] = o[(i + 1) % o.length];
@@ -486,7 +486,7 @@ function orientedRect(o) {
 }
 
 // 회전 사각형의 (u, v) 좌표 → 바닥 좌표
-function rectPoint(r, u, v) {
+export function rectPoint(r, u, v) {
   return [r.cx + u * r.ux - v * r.uz, r.cz + u * r.uz + v * r.ux];
 }
 
@@ -1156,6 +1156,7 @@ function makeTreeBlocker(campus) {
     }
   }
   const waters = campus.greens.filter((g) => g.kind === 'water').map((g) => g.outline);
+  for (const o of campus.parking || []) waters.push(o); // 주차장에도 심지 않음 (주차 차량 자리)
 
   return (x, z) => {
     const k = `${Math.floor(x / cell)},${Math.floor(z / cell)}`;

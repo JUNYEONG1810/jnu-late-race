@@ -10,6 +10,7 @@ import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, se
 import { LateMode } from './late-mode.js';
 import { buildSurroundings } from './surroundings.js';
 import { buildRoadMarks } from './roadmarks.js';
+import { buildLife } from './life.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -93,6 +94,7 @@ function setQuality(q) {
   world.trees.setDensity(high ? 1 : 0.5);
   world.ground.setResolution(high ? 4096 : 2048); // 바닥 그림 해상도
   world.landscape.lamps.visible = high; // 가로등은 품질 높음에서만
+  world.life.setQuality(high); // 학생·셔틀버스 수
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
   try { localStorage.setItem('quality', q); } catch {}
@@ -259,6 +261,10 @@ async function start() {
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
   lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
+  // 주차 차량·셔틀버스·학생 (미션 장소·출발점·교수님 등장 자리 둘레는 비움)
+  world.life = buildLife(scene, campus, collider, {
+    avoidPoints: [...lateMode.targets.map((t) => [t.x, t.z]), position, [lateMode.stage.to.x, lateMode.stage.to.z]],
+  });
   hud.initMinimap(campus);
   setupTitle();
 
@@ -300,6 +306,9 @@ function loop() {
     for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
   }
   lateMode.update(dt);
+  // 연출 중에는 교수님·굴착기 둘레의 학생·버스를 숨김
+  const cine = lateMode.active && lateMode.inputLocked && lateMode.state !== 'mission' && lateMode.state !== 'paused';
+  world.life.update(dt, car, cine ? [[lateMode.stage.to.x, lateMode.stage.to.z], [car.pos.x, car.pos.y]] : []);
   world.landscape.update(dt, car.pos.x, car.pos.y); // 주차 차단기
 
   rig.update(dt, car);
