@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { heightAt } from './terrain.js';
 import { pointInPolygon } from './car.js';
 import { DRIVER as D } from './driver-config.js';
+import { makeStars } from './driver.js';
 
 export const WALK = {
   speed: 1.7,       // 걷기 (m/s)
@@ -679,25 +680,6 @@ export class Walker {
 
 function smooth(k) { return k * k * (3 - 2 * k); }
 function rand(a, b) { return a + Math.random() * (b - a); }
-
-// 노란 별 3개를 고리 모양으로 한 메시에 (빛 계산 없는 단색, 양면)
-function makeStars() {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) {
-    const a = (i * Math.PI) / 5, rr = i % 2 ? 0.032 : 0.075;
-    shape[i ? 'lineTo' : 'moveTo'](Math.sin(a) * rr, Math.cos(a) * rr);
-  }
-  const one = new THREE.ShapeGeometry(shape).toNonIndexed();
-  const pos = [];
-  for (let i = 0; i < 3; i++) {
-    const a = (i * Math.PI * 2) / 3;
-    const g = one.clone().rotateY(a).translate(Math.sin(a) * 0.2, 0, Math.cos(a) * 0.2);
-    pos.push(...g.attributes.position.array);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffd23a', side: THREE.DoubleSide }));
-}
 
 function lerp(a, b, k) { return a + (b - a) * k; }
 

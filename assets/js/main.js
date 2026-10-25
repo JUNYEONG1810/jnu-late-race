@@ -171,7 +171,7 @@ addEventListener('keydown', (e) => {
     if (onWalkKey(e.code)) return;
   } else {
     if (e.code === 'KeyH') hud.showHelp();
-    if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
+    if (e.code === 'KeyG') drive.manualPeek = !drive.manualPeek; // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
     if (e.code === 'KeyE' && !lateMode?.active) getOff();
     if (e.code === 'KeyQ' && !lateMode?.inputLocked) car.scoop(); // 버킷 퍼 올리기
   }
@@ -237,7 +237,7 @@ function toggleBgm() {
 }
 // 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬),
 // 가벼운 모드 (기본 꺼짐: 켜면 장식 요소를 한꺼번에 끔)
-const settings = { walkCamAuto: false, chatter: true, light: false };
+const settings = { walkCamAuto: false, chatter: true, light: false, faceWindow: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
 hud.bindSettings(settings, () => {
   try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {}
@@ -256,9 +256,12 @@ function applyLight() {
 }
 const rig = new CameraRig(camera);
 const car = new Car();
-car.onBoostStart = playBoost;
+car.onBoostStart = () => { playBoost(); drive.boostT = DRIVE_FACE.boost; }; // 부스터: 깜짝
 car.onBoostEnd = playBoostEnd;
-car.onHit = playHit;
+car.onHit = (s) => { // 쾅: 세게 부딪히면 어질어질 + 머리 위 별
+  playHit(s);
+  if (s > DRIVE_FACE.crashHit) { drive.crashT = DRIVE_FACE.crash; car.driver.dizzy(DRIVE_FACE.crash); }
+};
 scene.add(car.object, car.exhaust.group);
 const engine = new EngineSound();
 hud.setSound(!isMuted());
@@ -643,6 +646,7 @@ async function start() {
   scene.add(walker.object);
   lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
   lateMode.onResult = (grade) => music.result(grade); // 등급별 짧은 결과 음악
+  lateMode.onMissionDone = () => { drive.relievedT = DRIVE_FACE.relieved; car.driver.waveHoof(); }; // 휴~ + 창밖으로 발굽 흔들기
   life = buildCampusLife(scene, { campus, collider, hud, lateMode, walker, car, speak,
     sounds: { meow: playMeow, splash: playSplash, stamp: playStamp } });
   walker.onSplash = (x, z) => life.splashAt(x, z); // 풍덩: 물보라·소리, 오리가 흩어짐
@@ -675,12 +679,41 @@ function applyRoadWidths(campus, list) {
 }
 
 // 운전사 학생 표정: 자유 주행 웃음, 지각 모드 긴장, 결과 A+ 만세, F 울먹 (그 밖의 등급은 웃음)
+// ---------- 운전 중 표정·몸짓 ----------
+// 우선순위: 결과(만세·울먹) > 쾅(어질) > 미션 완료(휴~) > 부스터(깜짝) > 마지막 30초(울먹) > 지각 모드(긴장) > 웃음
+const DRIVE_FACE = {
+  crash: 1.6, crashHit: 0.25, boost: 1.0, relieved: 2.4, tearful: 30,
+  idlePeek: 6,          // 자유 주행에서 이만큼 서 있으면 창밖으로 고개를 내밀어 둘러봄
+  glance: [6, 11],      // 지각 모드에서 가끔 뒤를 힐끔 (간격, 초)
+  wind: [25, 60],       // 고개를 내밀었을 때 볼이 눌리기 시작하는 속도 ~ 가장 눌리는 속도 (km/h)
+};
+const drive = { crashT: 0, boostT: 0, relievedT: 0, idleT: 0, glanceT: 8, manualPeek: false };
 function driverExpression() {
-  if (!lateMode.active) return 'smile';
-  if (lateMode.state === 'outro' || lateMode.state === 'result') {
-    return lateMode.grade === 'A+' ? 'hooray' : lateMode.grade === 'F' ? 'cry' : 'smile';
+  const L = lateMode;
+  if (L.active && (L.state === 'outro' || L.state === 'result')) {
+    return L.grade === 'A+' ? 'hooray' : L.grade === 'F' ? 'cry' : 'smile';
   }
+  if (drive.crashT > 0) return 'dizzy';
+  if (drive.relievedT > 0) return 'relieved';
+  if (drive.boostT > 0) return 'surprised';
+  if (!L.active) return 'smile';
+  if ((L.state === 'playing' || L.state === 'mission') && TIME_LIMIT - (L.elapsed || 0) <= DRIVE_FACE.tearful) return 'cry';
   return 'nervous';
+}
+// 고개 내밀기(G·서 있을 때·미션 완료), 뒤돌아보기, 바람에 눌린 볼
+function updateDriverGesture(dt, walking) {
+  for (const k of ['crashT', 'boostT', 'relievedT']) drive[k] = Math.max(0, drive[k] - dt);
+  const D = car.driver, L = lateMode;
+  if (walking) { drive.idleT = 0; return; }
+  const still = Math.abs(car.forwardSpeed) < 0.5 && !L.active && !onTitle;
+  drive.idleT = still ? drive.idleT + dt : 0;
+  D.setPeek(drive.manualPeek || drive.relievedT > 0 || drive.idleT > DRIVE_FACE.idlePeek);
+  if (L.active && L.state === 'playing' && (drive.glanceT -= dt) <= 0) {
+    drive.glanceT = DRIVE_FACE.glance[0] + Math.random() * (DRIVE_FACE.glance[1] - DRIVE_FACE.glance[0]);
+    if (drive.relievedT === 0) D.glanceBack();
+  }
+  const [w0, w1] = DRIVE_FACE.wind;
+  D.setWind(Math.max(0, Math.min(1, (car.speedKmh - w0) / (w1 - w0))));
 }
 
 // ---------- 루프 ----------
@@ -709,7 +742,9 @@ function loop() {
   }
   if (!walking) walker.update(dt); // 타고 나서 문 닫기
   lateMode.update(dt);
+  updateDriverGesture(dt, walking);
   car.driver.setExpression(walking ? walker.face() : driverExpression());
+  hud.setFace(car.driver.expression, settings.faceWindow && !settings.light && !onTitle);
   if (lateMode.frozen) car.driver.update(dt, 0); // 결과 화면 등 굴착기가 멈춘 동안에도 표정·만세 움직임
   const focus = walking ? walker.pos : car.pos; // 화면·소리·미니맵의 중심
   const focusY = walking ? walker.y : car.object.position.y;

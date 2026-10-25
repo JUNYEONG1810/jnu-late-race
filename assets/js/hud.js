@@ -1,5 +1,7 @@
 // 화면 위 정보: 속도, 가까운 건물 이름, 주요 건물 이름표, 미니맵, 품질·소리 버튼, 조작법, 알림.
 import * as THREE from 'three';
+import { FACES } from './driver.js';
+import { DRIVER } from './driver-config.js';
 
 const $ = (id) => document.getElementById(id);
 const tmp = new THREE.Vector3();
@@ -7,7 +9,7 @@ const tmp = new THREE.Vector3();
 // 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
 const MINIMAP = { radius: 260, res: 0.7 };
 // 이름표가 가리면 안 되는 HUD 요소들
-const LABEL_BLOCKERS = ['play-info', 'photo-bar', 'stamp-board', 'npc-bubble', 'quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
+const LABEL_BLOCKERS = ['face-window', 'play-info', 'photo-bar', 'stamp-board', 'npc-bubble', 'quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
 
 export class Hud {
   constructor({ onQuality, onSound, onBgm }) {
@@ -124,6 +126,56 @@ export class Hud {
     el.style.transform = `translate(${(tmp.x + 1) / 2 * innerWidth}px, ${(1 - tmp.y) / 2 * innerHeight - 8}px) translate(-50%, -100%)`;
     el.classList.toggle('hidden', !on || !text);
   }
+
+  // 운전사 학생 얼굴 창: 3D 표정과 같은 부품(FACES)을 2D SVG로. name: 표정 이름, on: 보일지
+  setFace(name, on = true) {
+    const el = $('face-window');
+    el.classList.toggle('hidden', !on);
+    if (!on || name === this.faceName) return;
+    if (!this.faceParts) {
+      const C = DRIVER.colors;
+      const g = (k, inner) => `<g data-part="${k}" style="display:none">${inner}</g>`;
+      const eye = (x) => `<ellipse cx="${x}" cy="-3" rx="5.2" ry="5.8" fill="${C.eye}"/><circle cx="${x + 1.8}" cy="-5.2" r="1.7" fill="#fff"/>`;
+      const arcUp = (x) => `<path d="M${x - 5} -1 Q${x} -8 ${x + 5} -1" stroke="${C.eye}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+      const arcDn = (x) => `<path d="M${x - 5} -4 Q${x} 2 ${x + 5} -4" stroke="${C.eye}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+      const cross = (x) => `<path d="M${x - 4.5} -7.5 L${x + 4.5} 1.5 M${x + 4.5} -7.5 L${x - 4.5} 1.5" stroke="${C.eye}" stroke-width="2.4" stroke-linecap="round"/>`;
+      const star = (x, y) => `<path transform="translate(${x} ${y}) scale(0.9)" d="M0 -6 L1.8 -1.8 L6 -1.8 L2.6 1 L3.8 5.6 L0 3 L-3.8 5.6 L-2.6 1 L-6 -1.8 L-1.8 -1.8 Z" fill="#ffd23a" stroke="#c99a12" stroke-width="0.6"/>`;
+      el.innerHTML = `<svg viewBox="-50 -52 100 100">`
+        + `<circle r="47" fill="#e9f3ff"/>`
+        // 귀·뿔·머리
+        + [-1, 1].map((s) => `<ellipse cx="${s * 37}" cy="-10" rx="14" ry="7" fill="${C.body}" transform="rotate(${s * 18} ${s * 37} -10)"/><ellipse cx="${s * 38}" cy="-9" rx="9" ry="4" fill="${C.earInner}" transform="rotate(${s * 18} ${s * 38} -9)"/>`
+          + `<rect x="${s * 17 - 3.5}" y="-42" width="7" height="13" rx="3.5" fill="${C.horn}" transform="rotate(${s * 16} ${s * 17} -36)"/>`).join('')
+        + `<ellipse cx="0" cy="0" rx="33" ry="30" fill="${C.body}"/>`
+        + `<ellipse cx="0" cy="-19" rx="12" ry="7" fill="${C.cream}"/>`
+        + `<ellipse cx="0" cy="15" rx="22" ry="13" fill="${C.cream}"/>`
+        + `<ellipse cx="-7" cy="13" rx="2.6" ry="2" fill="${C.nostril}"/><ellipse cx="7" cy="13" rx="2.6" ry="2" fill="${C.nostril}"/>`
+        + `<ellipse cx="-23" cy="6" rx="5.5" ry="3.4" fill="${C.cheek}" opacity="0.8"/><ellipse cx="23" cy="6" rx="5.5" ry="3.4" fill="${C.cheek}" opacity="0.8"/>`
+        // 표정 부품
+        + g('eyesOpen', eye(-13) + eye(13))
+        + g('eyesHappy', arcUp(-13) + arcUp(13))
+        + g('eyesClosed', arcDn(-13) + arcDn(13))
+        + g('eyesDizzy', cross(-13) + cross(13))
+        + g('brows', `<path d="M-19 -14 L-8 -11.5 M19 -14 L8 -11.5" stroke="${C.hoof}" stroke-width="2.2" stroke-linecap="round" transform="rotate(0)"/>`)
+        + g('smile', `<path d="M-6 21 Q0 26 6 21" stroke="${C.mouth}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`)
+        + g('nervousMouth', `<path d="M-7 23 Q-4 20 -1 23 Q2 26 5 23 Q7 21 8 22" stroke="${C.mouth}" stroke-width="2" fill="none" stroke-linecap="round"/>`)
+        + g('open', `<ellipse cx="0" cy="22.5" rx="5.5" ry="4.2" fill="${C.mouth}"/><ellipse cx="0" cy="24.6" rx="3" ry="1.6" fill="${C.cheek}"/>`)
+        + g('frown', `<path d="M-6 25 Q0 19.5 6 25" stroke="${C.mouth}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`)
+        + g('sweat', `<path d="M27 -26 Q31 -19 27 -16 Q23 -19 27 -26 Z" fill="${C.drop}"/>`)
+        + g('tears', `<ellipse cx="-14" cy="6" rx="2.4" ry="3.4" fill="${C.drop}"/><ellipse cx="14" cy="6" rx="2.4" ry="3.4" fill="${C.drop}"/>`)
+        + g('stars', star(-20, -44) + star(0, -48) + star(20, -44))
+        + `</svg>`;
+      this.faceParts = [...el.querySelectorAll('[data-part]')];
+    }
+    this.faceName = name;
+    const show = [...(FACES[name] || FACES.smile), ...(name === 'dizzy' ? ['stars'] : [])];
+    for (const p of this.faceParts) p.style.display = show.includes(p.dataset.part) ? '' : 'none';
+    el.classList.remove('pop');
+    void el.offsetWidth; // 표정이 바뀔 때 살짝 통
+    el.classList.add('pop');
+    clearTimeout(this.facePop);
+    this.facePop = setTimeout(() => el.classList.remove('pop'), 160);
+  }
+
 
   // 명소 도장판: stamps [{name, emoji}], got {이름: 찍은 시각}
   setStamps(stamps, got) {

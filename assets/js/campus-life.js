@@ -58,7 +58,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
   hud.setStamps(stamps, got);
 
   // 산책하는 교수님: 지각 모드의 교수님을 자유 주행 동안 공대 2호관 앞에서 앞뒤로 걷게 (지각 모드 중에는 지각 모드가 맡음)
-  const prof = { t: 0, dir: 1, wait: 0, talkT: 0, lineI: -1, on: false };
+  const prof = { t: 0, dir: 1, wait: 0, talkT: 0, lineI: -1, on: false, push: new THREE.Vector2() }; // push: 굴착기·황소를 비켜 선 만큼
   const S = lateMode.stage, n = new THREE.Vector2(S.n.x, S.n.z), side = new THREE.Vector2(-n.y, n.x);
   const paceA = new THREE.Vector2(S.to.x, S.to.z).addScaledVector(n, 2), paceB = paceA.clone();
   for (let d = LIFE.prof.pace; d > 2; d -= 1) { // 건물 앞을 따라 막히지 않는 곳까지
@@ -161,7 +161,19 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
         hud.sayNpc(line, speak(line), () => P.headTop(), '교수님');
       }
       if (d < 1.6 && prof.wait <= 0) prof.wait = 1; // 황소·굴착기와 부딪히지 않게 잠깐 멈춤
+      // 굴착기(3.6m)·황소(1.2m)보다 가까워지면 그만큼 옆으로 비켜 서고, 멀어지면 천천히 제자리로
+      const base = paceA.clone().lerp(paceB, prof.t);
+      const away = base.clone().add(prof.push);
+      let pushed = false;
+      for (const [q, r] of [[car.pos, LIFE.student.minCar], ...(walker.active ? [[walker.pos, LIFE.student.minWalker]] : [])]) {
+        let dx = away.x - q.x, dz = away.y - q.y, dd = Math.hypot(dx, dz);
+        if (dd < 1e-3) { dx = n.x; dz = n.y; dd = 1; } // 딱 겹치면 건물 바깥쪽으로
+        if (dd < r) { away.set(q.x + (dx / dd) * r, q.y + (dz / dd) * r); pushed = true; }
+      }
+      prof.push.copy(away).sub(base);
+      if (!pushed) prof.push.multiplyScalar(Math.exp(-dt * 0.8));
       if (prof.wait > 0) {
+        P.object.position.set(away.x, heightAt(away.x, away.y), away.y);
         prof.wait -= dt;
         P.walking = false;
         P.face(who.x - here.x, who.y - here.y);
@@ -170,7 +182,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
         const L = paceA.distanceTo(paceB);
         prof.t += prof.dir * dt * 0.55 / Math.max(1, L);
         if (prof.t > 1 || prof.t < 0) { prof.t = THREE.MathUtils.clamp(prof.t, 0, 1); prof.dir *= -1; prof.wait = 1.5; }
-        const p = paceA.clone().lerp(paceB, prof.t);
+        const p = paceA.clone().lerp(paceB, prof.t).add(prof.push);
         P.walking = true;
         P.object.position.set(p.x, heightAt(p.x, p.y), p.y);
         const dir = paceB.clone().sub(paceA).multiplyScalar(prof.dir);

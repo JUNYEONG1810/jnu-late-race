@@ -639,3 +639,9 @@ body.photo #hud > :not(#photo-bar):not(#toast) { display: none !important; }
 #stamp-btn { display: none; }
 body.walking #stamp-btn { display: inline-block; }
 body.title #npc-bubble, body.cine #npc-bubble, body.title #stamp-board, body.cine #stamp-board, body.late #stamp-board { display: none; }
+
+/* ---------- 운전사 얼굴 창 (밤샘 10단계) ---------- */
+#face-window { left: 20px; bottom: 100px; width: 92px; height: 92px; padding: 4px; border-radius: 50%; pointer-events: none; transition: transform 0.15s; }
+#face-window svg { width: 100%; height: 100%; display: block; }
+#face-window.pop { transform: scale(1.08); }
+body.title #face-window, body.cine #face-window, body.photo #face-window { display: none; }

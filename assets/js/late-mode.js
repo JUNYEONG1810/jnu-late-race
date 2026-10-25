@@ -433,6 +433,7 @@ export class LateMode {
     playDing();
     playCharge(); // 부스터 게이지 충전 "슈웅↑"
     this.car.addBoost(BOOST_REWARD);
+    this.onMissionDone?.(); // main: 휴~ 표정, 창밖으로 발굽 흔들기
     this.hud.flashGauge();
     this.hud.toast(`${t.emoji} ${t.title} 완료! 부스터 +50%`, 2200);
     this.index++;

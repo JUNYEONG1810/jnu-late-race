@@ -7,8 +7,9 @@ import { DRIVER as D } from './driver-config.js';
 const SKIN = new THREE.MeshLambertMaterial({ vertexColors: true });
 const GOLD = new THREE.MeshPhongMaterial({ color: D.colors.gold, specular: '#fff4c2', shininess: 90, emissive: '#3a2a00' });
 // 운전 중 4종 + 걸을 때(walker.js): happy(음메·감정 표현), yawn(하품), sleep(꾸벅·낮잠), surprised(화들짝), dizzy(꽈당)
-const FACES = {
+export const FACES = {
   smile: ['eyesOpen', 'smile'],
+  relieved: ['eyesHappy', 'smile', 'sweat'],        // 미션 완료: 휴~
   nervous: ['eyesOpen', 'nervousMouth', 'brows', 'sweat'],
   hooray: ['eyesHappy', 'open'],
   cry: ['eyesOpen', 'frown', 'brows', 'tears'],
@@ -16,8 +17,10 @@ const FACES = {
   yawn: ['eyesClosed', 'open'],
   sleep: ['eyesClosed'],
   surprised: ['eyesOpen', 'open', 'brows'],
-  dizzy: ['eyesDizzy', 'nervousMouth'],
+  dizzy: ['eyesDizzy', 'nervousMouth'],             // 꽈당·쾅 (굴착기 충돌 때는 별도 돎)
 };
+// 운전 중 몸짓: 뒤돌아보기(지각 모드에서 가끔 힐끔), 발굽 흔들기(미션 완료), 바람에 눌린 볼(고개 내밀고 빨리 달릴 때)
+const DRIVE_GESTURE = { glance: 1.5, wave: [-2.75, 0.5], squish: [0.08, -0.05, -0.08] };
 
 // 여러 도형을 정점 색으로 칠해 한 메시로 합친다
 class Parts {
@@ -61,6 +64,10 @@ export class Driver {
     this.peek = 0;
     this.peekGoal = 0;
     this.time = 0;
+    this.glanceT = 0;  // 뒤돌아보기 남은 시간
+    this.waveT = 0;    // 발굽 흔들기 남은 시간
+    this.wind = 0;     // 바람에 눌린 볼 0~1
+    this.dizzyT = 0;   // 충돌 별 남은 시간
     this.standing = false; // 내려서 걷는 중이면 자세·몸짓은 walker.js가 맡는다
 
     // ---- 의자 + 조종 레버 (움직이지 않음) ----
@@ -199,6 +206,12 @@ export class Driver {
       tears: tears.mesh(),
     };
     for (const m of Object.values(this.faces)) this.head.add(m);
+    // 충돌 때 머리 위를 도는 별 (걷는 황소와 같은 모양, 머리 크기에 맞춰)
+    this.stars = makeStars();
+    this.stars.visible = false;
+    this.stars.position.y = H.r + 0.2;
+    this.stars.scale.setScalar(1 / D.scale);
+    this.head.add(this.stars);
     this.setExpression('smile');
     this.update(0, 0);
   }
@@ -214,11 +227,20 @@ export class Driver {
   // G: 왼쪽 창문(굴착기 팔이 없는 쪽)으로 고개 내밀기 / 들어가기
   togglePeek() { this.peekGoal = this.peekGoal ? 0 : 1; }
   setPeek(on) { this.peekGoal = on ? 1 : 0; }
+  glanceBack(sec = 0.9) { this.glanceT = sec; }        // 뒤를 힐끔
+  waveHoof(sec = 2.2) { this.waveT = sec; }           // 창밖으로 발굽 흔들기
+  setWind(w) { this.wind = w; }                        // 바람에 눌린 볼 (0~1)
+  dizzy(sec = 1.6) { this.dizzyT = sec; }              // 충돌: 머리 위 별
 
   // speed: 굴착기 앞뒤 속도(m/s) — 귀 펄럭임에만 씀
   update(dt, speed = 0) {
     this.time += dt;
-    if (this.standing) return;
+    this.glanceT = Math.max(0, this.glanceT - dt);
+    this.waveT = Math.max(0, this.waveT - dt);
+    this.dizzyT = Math.max(0, this.dizzyT - dt);
+    this.stars.visible = this.dizzyT > 0 && !this.standing;
+    if (this.stars.visible) this.stars.rotation.y = this.time * 5;
+    if (this.standing) { this.head.scale.setScalar(1); return; }
     const t = this.time, P = D.peek;
     this.peek += (this.peekGoal - this.peek) * Math.min(1, dt * P.speed);
     const k = this.peek * this.peek * (3 - 2 * this.peek);
@@ -226,7 +248,12 @@ export class Driver {
     // 고개 내밀기: 몸을 왼쪽(+x)으로 옮기며 기울이고, 고개를 앞쪽으로 돌림
     this.root.position.x = k * P.x;
     this.root.rotation.z = -k * P.lean;
-    this.head.rotation.set(0, k * P.turn * 0.4, k * P.lean * 0.5);
+    // 뒤돌아보기: 빠르게 돌렸다가 천천히 되돌림
+    const g = this.glanceT > 0 ? Math.sin(Math.min(1, this.glanceT / 0.9) * Math.PI) : 0;
+    this.head.rotation.set(0, k * P.turn * 0.4 + g * DRIVE_GESTURE.glance, k * P.lean * 0.5);
+    // 바람에 눌린 볼: 고개를 내밀고 빨리 달리면 머리가 납작하게
+    const [sx, sy, sz] = DRIVE_GESTURE.squish, w = this.wind * k;
+    this.head.scale.set(1 + sx * w + Math.sin(t * 31) * 0.01 * w, 1 + sy * w, 1 + sz * w);
 
     // 숨 쉬듯 살짝 오르내림, 만세면 통통
     const hooray = this.expression === 'hooray';
@@ -237,8 +264,11 @@ export class Driver {
     this.arms.forEach((g, i) => {
       const s = i ? 1 : -1;
       const wave = hooray ? Math.sin(t * 7 + i) * 0.15 : 0;
-      g.rotation.x += (A[0] + wave - g.rotation.x) * Math.min(1, dt * 10 || 1);
-      g.rotation.z += (s * A[1] - g.rotation.z) * Math.min(1, dt * 10 || 1);
+      // 미션 완료: 창밖(왼쪽, +x) 발굽을 들어 흔듦
+      const hoof = i === 1 && this.waveT > 0;
+      const ax = hoof ? DRIVE_GESTURE.wave[0] + Math.sin(t * 13) * 0.3 : A[0] + wave, az = hoof ? DRIVE_GESTURE.wave[1] : s * A[1];
+      g.rotation.x += (ax - g.rotation.x) * Math.min(1, dt * 10 || 1);
+      g.rotation.z += (az - g.rotation.z) * Math.min(1, dt * 10 || 1);
     });
     const Lg = D.pose.sit.leg;
     this.legs.forEach((g, i) => { g.rotation.x = Lg[0]; g.rotation.z = (i ? 1 : -1) * Lg[1]; });
@@ -253,4 +283,23 @@ export class Driver {
     });
     this.tail.rotation.y = Math.sin(t * 3) * 0.25;
   }
+}
+
+// 노란 별 3개를 고리 모양으로 한 메시에 (빛 계산 없는 단색, 양면)
+export function makeStars() {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i * Math.PI) / 5, rr = i % 2 ? 0.032 : 0.075;
+    shape[i ? 'lineTo' : 'moveTo'](Math.sin(a) * rr, Math.cos(a) * rr);
+  }
+  const one = new THREE.ShapeGeometry(shape).toNonIndexed();
+  const pos = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i * Math.PI * 2) / 3;
+    const g = one.clone().rotateY(a).translate(Math.sin(a) * 0.2, 0, Math.cos(a) * 0.2);
+    pos.push(...g.attributes.position.array);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffd23a', side: THREE.DoubleSide }));
 }
