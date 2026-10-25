@@ -1,6 +1,6 @@
 // 시작(첫 화면), 화면 구성, 입력, 소리, 게임 루프.
 import * as THREE from 'three';
-import { loadCampus, buildMap, placeSpawnAtGate } from './map.js';
+import { loadCampus, buildMap } from './map.js';
 import { buildLandscape, removeReplacedBuildings } from './landscape.js';
 import { loadTerrain } from './terrain.js';
 import { Car, Collider } from './car.js';
@@ -8,15 +8,9 @@ import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
 import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
-import { buildSurroundings } from './surroundings.js';
-import { buildRoadMarks } from './roadmarks.js';
-import { buildLife } from './life.js';
 
-const SKY_TOP = new THREE.Color('#5ea8ec');
-const SKY_HORIZON = new THREE.Color('#e6f1fb');
-// 햇빛: 오전 9시쯤(수업 시작) 동남동 하늘 약 35° (방위 125°). 실제 날짜·시각 계산이 아니라 그 무렵의 방향으로 정한 값(추정)
-const SUN_DIR = new THREE.Vector3(0.67, 0.57, 0.47).normalize();
-const SUN_COLOR = '#ffeccf';
+const SKY_TOP = new THREE.Color('#6fb4f0');
+const SKY_HORIZON = new THREE.Color('#e4f3ff');
 // 주소 뒤에 ?fps=1 을 붙이면 왼쪽 위 구석에 fps 표시 (기본은 숨김)
 const SHOW_FPS = ['1', 'true', ''].includes(new URLSearchParams(location.search).get('fps'));
 // 굴착기 색 (첫 화면에서 고름)
@@ -33,18 +27,17 @@ const LANDMARKS = [
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 부드러운 그림자 가장자리 (품질 높음에서만 그림자)
+renderer.shadowMap.type = THREE.PCFShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-// 지수 안개: 캠퍼스(1km 안)는 거의 맑고, 먼 산(무등산 약 10km)은 옅게 보이다가 지평선에서 하늘색으로
-scene.fog = new THREE.FogExp2(SKY_HORIZON, 0.000105);
+scene.fog = new THREE.Fog(SKY_HORIZON, 700, 3000);
 
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 22000);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 5000);
 
-scene.add(new THREE.HemisphereLight('#d9ebff', '#b3ab98', 1.55)); // 하늘빛(위) · 땅에서 튀는 빛(아래)
-const sun = new THREE.DirectionalLight(SUN_COLOR, 2.35);
-const SUN_OFFSET = SUN_DIR.clone().multiplyScalar(170);
+scene.add(new THREE.HemisphereLight('#dceeff', '#b8b2a2', 1.6));
+const sun = new THREE.DirectionalLight('#fff6e8', 2.2);
+const SUN_OFFSET = new THREE.Vector3(70, 120, 50);
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 400 });
 sun.shadow.bias = -0.0003;
@@ -58,18 +51,11 @@ function makeSky() {
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    uniforms: { top: { value: SKY_TOP }, horizon: { value: SKY_HORIZON }, sunDir: { value: SUN_DIR }, sunColor: { value: new THREE.Color('#fff1d6') } },
+    uniforms: { top: { value: SKY_TOP }, horizon: { value: SKY_HORIZON } },
     vertexShader: `varying vec3 vDir;
       void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    // 위는 진한 하늘색 → 지평선은 옅은 안개색, 해 쪽은 따뜻하게 밝음(해 둘레 빛 + 그 방향 지평선 노을기)
-    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 sunColor; varying vec3 vDir;
-      void main() {
-        vec3 d = normalize(vDir);
-        float t = pow(clamp(d.y, 0.0, 1.0), 0.55);
-        vec3 c = mix(horizon, top, t);
-        float s = max(dot(d, sunDir), 0.0);
-        c += sunColor * (pow(s, 600.0) * 1.2 + pow(s, 40.0) * 0.28 + pow(s, 6.0) * 0.08 * (1.0 - t));
-        gl_FragColor = vec4(c, 1.0);
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 vDir;
+      void main() { float t = pow(clamp(vDir.y, 0.0, 1.0), 0.6); gl_FragColor = vec4(mix(horizon, top, t), 1.0);
         #include <colorspace_fragment>
       }`,
   });
@@ -94,7 +80,6 @@ function setQuality(q) {
   world.trees.setDensity(high ? 1 : 0.5);
   world.ground.setResolution(high ? 4096 : 2048); // 바닥 그림 해상도
   world.landscape.lamps.visible = high; // 가로등은 품질 높음에서만
-  world.life.setQuality(high); // 학생·셔틀버스 수
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
   try { localStorage.setItem('quality', q); } catch {}
@@ -217,39 +202,23 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus, lawns, widths, styles, monuments, , surroundings, roadMarks] = await Promise.all([
-    loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadCampus('data/building-styles.json?v=7'), loadCampus('data/monuments.json?v=4'),
-    loadTerrain('data/terrain.json?v=4'), loadCampus('data/surroundings.json?v=1'), loadCampus('data/road-marks.json?v=1'),
+  const [campus, lawns, widths] = await Promise.all([
+    loadCampus('data/campus.json?v=5'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
+    loadTerrain('data/terrain.json?v=1'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
-  placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
-  campus.monumentsData = monuments.monuments; // 기념물 형태·크기·근거 (scripts/build_monuments.py)
-  // 건물 외관 지정 (data/building-styles.json, 가장 우선). 층수도 근거가 있으면 여기서 바꾼다 (높이 = 층수 × 4m + 난간 1m)
-  for (const b of campus.buildings) {
-    const st = styles[b.id];
-    if (!st) continue;
-    b.style = st;
-    if (st.floors) { b.floors = st.floors; b.height = st.floors * 4 + 1; }
-  }
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,
-    terrainFar: 1, // 지형 격자 바깥은 먼 지형(바깥 풍경)이 채운다
   });
-  world.surroundings = buildSurroundings(scene, surroundings); // 먼 산·둘레 건물 (충돌 없음, scripts/build_surroundings.py)
-  world.roadMarks = buildRoadMarks(campus, roadMarks); // 횡단보도·정지선·화살표·과속방지턱 (scripts/build_road_marks.py)
-  world.group.add(...world.roadMarks.meshes);
-  // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
-  collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
+  collider = new Collider(campus);
   world.landscape = buildLandscape(scene, campus);
   for (const o of world.gateObstacles) collider.addObstacle(o);
   for (const o of world.landscape.obstacles) collider.addObstacle(o);
-  for (const o of world.landscape.quietObstacles) collider.addObstacle(o, '', { quiet: true }); // 기념물: 조용히 멈춤
   for (const l of world.landscape.labels) hud.addLabel(l.text, l.x, l.y, l.z, { maxDist: l.maxDist, small: true });
-  for (const m of campus.monumentsData) world.trees.clearAround(m.p[0], m.p[1], m.form === 'tower' ? 6 : m.base ? m.base.d / 2 + 1.5 : 3);
+  for (const m of campus.monuments || []) world.trees.clearAround(m.p[0], m.p[1], m.shape === 'tower' ? 6 : 3);
   world.trees.clearAround(...world.landscape.barrier.center, 12); // 차단기 지붕·부스 자리
   for (const [x, z] of world.landscape.avenue.spots) world.trees.clearAround(x, z, 4); // 진입로 가로수 자리의 작은 나무
   for (const [osmName, label] of LANDMARKS) {
@@ -261,10 +230,6 @@ async function start() {
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
   lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
-  // 주차 차량·셔틀버스·학생 (미션 장소·출발점·교수님 등장 자리 둘레는 비움)
-  world.life = buildLife(scene, campus, collider, {
-    avoidPoints: [...lateMode.targets.map((t) => [t.x, t.z]), position, [lateMode.stage.to.x, lateMode.stage.to.z]],
-  });
   hud.initMinimap(campus);
   setupTitle();
 
@@ -306,9 +271,6 @@ function loop() {
     for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
   }
   lateMode.update(dt);
-  // 연출 중에는 교수님·굴착기 둘레의 학생·버스를 숨김
-  const cine = lateMode.active && lateMode.inputLocked && lateMode.state !== 'mission' && lateMode.state !== 'paused';
-  world.life.update(dt, car, cine ? [[lateMode.stage.to.x, lateMode.stage.to.z], [car.pos.x, car.pos.y]] : []);
   world.landscape.update(dt, car.pos.x, car.pos.y); // 주차 차단기
 
   rig.update(dt, car);

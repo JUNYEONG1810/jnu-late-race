@@ -14,7 +14,7 @@
    1. 연출: 카메라가 공과대 2호관 입구로 날아감 → 교수님이 뒷짐 지고 뒤뚱뒤뚱 걸어 나옴 → 말풍선 대사 + 꿍싯꿍싯 목소리. **필수 대사(글자 그대로):** "지각을 하게 되면 조금 Serious한 상황이 생길 거라고 볼 수 있겠지..." (아래 "대사" 참고)
    2. 카메라가 정문의 굴착기로 돌아옴 → **앞면 → 옆면 → 뒷면**으로 돌며 보여 줌 → 뒤에서 **3, 2, 1, GO!**
    3. 제한 시간 안에 미션 장소를 차례로 들르고, 마지막에 공과대 2호관 도착
-   4. 결과: 카메라가 교수님에게 감. 시간 안에 도착 → 날개를 위로 번쩍 + "A+". 남은 시간이 0이 되는 순간 바로 실패: 굴착기 조작 멈춤(부드럽게 감속) → 화면 가운데 "시간 초과!" 약 1초 → 교수님 "F다." 연출 → 결과 화면(F + 완료한 미션 수 n/5, 다시하기·자유 주행으로). "지각 +0:11"처럼 시간을 넘겨 계속 달리는 일은 없다. 마지막 10초는 1초마다 짧은 경고음 + 타이머 빨간 깜빡임.
+   4. 결과: 카메라가 교수님에게 감. 시간 안에 도착 → 날개를 위로 번쩍 + "A+", 늦으면 → "F다." (같은 목소리)
    - 대사는 클릭 또는 Space로 다음 대사. Esc로 연출 전체 건너뛰기. 연출은 카운트다운까지 25초 안쪽.
    - 연출 순서(polish): 교수님 대사 → 천천히 올라가 캠퍼스 전체 → 미션 장소 5곳 이모지·이름이 차례로(마지막 🏫) → 정문 굴착기로 내려옴 → 앞·옆·뒤 → 3,2,1,GO. 멀미 방지: ease-in-out, 롤 없음, FOV 고정, 시선은 각도(yaw·pitch)로 보간.
 
@@ -88,13 +88,10 @@
 - 빌드 없는 정적 사이트. three.js r160을 CDN(jsDelivr) + import map으로 불러온다. 프레임워크·번들러 없음.
 - **물리: 직접 만든 아케이드 주행**(속도, 가속, 브레이크, 조향, 가벼운 드리프트). 무거운 물리 엔진은 쓰지 않는다 (시간 절약, 조작감 조절 쉬움).
 - 충돌: 차를 원 하나로 보고, 건물 외곽선(2D 다각형)과 부딪히면 밀어내고 감속. 높이 방향 충돌은 없음.
-- 기념물·조형물은 부딪히면 튕김·소리·화면 흔들림 없이 조용히 멈춘다(`addObstacle(..., { quiet: true })`). 흉상·동상은 옆선을 돌려 만든 매끈한 고전 비례(부드러운 음영), 이목구비 없음. 마네킹 같은 인물 형상·실루엣은 어디에도 쓰지 않는다(임을 위한 행진은 받침 + 이름 새긴 판석). 이름표는 OSM 공식 이름만.
-- 지형: 국토지리정보원 수치지도(2020 1:1,000 우선, 2025 1:5,000) 등고선·표고점·옹벽으로 만든 5m 격자 `data/terrain.json`(`scripts/build_terrain_ngii.py`, 바탕·바깥은 AWS Terrain Tiles `scripts/build_terrain.py`의 사본 data/raw/terrain_aws.json, 정문 앞 출발점 = 0m). 옹벽·석축·제방·법면 선에서는 매끄러움 조건을 끊어 단차를 남긴다. 떼어 둔 표고점으로 검증해 AWS보다 나쁘면 바꾸지 않는다(docs/지형-수치지도.md). 그다음 `scripts/smooth_road_terrain.py`가 차도 범위(반폭 + 3.5m)만 길이 방향으로 부드럽게(최대 경사 약 12%), 폭 방향은 평평하게 고친다(원본 사본 data/raw/terrain_ngii.json). 옹벽·단차는 도로 밖에만. `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px, 이방성 필터 장치 최대)에 그려 지형 메시 텍스처로 입힌다. 차도와 차선만 가까이서 선명하도록 지형을 따라 휘는 별도 메시(깊이 테스트 + polygonOffset, 땅에서 7cm·11cm)로 그린다. 포장면은 따뜻한 연회색(#dbd7cd). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 굴착기는 옹벽 단차에서 튀지 않게 높이·기울기(18°)·속도용 경사(25%)만 부드럽게 보정. 크레딧 "지형: 국토지리정보원 수치지도(등고선·표고점)" + 바깥 구역 Terrain Tiles 출처.
+- 지형(terrain 브랜치): AWS Terrain Tiles를 5m 격자로 구운 `data/terrain.json`(`scripts/build_terrain.py`, 정문 앞 출발점 = 0m). `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px, 이방성 필터 장치 최대)에 그려 지형 메시 텍스처로 입힌다. 차도와 차선만 가까이서 선명하도록 지형을 따라 휘는 별도 메시(깊이 테스트 + polygonOffset, 땅에서 7cm·11cm)로 그린다. 포장면은 따뜻한 연회색(#dbd7cd). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 크레딧에 Terrain Tiles 출처(ETOPO1 NOAA, GMTED2010·SRTM USGS). main에는 아직 합치지 않음.
 - 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 주소 뒤 `?fps=1`이면 왼쪽 위 구석에 fps 표시(기본 숨김).
-- 바깥 풍경: 지형 격자(terrain.json) 바깥은 먼 지형 메시가 채운다(가까운 지형의 3km 바깥 띠는 쓰지 않음, buildMap terrainFar: 1). 안개는 지수 안개(FogExp2 0.000105), 카메라 먼 거리 22km. 둘레 건물 높이 = 층수 태그 × 4m + 1, 없으면 house·detached 2층, 나머지 4층.
-- 조명: 오전 9시쯤 동남동 햇빛(방위 125°, 고도 약 35°, 따뜻한 색, 추정), 품질 높음에서만 부드러운 그림자(PCFSoft). 가벼운 앰비언트 오클루전은 미리 구움: 벽 아래 6m가 땅 쪽으로 어두워짐(정점 색), 바닥 그림에 건물 둘레 흐린 접지 그림자. 하늘은 위 진한 하늘색 → 지평선 옅은 색 + 해 둘레 빛. 무거운 후처리(SSAO 등)는 쓰지 않는다.
 - 성능: 내장 그래픽 노트북에서 60fps 목표. 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위). 기본값은 "높음" (정문 출발 화면 1366×768 품질 높음 60fps 측정, 50 미만이면 "낮음"으로 바꾼다).
 - HUD 배치: 왼쪽 위 품질·소리 버튼, 오른쪽 위 미니맵, 그 아래 지각 모드 미션 목록. 건물 이름표는 서로·HUD와 겹치면 위아래로 비키거나 숨긴다.
 - CSS·JS를 고치면 HTML에서 불러오는 주소의 `?v=` 버전을 갱신 (배포 캐시 문제 방지).
@@ -105,13 +102,10 @@
 - `scripts/fetch_osm.py`(Python 표준 라이브러리만) → `data/raw/`(커밋 안 함) → `scripts/build_map.py` → `data/campus.json`(커밋함)
 - 좌표: 캠퍼스 중심 기준 미터(x 동쪽, z 남쪽).
 - 건물 높이 = 층수 × 4m + 옥상 난간 1m. 층수 우선순위: `data/building-floors.csv`에 직접 적은 값 > 브이월드 지상층수(`scripts/fetch_vworld.py`, 키는 `.env`의 `VWORLD_KEY`, 출력·커밋 금지) > OSM `building:levels` > 기본 4층. csv를 고치고 `scripts/building_floors.py`(또는 `build_map.py`)를 다시 돌리면 반영. "전남대학교" 일괄 4층(브이월드 대표값)을 쓴 건물은 csv 출처에 "브이월드(일괄값)"으로 표시. 크레딧에 "건물 층수: 국토교통부 브이월드".
-- 근거 원칙: 측량·사진에서 직접 보이는 것·명시한 규칙 같은 근거가 없으면 값을 지어내지 말고 기본값으로 두며 "근거 없음"이라고 표시한다 (시각적 다양성용으로 고른 값은 "임의"로 표시, 등급 확실/추정/임의는 docs/데이터-근거-요약.md).
-- 건물 외관 우선순위: `data/building-styles.json`(osm id별: 재료 커튼월/벽돌/콘크리트/타일/석재, 벽·지붕 색, 창 형태 개별창/띠창/전면유리, 층 띠, 덩어리 parts(외곽선·원, 층수), 우진각 지붕, 옥상 구조물·태양광, 지붕만 있는 차양 canopy, 근거가 확실할 때 floors) > csv "직접" > csv 추정 > 건물마다 정해진 기본값. 항목마다 근거 이미지(ref/, 커밋 안 함)를 evidence에 적는다. 브이월드 3D는 캠퍼스에 실사 텍스처 건물이 없어 정사영상·수치지도 근거의 간이 방식. OSM 중정(relation inner)은 campus.json `holes`로 뚫는다.
-- 정문: 실제 자리(OSM 정문 점보다 62m 북쪽, 24, 446)에 짙은 회색 루버 지붕 두 덩어리 + 흰 틀 기둥(`map.js` REAL_GATE). 출발 위치는 그 남쪽 25m 들어오는 차로.
 - 국토지리정보원 자료(data/raw/ngii, 커밋 안 함): 정사영상 2025 25cm, 수치지도 2025 1:5,000·2020 1:1,000. 좌표는 EPSG:5186(`scripts/ngii.py`). 게임에는 사진이 아니라 판단 결과만 쓴다: 잔디(`data/lawns.json`), 차도 폭(`data/road-widths.json`), 층수(일괄값·기본값 건물만, 출처 "수치지도"), 지붕색·외관 추정. 잘라낸 사진은 `ref/`(커밋 안 함). 정리는 `docs/참고-조사.md`. 크레딧 "정사영상·수치지도: 국토지리정보원".
 - csv 외관 칸(외관·외벽색·지붕색·외관출처): 외관은 커튼월/벽돌/콘크리트/타일, 비우면 기본. 사람이 고친 값("직접")은 다시 돌려도 유지(`data/building-looks-auto.json`의 지난 자동값과 비교).
 - 정문 진입로: 4차로 + 분리대, 주차 차단기(지붕·요금 부스·빨강·흰 막대, 15m 안이면 올라감), 키 큰 가로수(7m 간격, 약 16m). 차단기 지붕을 막던 OSM 건물(w1163961970)은 뺀다.
-- 조경(OSM 그대로): 연못(반짝이는 수면 + 가장자리 돌), 운동장 종류별 색·라인, 주차장(짙은 회색 + 주차선), 밝은 보행로, 계단 줄무늬, 벤치·자전거 보관소·버스정류장, 조형물·기념물(이름표 + 단정한 비석·받침대·탑, 흉상·동상만 매끈한 조각, data/monuments.json). 가로등은 OSM에 없어 주요 차도 양옆 약 30m 간격으로 배치, 품질 "낮음"에서 숨김.
+- 조경(OSM 그대로): 연못(반짝이는 수면 + 가장자리 돌), 운동장 종류별 색·라인, 주차장(짙은 회색 + 주차선), 밝은 보행로, 계단 줄무늬, 벤치·자전거 보관소·버스정류장, 조형물·기념물(이름표 + 단정한 비석·받침대·탑, 인물 모양 금지). 가로등은 OSM에 없어 주요 차도 양옆 약 30m 간격으로 배치, 품질 "낮음"에서 숨김.
 - 도로: `highway` 선을 종류별 폭(주도로 8m, 일반 6m, 보행로 3m)의 띠로.
 - **화면 구석에 항상 표시:** "지도 데이터 © OpenStreetMap 기여자"
 - 다른 사람의 코드를 복사하지 않는다. 특히 SMASH 대학교(hong-iron.github.io/SMASH)는 코드 재배포 금지 라이선스이므로 **참고만 하고 코드는 새로 작성**한다. 크레딧 화면에 "3D 캠퍼스 아이디어: SMASH 대학교에서 영감"을 적는다.
@@ -143,9 +137,6 @@ assets/js/main.js              시작, 화면 전환, 루프
 assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
 assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등, 주차 차단기, 진입로 가로수
 assets/js/terrain.js           지형 높이(heightAt), 지형 메시
-assets/js/life.js              생동감: 주차 차량(충돌), 순환로 셔틀버스(굴착기 다가오면 멈춤), 보행로 학생(미리 비켜서 3.4m 안으로 절대 안 들어옴), 품질 낮음은 수 줄임
-assets/js/roadmarks.js         노면 표시: 횡단보도·정지선·방향 화살표·과속방지턱 (data/road-marks.json, 차선보다 한 단계 위 polygonOffset)
-assets/js/surroundings.js      캠퍼스 바깥 풍경: 먼 지형(무등산 쪽 ±15km, 150m 격자) + 둘레 OSM 건물 덩어리 (data/surroundings.json, 충돌 없음)
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
 assets/js/hud.js               속도계, 타이머, 미션 목록, 미니맵, 건물 이름
@@ -156,17 +147,10 @@ assets/js/missions-data.js     미션 데이터
 assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
 data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, data/building-looks-auto.json
-data/monuments.json            기념물 27곳 형태·크기·재료·근거 등급·출처 (scripts/build_monuments.py로 생성)
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
-scripts/build_road_marks.py   OSM 횡단보도·과속방지턱·차도 태그 → data/road-marks.json
-scripts/fetch_surroundings.py, build_surroundings.py   바깥 풍경: AWS 타일 z11 + Overpass 둘레 건물(data/raw/) → data/surroundings.json
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)
-scripts/build_terrain_ngii.py, terrain_steps_check.py, smooth_road_terrain.py   수치지도 지형 + 검증 + 차도 단차 정리
-scripts/ngii_building_crops.py, ngii_contact.py   건물 외관 근거용 정사영상 조각 (ref/e, ref/e2)
-data/building-styles.json   건물별 외관 지정 (가장 우선)
 scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
-scripts/monument_crops.py, build_monuments.py   기념물 정사영상 조각(ref/에만) → data/monuments.json
 README.md, 제작로그.md, CLAUDE.md
 ```
 

@@ -27,12 +27,6 @@ export const SLOPE = {
   smooth: 8,       // 기울기가 따라가는 빠르기
   pull: 4.5,       // 경사 1(45°)일 때 앞뒤로 끌리는 가속도 (m/s²)
   topSpeed: 1.6,   // 경사 1당 최고 속도 변화 비율 (오르막 -, 내리막 +)
-  // 수치지도 지형은 옹벽 자리에 짧고 가파른 단차가 있어, 주행만 부드럽게 (지형 모양은 그대로)
-  maxSlope: 0.25,  // 속도 계산에 쓰는 경사 한도
-  maxTilt: 0.32,   // 몸 기울기 한도 (rad, 약 18°)
-  riseRate: 15,    // 땅이 높아질 때 따라 올라가는 빠르기
-  fallRate: 9,     // 땅이 낮아질 때 따라 내려가는 빠르기
-  maxSink: 0.25,   // 따라가는 동안 땅속으로 들어가도 되는 최대 깊이 (m)
 };
 
 export const BOOST = {
@@ -269,11 +263,7 @@ export class Car {
       if (n) {
         this.pos.copy(center).addScaledVector(nf, -D.radiusOffset);
         const vn = this.vel.dot(n);
-        if (vn < 0 && collider.lastQuiet) {
-          // 기념물: 튕기거나 소리 내지 않고 그 자리에서 조용히 멈춤
-          this.vel.addScaledVector(n, -vn);
-          this.vel.multiplyScalar(0.3);
-        } else if (vn < 0) {
+        if (vn < 0) {
           this.vel.addScaledVector(n, -vn * 1.25); // 벽 쪽 속도를 없애고 살짝 튕김
           this.vel.multiplyScalar(0.8);
           if (vn < -3 && this.hitTimer === 0) this.onHit?.(Math.min(1, -vn / 15)); // 충돌음 (세기 0~1)
@@ -382,22 +372,12 @@ export class Car {
     const L = SLOPE.halfLength, W = SLOPE.halfWidth;
     const hf = heightAt(x + fx * L, z + fz * L), hb = heightAt(x - fx * L, z - fz * L);
     const hl = heightAt(x + fz * W, z - fx * W), hr = heightAt(x - fz * W, z + fx * W); // 왼쪽 = 로컬 +x
-    const clamp = THREE.MathUtils.clamp;
-    this.slope = clamp((hf - hb) / (2 * L), -SLOPE.maxSlope, SLOPE.maxSlope);
-    const pitch = clamp(-Math.atan((hf - hb) / (2 * L)), -SLOPE.maxTilt, SLOPE.maxTilt);
-    const roll = clamp(Math.atan((hl - hr) / (2 * W)), -SLOPE.maxTilt, SLOPE.maxTilt);
+    this.slope = (hf - hb) / (2 * L);
+    const pitch = -Math.atan(this.slope), roll = Math.atan((hl - hr) / (2 * W));
     const k = snap ? 1 : Math.min(1, dt * SLOPE.smooth);
     this.tilt.x += (pitch - this.tilt.x) * k;
     this.tilt.z += (roll - this.tilt.z) * k;
-    // 높이: 단차에서 튀지 않게 부드럽게 따라가되 땅속으로는 maxSink 넘게 들어가지 않음
-    const ground = heightAt(x, z);
-    if (snap || this.groundY === undefined) this.groundY = ground;
-    else {
-      const rate = ground > this.groundY ? SLOPE.riseRate : SLOPE.fallRate;
-      this.groundY += (ground - this.groundY) * Math.min(1, dt * rate);
-      this.groundY = Math.max(this.groundY, ground - SLOPE.maxSink);
-    }
-    this.object.position.set(x, this.groundY, z);
+    this.object.position.set(x, heightAt(x, z), z);
     this.object.rotation.set(this.tilt.x, this.heading, this.tilt.z, 'YXZ');
   }
 }
@@ -532,9 +512,8 @@ export class Collider {
   }
 
   // 건물이 아닌 장애물(정문 기둥 등)도 같은 방식으로 넣는다
-  // quiet: 부딪혀도 튕김·충돌음 없이 조용히 멈추는 장애물 (기념물)
-  addObstacle(outline, name = '', { quiet = false } = {}) {
-    const bi = this.buildings.push({ name, quiet }) - 1;
+  addObstacle(outline, name = '') {
+    const bi = this.buildings.push({ name }) - 1;
     for (let i = 0; i < outline.length; i++) {
       const [x1, z1] = outline[i];
       const [x2, z2] = outline[(i + 1) % outline.length];
@@ -577,7 +556,6 @@ export class Collider {
   // pos(Vector2)를 건물 밖으로 밀어낸다. 부딪혔으면 밀어낸 방향(단위 벡터)을 돌려줌
   resolve(pos, radius) {
     let hit = null;
-    this.lastQuiet = true; // 이번에 부딪힌 것이 모두 조용한 장애물인지
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       this.forEachEdge(pos.x, pos.y, radius, (e) => {
@@ -591,7 +569,6 @@ export class Collider {
         pos.x += dx * (radius - d);
         pos.y += dz * (radius - d);
         hit = (hit || new THREE.Vector2()).set(dx, dz);
-        if (!this.buildings[e[4]].quiet) this.lastQuiet = false;
         moved = true;
       });
       if (!moved) break;

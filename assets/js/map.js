@@ -11,15 +11,13 @@ const WALL_COLORS = ['#ece0c6', '#f5f3ee', '#d7d9db', '#b86b52'];
 const ROOF_COLORS = ['#8fb79c', '#c3c5c1', '#b3aa9c'];
 const ENTRANCE_COLOR = '#3a3f47';
 // 외관 종류 (data/building-floors.csv "외관" 칸, 비우면 콘크리트) → 외벽색을 안 적었을 때의 기본색
-const FACADE_COLORS = { 커튼월: '#e3edf4', 벽돌: '#a65a44', 타일: '#ece7dc', 석재: '#d8d2c4' };
+const FACADE_COLORS = { 커튼월: '#e3edf4', 벽돌: '#a65a44', 타일: '#ece7dc' };
 const OUTSIDE_TINT = new THREE.Color('#eceef0');
 const OUTSIDE_MIX = 0.45;
 
 const FLOOR_M = 4; // 층 높이 (campus.json 높이 = 층수 × 4m + 난간 1m)
 const BAY_M = 3;     // 창문 하나의 가로 폭
 const BURY_M = 1.5;  // 벽을 가장 낮은 땅보다 더 내려 묻는 깊이
-// 가벼운 앰비언트 오클루전(미리 구움): 벽 아래쪽은 땅·옆 건물에 가려 어둡게, 바닥 그림엔 건물 둘레 접지 그림자
-const AO = { wallDark: 0.68, wallH: 6, groundAlpha: 0.3, groundBlur: 3.2 }; // 벽 바닥 밝기 비율, 어두워지는 높이(m), 바닥 그림자 진하기·번짐(m)
 
 const GROUND_COLOR = '#c9c5bc';
 const CAMPUS_COLOR = '#dbd7cd'; // 따뜻한 연회색 포장면 (눈부시지 않게)
@@ -51,10 +49,10 @@ export async function loadCampus(url) {
   return res.json();
 }
 
-export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terrainFar = 3000 } = {}) {
+export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}) {
   const group = new THREE.Group();
 
-  const ground = buildGround(campus, groundPx, anisotropy, terrainFar);
+  const ground = buildGround(campus, groundPx, anisotropy);
   group.add(ground.mesh);
   group.add(buildWater(campus.greens.filter((g) => g.kind === 'water')));
   group.add(...buildRoadMeshes(campus));
@@ -65,7 +63,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terra
   const trees = buildTrees(campus);
   group.add(trees.group);
 
-  const gate = buildGate();
+  const gate = buildGate(campus.spawn);
   group.add(gate.group);
 
   scene.add(group);
@@ -74,7 +72,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terra
 
 // ---------- 지형 + 바닥 그림 ----------
 
-function buildGround(campus, px, anisotropy, far) {
+function buildGround(campus, px, anisotropy) {
   const xs = campus.boundary.map((p) => p[0]), zs = campus.boundary.map((p) => p[1]);
   const bounds = {
     x0: Math.min(...xs) - GROUND_MARGIN, x1: Math.max(...xs) + GROUND_MARGIN,
@@ -94,7 +92,7 @@ function buildGround(campus, px, anisotropy, far) {
     material.needsUpdate = true;
   };
   paint(px);
-  const mesh = new THREE.Mesh(buildTerrainGeometry(bounds, far), material);
+  const mesh = new THREE.Mesh(buildTerrainGeometry(bounds), material);
   mesh.receiveShadow = true;
   return {
     mesh, bounds,
@@ -128,21 +126,6 @@ function paintGround(canvas, campus, bounds) {
   for (const x of sorted) if ((x.kind === 'pitch' || x.kind === 'dirt') && Math.abs(area(x.outline)) > 150) courtLines(P, x, MARK_COLOR);
 
   for (const r of campus.roads) if (!r.car) P.ribbon(r.points, r.width, FOOT_COLOR);
-  // 건물 둘레 접지 그림자 (앰비언트 오클루전): 외곽선을 조금 넓혀 흐리게 칠함. 건물 사이 좁은 곳은 겹쳐서 더 어두움
-  g.save();
-  g.filter = `blur(${Math.max(1, AO.groundBlur * P.s)}px)`;
-  g.globalAlpha = AO.groundAlpha;
-  g.lineJoin = 'round';
-  for (const b of campus.buildings) {
-    if (b.style?.canopy) continue;
-    P.path(b.outline, true);
-    g.fillStyle = '#2a2a24';
-    g.fill();
-    g.lineWidth = AO.groundBlur * P.s;
-    g.strokeStyle = '#2a2a24';
-    g.stroke();
-  }
-  g.restore();
   for (const r of campus.roads) if (r.car) P.ribbon(r.points, Math.max(1, r.width - 1), ASPHALT_COLOR);
   for (const r of campus.roads) if (r.type === 'steps') P.dashes(r.points, r.width, 0.3, 0.45, STEP_COLOR);
 
@@ -232,7 +215,6 @@ class GroundPainter {
 // polygonOffset + 살짝 띄운 높이로 바닥 위에 그려 깜빡이지 않는다. (바닥 그림의 차도는 조금 좁게 칠해 밑에 깔아 둠)
 const ROAD_LIFT = 0.07, LANE_LIFT = 0.11; // 땅에서 띄우는 높이 (m)
 const DRAPE_STEP = 2.5;                     // 지형을 따라가도록 나누는 간격 (m)
-const DRAPE_FINE = 1.0;                     // 옹벽 단차처럼 지형이 급히 꺾이는 곳은 더 잘게
 const JOINT_ANGLE = 0.14;                   // 이보다 많이 꺾이는 곳(약 8°)에만 둥근 이음
 
 function buildRoadMeshes(campus) {
@@ -261,17 +243,15 @@ function buildRoadMeshes(campus) {
   return [roads, lanes, medians];
 }
 
-export class DrapeBuilder {
+class DrapeBuilder {
   constructor(lift) {
     this.lift = lift;
     this.pos = [];
     this.index = [];
   }
 
-  // 둘레 0.6m 안 가장 높은 땅 위에 (격자 대각선 꺾임 때문에 땅이 도로를 뚫고 올라오지 않게)
   vertex(x, z) {
-    const y = Math.max(heightAt(x, z), heightAt(x + 0.6, z), heightAt(x - 0.6, z), heightAt(x, z + 0.6), heightAt(x, z - 0.6));
-    this.pos.push(x, y + this.lift, z);
+    this.pos.push(x, heightAt(x, z) + this.lift, z);
     return this.pos.length / 3 - 1;
   }
 
@@ -280,8 +260,7 @@ export class DrapeBuilder {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (len < 1e-6) return;
     const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
-    const step = this.bends(a, ux, uz, len, h) ? DRAPE_FINE : DRAPE_STEP;
-    const nu = Math.max(1, Math.ceil(len / step)), nv = Math.max(1, Math.ceil((2 * h) / step));
+    const nu = Math.max(1, Math.ceil(len / DRAPE_STEP)), nv = Math.max(1, Math.ceil((2 * h) / DRAPE_STEP));
     const first = this.pos.length / 3;
     for (let i = 0; i <= nu; i++) {
       for (let j = 0; j <= nv; j++) {
@@ -297,26 +276,9 @@ export class DrapeBuilder {
     }
   }
 
-  // 띠 위에서 지형이 2.5m 칸 안에서 6cm 넘게 꺾이는지 (가운데·양 가장자리 선을 0.5m 간격으로 봄)
-  bends(a, ux, uz, len, h) {
-    for (const s of [-h, 0, h]) {
-      const ox = a[0] - uz * s, oz = a[1] + ux * s;
-      for (let t0 = 0; t0 < len; t0 += DRAPE_STEP) {
-        const t1 = Math.min(len, t0 + DRAPE_STEP);
-        const y0 = heightAt(ox + ux * t0, oz + uz * t0), y1 = heightAt(ox + ux * t1, oz + uz * t1);
-        for (let t = t0 + 0.5; t < t1; t += 0.5) {
-          const lin = y0 + ((y1 - y0) * (t - t0)) / (t1 - t0);
-          if (Math.abs(heightAt(ox + ux * t, oz + uz * t) - lin) > 0.06) return true;
-        }
-      }
-    }
-    return false;
-  }
-
   // 꺾이는 곳·끝을 메우는 둥근 판 (가운데에서 바깥으로 고리 몇 개)
   disc([x, z], r) {
-    // 둘레·고리 간격 약 1.5m (넓은 도로 끝의 큰 판도 지형을 따라가게)
-    const seg = Math.max(12, Math.ceil((2 * Math.PI * r) / 1.5)), rings = Math.max(1, Math.ceil(r / 1.5));
+    const seg = 12, rings = Math.max(1, Math.ceil(r / DRAPE_STEP));
     const center = this.vertex(x, z);
     const ring = (k) => Array.from({ length: seg }, (_, i) => {
       const a = (i / seg) * Math.PI * 2, rr = (r * k) / rings;
@@ -461,7 +423,7 @@ function makeRippleTexture() {
 }
 
 // 다각형을 가장 작게 감싸는 회전 사각형: 중심, 긴 변 방향(u), 길이 L(긴 변)·W(짧은 변)
-export function orientedRect(o) {
+function orientedRect(o) {
   let best = null;
   for (let i = 0; i < o.length; i++) {
     const [x1, z1] = o[i], [x2, z2] = o[(i + 1) % o.length];
@@ -486,7 +448,7 @@ export function orientedRect(o) {
 }
 
 // 회전 사각형의 (u, v) 좌표 → 바닥 좌표
-export function rectPoint(r, u, v) {
+function rectPoint(r, u, v) {
   return [r.cx + u * r.ux - v * r.uz, r.cz + u * r.uz + v * r.ux];
 }
 
@@ -579,27 +541,42 @@ function courtLines(b, g, color) {
 
 // ---------- 건물 ----------
 
-// 외관 텍스처: 한 칸 = 가로 3m(bay) × 한 층. 재료 무늬 × 창 형태(개별창/띠창/전면유리) × 층 띠. 색은 정점 색(외벽색)과 곱해진다
-const textureCache = new Map();
-function facadeTexture(key, anisotropy) {
-  if (textureCache.has(key)) return textureCache.get(key);
-  const [material, windows, bands] = key.split('|');
+// 한 칸 = 가로 3m × 한 층 3.5m. 흰 벽 + 층 사이 가로줄 + 창문. 벽 색은 정점 색과 곱해진다.
+function makeWindowTexture(anisotropy) {
   const S = 128;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = S;
   const g = canvas.getContext('2d');
-  if (material === '커튼월' || windows === '전면유리') drawGlass(g, S);
-  else {
-    drawMaterial(g, S, material);
-    if (bands === '1') { g.fillStyle = '#bdbbb6'; g.fillRect(0, 0, S, 12); } // 층 띠 (슬래브 끝)
-    if (windows === '띠창') drawRibbon(g, S);
-    else drawWindow(g, 22, 36, 84, 62);
-  }
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = '#c9c9c9'; // 층 사이 가로줄 (슬래브)
+  g.fillRect(0, 0, S, 9);
+  const grad = g.createLinearGradient(0, 34, 0, 100);
+  grad.addColorStop(0, '#7f9ab4');
+  grad.addColorStop(1, '#4b6178');
+  g.fillStyle = '#e2e5e8'; // 창틀
+  g.fillRect(16, 32, 96, 70);
+  g.fillStyle = grad;
+  g.fillRect(20, 36, 88, 62);
+  g.fillStyle = '#e2e5e8'; // 가운데 창살
+  g.fillRect(62, 36, 4, 62);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  return tex;
+}
+
+// 외관 텍스처: 한 칸 = 가로 3m × 한 층 4m (창문 텍스처와 같은 크기). 색은 정점 색(외벽색)과 곱해진다
+function facadeTexture(draw, anisotropy) {
+  const S = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  draw(canvas.getContext('2d'), S);
   const t = new THREE.CanvasTexture(canvas);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = anisotropy;
-  textureCache.set(key, t);
   return t;
 }
 
@@ -611,46 +588,30 @@ function drawWindow(g, x, y, w, h) {
   g.fillRect(x - 3, y - 3, w + 6, h + 6);
   g.fillStyle = grad;
   g.fillRect(x, y, w, h);
-  g.fillStyle = '#e8e8e8'; // 가운데 창살
-  g.fillRect(x + w / 2 - 2, y, 4, h);
 }
 
-// 띠창: 칸 전체를 가로지르는 유리 띠 + 얇은 세로 창살
-function drawRibbon(g, S) {
-  const grad = g.createLinearGradient(0, 40, 0, 96);
-  grad.addColorStop(0, '#86a1ba');
-  grad.addColorStop(1, '#4e647b');
-  g.fillStyle = grad;
-  g.fillRect(0, 40, S, 56);
-  g.fillStyle = '#dfe2e5';
-  g.fillRect(0, 38, S, 3);
-  g.fillRect(0, 95, S, 3);
-  for (const x of [0, 64]) g.fillRect(x, 40, 3, 56);
-}
-
-// 재료 무늬: 콘크리트(민무늬 + 층 줄), 벽돌(줄눈), 타일(네모 줄눈), 석재(큰 돌 판)
-function drawMaterial(g, S, material) {
+// 벽돌: 줄눈(밝은 선) + 엇갈린 세로 줄눈 + 창
+function drawBrick(g, S) {
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, S, S);
-  if (material === '벽돌') {
-    g.fillStyle = '#d6cfc8';
-    for (let y = 0, row = 0; y < S; y += 8, row++) {
-      g.fillRect(0, y, S, 1.5);
-      for (let x = (row % 2) * 8; x < S; x += 16) g.fillRect(x, y, 1.5, 8);
-    }
-  } else if (material === '타일') {
-    g.fillStyle = '#dcdad5';
-    for (let i = 0; i < S; i += 16) { g.fillRect(i, 0, 1, S); g.fillRect(0, i, S, 1); }
-  } else if (material === '석재') {
-    g.fillStyle = '#d9d4ca';
-    for (let y = 0, row = 0; y < S; y += 32, row++) {
-      g.fillRect(0, y, S, 2);
-      for (let x = (row % 2) * 32; x < S; x += 64) g.fillRect(x, y, 2, 32);
-    }
-  } else {
-    g.fillStyle = '#c9c9c9';
-    g.fillRect(0, 0, S, 9);
+  g.fillStyle = '#d6cfc8';
+  for (let y = 0, row = 0; y < S; y += 8, row++) {
+    g.fillRect(0, y, S, 1.5);
+    for (let x = (row % 2) * 8; x < S; x += 16) g.fillRect(x, y, 1.5, 8);
   }
+  drawWindow(g, 24, 38, 80, 58);
+}
+
+// 타일: 밝은 네모 줄눈 + 창
+function drawTile(g, S) {
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = '#dcdad5';
+  for (let i = 0; i < S; i += 16) {
+    g.fillRect(i, 0, 1, S);
+    g.fillRect(0, i, S, 1);
+  }
+  drawWindow(g, 22, 36, 84, 62);
 }
 
 // 커튼월: 위는 밝은 하늘, 아래로 짙어지는 유리 + 얇은 세로 멀리언 + 층마다 가로 띠
@@ -681,42 +642,25 @@ class MeshBuilder {
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
-    let pts = [a, b, c], tuv = uvs, cols = Array.isArray(color) ? color : [color, color, color]; // 정점마다 색을 줄 수도 있음
+    let pts = [a, b, c], tuv = uvs;
     if (cx * n[0] + cy * n[1] + cz * n[2] < 0) {
       pts = [a, c, b];
       tuv = uvs && [uvs[0], uvs[2], uvs[1]];
-      cols = [cols[0], cols[2], cols[1]];
     }
     pts.forEach((p, i) => {
       this.pos.push(p[0], p[1], p[2]);
       this.nor.push(n[0], n[1], n[2]);
-      this.col.push(cols[i].r, cols[i].g, cols[i].b);
+      this.col.push(color.r, color.g, color.b);
       if (this.uv) this.uv.push(tuv[i][0], tuv[i][1]);
     });
   }
 
-  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다.
-  // 아래 AO.wallH m는 따로 나눠 땅 쪽으로 갈수록 어둡게(앰비언트 오클루전)
-  wall(p1, p2, y0, y1, n, color, u1 = 0, base = null, floorH = FLOOR_M) {
-    if (base === null) return this.wallPart(p1, p2, y0, y1, n, color, u1, null, floorH); // 입구·옥상 구조물: 그늘 없음
-    const ym = Math.min(y1, base + AO.wallH);
-    if (ym > y0 + 0.1 && ym < y1 - 0.1) {
-      this.wallPart(p1, p2, y0, ym, n, color, u1, base, floorH);
-      this.wallPart(p1, p2, ym, y1, n, color, u1, base, floorH);
-    } else this.wallPart(p1, p2, y0, y1, n, color, u1, base, floorH);
-  }
-
-  wallPart(p1, p2, y0, y1, n, color, u1, base, floorH) {
+  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다
+  wall(p1, p2, y0, y1, n, color, u1 = 0, base = 0) {
     const a = [p1[0], y0, p1[1]], b = [p2[0], y0, p2[1]], c = [p2[0], y1, p2[1]], d = [p1[0], y1, p1[1]];
-    const v0 = (y0 - (base ?? 0)) / floorH, v1 = (y1 - (base ?? 0)) / floorH;
-    const shade = (y) => {
-      if (base === null) return color;
-      const k = Math.min(1, Math.max(0, (y - base) / AO.wallH));
-      return color.clone().multiplyScalar(AO.wallDark + (1 - AO.wallDark) * Math.sqrt(k));
-    };
-    const lo = shade(y0), hi = shade(y1);
-    this.tri(a, b, c, n, [lo, lo, hi], [[0, v0], [u1, v0], [u1, v1]]);
-    this.tri(a, c, d, n, [lo, hi, hi], [[0, v0], [u1, v1], [0, v1]]);
+    const v0 = (y0 - base) / FLOOR_M, v1 = (y1 - base) / FLOOR_M;
+    this.tri(a, b, c, n, color, [[0, v0], [u1, v0], [u1, v1]]);
+    this.tri(a, c, d, n, color, [[0, v0], [u1, v1], [0, v1]]);
   }
 
   geometry() {
@@ -730,264 +674,78 @@ class MeshBuilder {
   }
 }
 
-// 벽(외관 텍스처 종류마다 한 메시)과 지붕·입구·옥상 구조물(텍스처 없음)을 각각 합친다.
+// 벽(창문 텍스처)과 지붕·입구(텍스처 없음)를 각각 한 메시로.
 // 지붕을 텍스처 메시에 넣으면 멀리서 밉맵 평균 때문에 창문색이 섞여 어두워진다.
-// 외관 우선순위: data/building-styles.json(b.style) > csv "직접" > csv 추정(b.facade 등) > 건물마다 정해진 기본값.
 function buildBuildings(list, anisotropy) {
-  const walls = new Map(); // 텍스처 키 → MeshBuilder
-  const wallsFor = (key) => {
-    if (!walls.has(key)) walls.set(key, new MeshBuilder(true));
-    return walls.get(key);
-  };
+  const walls = { 콘크리트: new MeshBuilder(true), 벽돌: new MeshBuilder(true), 타일: new MeshBuilder(true), 커튼월: new MeshBuilder(true) };
   const plain = new MeshBuilder(false);
   const entrance = new THREE.Color(ENTRANCE_COLOR);
-  const clocks = []; // 시계탑 (옥상 구조물 clock: true)
 
   for (const b of list) {
     const o = b.outline;
     if (o.length < 3) continue;
-    const st = b.style || {};
     const k = hash(b.id);
-    const want = st.facade || b.facade;
-    const facade = FACADE_COLORS[want] || want === '콘크리트' ? want : '콘크리트';
-    const tint = (c) => (b.inCampus ? c : c.lerp(OUTSIDE_TINT, OUTSIDE_MIX));
-    const wall = tint(new THREE.Color(st.wallColor || b.wallColor || FACADE_COLORS[facade] || WALL_COLORS[k % WALL_COLORS.length]));
-    const roof = tint(new THREE.Color(st.roofColor || b.roofColor || ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]));
-    const look = { facade, windows: st.windows || (facade === '커튼월' ? '전면유리' : '개별창'), bands: st.bands !== false, bay: st.bay || BAY_M };
+    const facade = FACADE_COLORS[b.facade] ? b.facade : '콘크리트';
+    // 외벽색: csv에 적은 색 > 외관 종류 기본색 > 건물마다 정해진 색. 지붕색: csv(정사영상) > 건물마다 정해진 색
+    const wall = new THREE.Color(b.wallColor || FACADE_COLORS[facade] || WALL_COLORS[k % WALL_COLORS.length]);
+    const roof = new THREE.Color(b.roofColor || ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]);
+    if (!b.inCampus) {
+      wall.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
+      roof.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
+    }
     // 외곽선 안 가장 낮은 땅에서 시작하고, 벽은 그보다 더 내려 비탈 쪽이 뜨지 않게 묻는다
     const base = heightRange(o).lo;
     b.base = base;
-    const mainH = st.mainFloors ? st.mainFloors * FLOOR_M + 1 : b.height;
-    let top = 0;
-
-    // 지붕만 있는 차양(도로를 덮는 지붕 등): 기둥 + 얇은 지붕판, 벽·입구 없음
-    if (st.canopy) {
-      const ch = st.canopyH || 5;
-      box(plain, o, base + ch - 0.4, base + ch, roof);
-      for (const [x, z] of o) box(plain, circleOutline([x, z], 0.25, 6), base - BURY_M, base + ch - 0.4, wall);
-      b.height = ch;
-      continue;
-    }
-    if (!st.skipMain) {
-      const longest = extrude(o, base, base + mainH, look, wall, roof, { wallsFor, plain, roof: st.roof, roofH: st.roofH, holes: b.holes });
-      top = mainH + (st.roof === 'hip' ? st.roofH || 3 : 0);
-      // 가장 긴 벽 가운데 1층에 어두운 입구
-      if (longest && longest.len >= 6 && mainH >= 3.5) {
-        const { p1, p2, n, len } = longest;
-        const w = Math.min(6, len * 0.4) / 2 / len;
-        const off = 0.06;
-        const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
-        // 입구는 그 자리 땅 높이에서 (언덕 쪽이면 그만큼 위에)
-        const gy = heightAt(...q(0.5));
-        plain.wall(q(0.5 - w), q(0.5 + w), gy - 0.3, gy + 3, n, entrance);
-        // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
-        b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2], y: gy };
-      }
-    }
-    // 따로 세우는 덩어리 (저층부·고층부, 원통, 유리 아트리움, 우진각 지붕 동 등)
-    for (const part of st.parts || []) {
-      const po = part.circle ? circleOutline(part.circle.c, part.circle.r) : part.outline;
-      const fh = part.floorHeight || FLOOR_M;
-      const h = part.floors * fh + 1;
-      const pf = part.facade || facade;
-      const plook = { facade: pf, windows: part.windows || (pf === '커튼월' ? '전면유리' : look.windows), bands: look.bands, bay: look.bay, floorH: fh };
-      const pw = part.wallColor ? tint(new THREE.Color(part.wallColor)) : (pf === facade ? wall : tint(new THREE.Color(FACADE_COLORS[pf] || '#d9d6cc')));
-      const pr = tint(new THREE.Color(part.roofColor || st.roofColor || b.roofColor || '#c3c5c1'));
-      const longest = extrude(po, base, base + h, plook, pw, pr, { wallsFor, plain, roof: part.roof, roofH: part.roofH });
-      top = Math.max(top, h + (part.roof === 'hip' ? part.roofH || 3 : 0));
-      if (st.skipMain && longest && !b.entrance) {
-        const { p1, p2, n } = longest;
-        const ex = (p1[0] + p2[0]) / 2, ez = (p1[1] + p2[1]) / 2;
-        b.entrance = { x: ex, z: ez, nx: n[0], nz: n[2], y: heightAt(ex, ez) };
-      }
-    }
-    // 모서리 세로 띠 (생활관 계단실처럼 다른 색): 외곽선 꼭짓점 몇 곳에 1.8m 폭 기둥
-    if (st.accent) {
-      const ac = tint(new THREE.Color(st.accent.color));
-      const stepI = Math.max(1, Math.round(o.length / st.accent.every));
-      o.forEach(([x, z], i) => {
-        if (i % stepI === 0) box(plain, circleOutline([x, z], 0.9, 6), base - BURY_M, base + mainH + 0.6, ac);
-      });
-    }
-    // 옥상 구조물 (옥탑, 원형 단, 태양광 판 등)
-    for (const f of st.features || []) {
-      if (f.type === 'solar') {
-        solarPanels(plain, f.outline || o, base + mainH, f.share || 1, tint(new THREE.Color('#2f4b6b')), f.outline ? [] : b.holes || []);
-        continue;
-      }
-      const fo = f.type === 'cylinder' ? circleOutline(f.c, f.r) : f.outline;
-      const on = f.on === 'main' ? mainH : 0;
-      box(plain, fo, base + on - 0.2, base + on + f.h, tint(new THREE.Color(f.color)));
-      top = Math.max(top, on + f.h);
-      if (f.clock) clocks.push({ outline: fo, top: base + on + f.h });
-    }
-    b.height = top || b.height; // 이름표·미니맵이 쓰는 가장 높은 곳
-  }
-
-  const meshes = [...walls.entries()].map(([key, w]) => {
-    const glass = key.startsWith('커튼월') || key.includes('전면유리');
-    const map = facadeTexture(key, anisotropy);
-    // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임
-    const mat = glass ? new THREE.MeshPhongMaterial({ vertexColors: true, map, shininess: 90, specular: '#ffffff' })
-      : new THREE.MeshLambertMaterial({ vertexColors: true, map });
-    return new THREE.Mesh(w.geometry(), mat);
-  });
-  meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
-  if (clocks.length) meshes.push(clockFaces(clocks));
-  for (const m of meshes) {
-    m.castShadow = true;
-    m.receiveShadow = true;
-  }
-  return meshes;
-}
-
-// 시계탑 네 면의 둥근 시계판: 흰 바탕 + 짙은 테두리 + 시곗바늘 2개 (시각은 임의: 8시 58분, 지각 직전)
-const CLOCK = { r: 0.32, ring: 0.06, below: 0.3, time: [8, 58] }; // r·ring은 면 폭 비율, below는 꼭대기에서 아래로(면 폭 비율)
-function clockFaces(list) {
-  const pos = [], nor = [], col = [];
-  const white = new THREE.Color('#f4f2ea'), dark = new THREE.Color('#2b2e33');
-  for (const { outline: o, top } of list) {
+    const h = base + b.height;
     const sign = area(o) > 0 ? 1 : -1;
+    let longest = null;
+
     for (let i = 0; i < o.length; i++) {
       const p1 = o[i], p2 = o[(i + 1) % o.length];
-      const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-      if (len < 2) continue;
-      const nx = ((p2[1] - p1[1]) / len) * sign, nz = (-(p2[0] - p1[0]) / len) * sign;
-      const ux = nz, uz = -nx; // 밖에서 볼 때 오른쪽
-      const R = len * CLOCK.r, cy = top - len * CLOCK.below;
-      const cx = (p1[0] + p2[0]) / 2, cz = (p1[1] + p2[1]) / 2;
-      // 면 위 점 (u 오른쪽, v 위, d 바깥으로 띄움)
-      const P = (u, v, d) => [cx + ux * u + nx * d, cy + v, cz + uz * u + nz * d];
-      const tri = (a, b, c, color) => {
-        for (const q of [a, b, c]) { pos.push(...q); nor.push(nx, 0, nz); col.push(color.r, color.g, color.b); }
-      };
-      const disc = (r0, r1, d, color, n = 40) => {
-        for (let k = 0; k < n; k++) {
-          const a0 = (k / n) * Math.PI * 2, a1 = ((k + 1) / n) * Math.PI * 2;
-          const o0 = P(Math.cos(a0) * r1, Math.sin(a0) * r1, d), o1 = P(Math.cos(a1) * r1, Math.sin(a1) * r1, d);
-          if (r0 === 0) tri(P(0, 0, d), o1, o0, color);
-          else {
-            const i0 = P(Math.cos(a0) * r0, Math.sin(a0) * r0, d), i1 = P(Math.cos(a1) * r0, Math.sin(a1) * r0, d);
-            tri(i0, o1, o0, color);
-            tri(i0, i1, o1, color);
-          }
-        }
-      };
-      const bar = (ang, L, w, d, color) => { // 가운데에서 시계 방향 ang(12시 = 0) 쪽으로 길이 L
-        const sx = Math.sin(ang), sy = Math.cos(ang), px = -sy * w / 2, py = sx * w / 2;
-        const a = P(px - sx * L * 0.12, py - sy * L * 0.12, d), b = P(-px - sx * L * 0.12, -py - sy * L * 0.12, d);
-        const c = P(-px + sx * L, -py + sy * L, d), e = P(px + sx * L, py + sy * L, d);
-        tri(a, c, b, color);
-        tri(a, e, c, color);
-      };
-      disc(0, R, 0.05, white);
-      disc(R, R + len * CLOCK.ring, 0.06, dark);
-      for (let h = 0; h < 12; h++) { // 시 눈금
-        const a = (h / 12) * Math.PI * 2, r0 = R * 0.82;
-        const sx = Math.sin(a), sy = Math.cos(a), w = R * 0.035;
-        tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), P(sx * R * 0.95 - sy * w, sy * R * 0.95 + sx * w, 0.07), dark);
-        tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * r0 + sy * w, sy * r0 - sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), dark);
-      }
-      const [hh, mm] = CLOCK.time;
-      bar(((hh % 12) + mm / 60) / 12 * Math.PI * 2, R * 0.55, R * 0.09, 0.08, dark); // 시침
-      bar((mm / 60) * Math.PI * 2, R * 0.85, R * 0.06, 0.09, dark);                // 분침
-      disc(0, R * 0.07, 0.1, dark, 12);
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-}
-
-// 외곽선을 y0~y1로 세움: 벽(외관 텍스처) + 지붕(평지붕 또는 우진각). 가장 긴 벽 정보를 돌려줌
-function extrude(o, base, y1, look, wallColor, roofColor, { wallsFor, plain, roof = 'flat', roofH = 3, holes = [] }) {
-  const wb = wallsFor(`${look.facade}|${look.windows}|${look.bands ? 1 : 0}`);
-  const floorH = look.floorH || FLOOR_M;
-  let longest = null;
-  // 바깥 고리는 바깥으로, 중정 고리는 중정 쪽으로 법선
-  for (const [ring, outward] of [[o, 1], ...holes.map((h) => [h, -1])]) {
-    const sign = (area(ring) > 0 ? 1 : -1) * outward;
-    for (let i = 0; i < ring.length; i++) {
-      const p1 = ring[i], p2 = ring[(i + 1) % ring.length];
       const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
       if (len < 1e-6) continue;
       // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
       const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
       // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
-      wb.wall(p1, p2, base - BURY_M, y1, n, wallColor, Math.max(1, Math.round(len / look.bay)), base, floorH);
-      if (outward > 0 && (!longest || len > longest.len)) longest = { p1, p2, n, len };
+      walls[facade].wall(p1, p2, base - BURY_M, h, n, wall, Math.max(1, Math.round(len / BAY_M)), base);
+      if (!longest || len > longest.len) longest = { p1, p2, n, len };
+    }
+
+    const contour = o.map(([x, z]) => new THREE.Vector2(x, z));
+    for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, [])) {
+      plain.tri([o[i][0], h, o[i][1]], [o[j][0], h, o[j][1]], [o[m][0], h, o[m][1]], [0, 1, 0], roof);
+    }
+
+    // 가장 긴 벽 가운데 1층에 어두운 입구
+    if (longest && longest.len >= 6 && b.height >= 3.5) {
+      const { p1, p2, n, len } = longest;
+      const w = Math.min(6, len * 0.4) / 2 / len;
+      const off = 0.06;
+      const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
+      // 입구는 그 자리 땅 높이에서 (언덕 쪽이면 그만큼 위에)
+      const gy = heightAt(...q(0.5));
+      plain.wall(q(0.5 - w), q(0.5 + w), gy - 0.3, gy + 3, n, entrance);
+      // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
+      b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2], y: gy };
     }
   }
-  if (roof === 'hip') hipRoof(plain, o, y1, roofH, roofColor);
-  else flatTop(plain, o, y1, roofColor, holes);
-  return longest;
-}
 
-function flatTop(plain, o, y, color, holes = []) {
-  const contour = o.map(([x, z]) => new THREE.Vector2(x, z));
-  const hv = holes.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)));
-  const pts = [o, ...holes].flat();
-  for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, hv)) {
-    plain.tri([pts[i][0], y, pts[i][1]], [pts[j][0], y, pts[j][1]], [pts[m][0], y, pts[m][1]], [0, 1, 0], color);
-  }
-}
-
-// 텍스처 없는 덩어리 (옥상 구조물·모서리 띠): 옆면 + 윗면
-function box(plain, o, y0, y1, color) {
-  const sign = area(o) > 0 ? 1 : -1;
-  for (let i = 0; i < o.length; i++) {
-    const p1 = o[i], p2 = o[(i + 1) % o.length];
-    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-    if (len < 1e-6) continue;
-    plain.wall(p1, p2, y0, y1, [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign], color);
-  }
-  flatTop(plain, o, y1, color);
-}
-
-// 우진각 지붕: 외곽선을 감싸는 회전 사각형 위에, 긴 변 방향 용마루(높이 h)
-function hipRoof(plain, o, y, h, color) {
-  const r = orientedRect(o);
-  const P = (u, v, yy) => { const [x, z] = rectPoint(r, u, v); return [x, yy, z]; };
-  const L = r.L / 2, W = r.W / 2, ridge = Math.max(0, L - W);
-  const a = P(-L, -W, y), b = P(L, -W, y), c = P(L, W, y), d = P(-L, W, y);
-  const e = P(-ridge, 0, y + h), f = P(ridge, 0, y + h);
-  for (const [p, q, s] of [[a, b, f], [a, f, e], [c, d, e], [c, e, f], [b, c, f], [d, a, e]]) {
-    const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2], vx = s[0] - p[0], vy = s[1] - p[1], vz = s[2] - p[2];
-    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } // 바깥(위)을 보게
-    const l = Math.hypot(nx, ny, nz) || 1;
-    plain.tri(p, q, s, [nx / l, ny / l, nz / l], color);
-  }
-}
-
-// 옥상 태양광 판: 건물 긴 변 방향으로 줄지어(3.4m × 2.3m 간격, 판 3×1.8m), 가장자리에서 2.5m 안쪽.
-// share: 줄의 몇 할을 채울지 (사진에서 지붕 일부만 덮인 건물)
-function solarPanels(plain, o, y, share, color, holes = []) {
-  const r = orientedRect(o);
-  const edge = (x, z) => {
-    let d = Infinity;
-    for (const ring of [o, ...holes]) {
-      for (let i = 0; i < ring.length; i++) d = Math.min(d, distToSegment(x, z, [...ring[i], ...ring[(i + 1) % ring.length]]));
-    }
-    return d;
+  const tex = (draw) => facadeTexture(draw, anisotropy);
+  const materials = {
+    콘크리트: new THREE.MeshLambertMaterial({ vertexColors: true, map: makeWindowTexture(anisotropy) }),
+    벽돌: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawBrick) }),
+    타일: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawTile) }),
+    // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임, 얇은 멀리언
+    커튼월: new THREE.MeshPhongMaterial({ vertexColors: true, map: tex(drawGlass), shininess: 90, specular: '#ffffff' }),
   };
-  const rows = Math.floor((r.W - 5) / 2.3);
-  for (let rw = 0; rw <= rows; rw++) {
-    if (rw / Math.max(1, rows) > share + 0.001) break;
-    const v = -r.W / 2 + 2.5 + rw * 2.3;
-    for (let u = -r.L / 2 + 2.5; u <= r.L / 2 - 2.5; u += 3.4) {
-      const [x, z] = rectPoint(r, u, v);
-      if (!pointInPolygon(x, z, o) || holes.some((h) => pointInPolygon(x, z, h)) || edge(x, z) < 2.4) continue;
-      const q = (du, dv) => rectPoint(r, u + du, v + dv);
-      flatTop(plain, [q(-1.5, -0.9), q(1.5, -0.9), q(1.5, 0.9), q(-1.5, 0.9)], y + 0.35, color); // 윗면만 (옆면은 멀리서 안 보여 삼각형 절약)
-    }
+  const meshes = Object.entries(walls).filter(([, w]) => w.pos.length)
+    .map(([type, w]) => new THREE.Mesh(w.geometry(), materials[type]));
+  meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+  for (const m of meshes) {
+    m.castShadow = true;
+    m.receiveShadow = true;
   }
-}
-
-function circleOutline([cx, cz], r, n = 40) {
-  return Array.from({ length: n }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cz + Math.sin((i / n) * Math.PI * 2) * r]);
+  return meshes;
 }
 
 // ---------- 나무 ----------
@@ -998,35 +756,20 @@ const TREE = {
   perArea: { forest: 80, park: 260, grass: 450 }, // 나무 한 그루당 넓이 (m²)
   max: 7000,
 };
-const CROWN_COLORS = ['#5f9e4a', '#6fae52', '#4f8c42', '#7db85a', '#5a9550', '#86b85e', '#4a7f3e', '#6a9a48'];
-// 나무 종류 (모양·크기·색 변형, 근거 없음: 시각적 다양성용 임의 비율). 진입로 가로수는 landscape.js에서 따로
-// [이름, 차도 옆 비율, 공원·잔디 비율, 숲 비율]
-const TREE_KINDS = [
-  ['round', 0.5, 0.35, 0.2],   // 둥근 활엽수 (지금까지의 나무)
-  ['broad', 0.3, 0.3, 0.15],   // 넓게 퍼진 활엽수 (낮고 넓은 수관)
-  ['shrub', 0.1, 0.2, 0.1],    // 관목 (줄기 없이 낮은 덤불)
-  ['cone', 0.07, 0.1, 0.3],    // 원뿔 침엽수
-  ['slim', 0.03, 0.05, 0.25],  // 가늘고 키 큰 침엽수
-];
+const CROWN_COLORS = ['#5f9e4a', '#6fae52', '#4f8c42', '#7db85a', '#5a9550'];
 
 // 차도 양옆과 녹지 안에 저폴리 나무를 InstancedMesh로 심는다.
 // 순서를 섞어 두어서, 개수(count)를 절반으로 줄이면 골고루 절반만 보인다.
 function buildTrees(campus) {
   const rand = mulberry32(20261025);
   const blocked = makeTreeBlocker(campus);
-  const spots = []; // [x, z, 크기, 종류]
+  const spots = []; // [x, z, 크기, 원뿔형?]
 
   const [gx, gz] = campus.spawn.gate;
-  const gateClear = 22; // 정문 루버 지붕(동쪽 끝까지 약 19m) 둘레
-  // where: 1 = 차도 옆, 2 = 공원·잔디, 3 = 숲 (TREE_KINDS의 비율 칸)
-  const pick = (where) => {
-    let t = rand() * TREE_KINDS.reduce((a, k) => a + k[where], 0);
-    for (const k of TREE_KINDS) { t -= k[where]; if (t <= 0) return k[0]; }
-    return 'round';
-  };
-  const add = (x, z, where) => {
+  const gateClear = Math.max(GATE.minOpening, campus.spawn.gateRoadWidth || 0) / 2 + GATE.pillar + 4;
+  const add = (x, z, coniferChance) => {
     if (spots.length >= TREE.max || blocked(x, z) || Math.hypot(x - gx, z - gz) < gateClear) return;
-    spots.push([x, z, 0.72 + rand() * 0.7, pick(where)]);
+    spots.push([x, z, 0.8 + rand() * 0.5, rand() < coniferChance]);
   };
 
   for (const r of campus.roads) {
@@ -1040,8 +783,8 @@ function buildTrees(campus) {
       const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
       for (let t = carry; t < len; t += TREE.roadSpacing) {
         const x = x1 + ux * t, z = z1 + uz * t;
-        add(x - uz * off, z + ux * off, 1);
-        add(x + uz * off, z - ux * off, 1);
+        add(x - uz * off, z + ux * off, 0.15);
+        add(x + uz * off, z - ux * off, 0.15);
       }
       carry = (carry - len) % TREE.roadSpacing;
       if (carry < 0) carry += TREE.roadSpacing;
@@ -1060,7 +803,7 @@ function buildTrees(campus) {
       const x = x0 + rand() * (x1 - x0), z = z0 + rand() * (z1 - z0);
       if (!pointInPolygon(x, z, o)) continue;
       const before = spots.length;
-      add(x, z, g.kind === 'forest' ? 3 : 2);
+      add(x, z, g.kind === 'forest' ? 0.4 : 0.15);
       if (spots.length > before) placed++;
     }
   }
@@ -1072,37 +815,24 @@ function buildTrees(campus) {
   }
 
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.4, 5).translate(0, 1.2, 0);
-  const crowns = {
-    round: new THREE.IcosahedronGeometry(2.1, 0).translate(0, 3.9, 0),
-    broad: new THREE.DodecahedronGeometry(2.0, 0).scale(1.45, 0.72, 1.45).translate(0, 3.4, 0),
-    shrub: new THREE.DodecahedronGeometry(1.0, 0).scale(1.2, 0.75, 1.2).translate(0, 0.65, 0),
-    cone: new THREE.ConeGeometry(1.9, 5.2, 7).translate(0, 4.6, 0),
-    slim: new THREE.ConeGeometry(1.15, 7.0, 6).translate(0, 5.2, 0),
-  };
-  // 줄기 크기 비율 [굵기, 높이] (관목은 줄기 없음)
-  const TRUNK = { round: [1, 1], broad: [1.3, 0.85], cone: [0.9, 1.05], slim: [0.75, 1.25] };
+  const roundGeo = new THREE.IcosahedronGeometry(2.1, 0).translate(0, 3.9, 0);
+  const coneGeo = new THREE.ConeGeometry(1.9, 5.2, 7).translate(0, 4.6, 0);
   const crownMat = new THREE.MeshLambertMaterial({ flatShading: true });
-  const withTrunk = spots.filter((t) => t[3] !== 'shrub');
-  const meshes = [[new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: '#8a6a4f' }), withTrunk.length), withTrunk]];
-  for (const [kind, geo] of Object.entries(crowns)) {
-    const list = spots.filter((t) => t[3] === kind);
-    meshes.push([new THREE.InstancedMesh(geo, crownMat, list.length), list]);
-  }
+  const round = spots.filter((s) => !s[3]), cone = spots.filter((s) => s[3]);
+  const meshes = [
+    [new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: '#8a6a4f' }), spots.length), spots],
+    [new THREE.InstancedMesh(roundGeo, crownMat, round.length), round],
+    [new THREE.InstancedMesh(coneGeo, crownMat, cone.length), cone],
+  ];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0), color = new THREE.Color();
   const group = new THREE.Group();
   for (const [mesh, list] of meshes) {
-    const trunk = mesh.material !== crownMat;
-    list.forEach(([x, z, size, kind], i) => {
+    list.forEach(([x, z, size], i) => {
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
-      const [tw, th] = trunk ? TRUNK[kind] : [1, 1];
-      m.compose(p.set(x, heightAt(x, z) - 0.2, z), q, s.set(size * tw, size * th * (trunk ? 1 : 0.9 + rand() * 0.25), size * tw));
+      m.compose(p.set(x, heightAt(x, z) - 0.2, z), q, s.set(size, size * (0.9 + rand() * 0.25), size));
       mesh.setMatrixAt(i, m);
-      if (!trunk) {
-        color.set(CROWN_COLORS[Math.floor(rand() * CROWN_COLORS.length)]);
-        if (kind === 'cone' || kind === 'slim') color.offsetHSL(0.02, 0, -0.06); // 침엽수는 조금 더 짙고 푸르게
-        mesh.setColorAt(i, color);
-      }
+      if (mesh.material === crownMat) mesh.setColorAt(i, color.set(CROWN_COLORS[Math.floor(rand() * CROWN_COLORS.length)]));
     });
     mesh.castShadow = true;
     mesh.userData.total = list.length;
@@ -1146,7 +876,7 @@ function makeTreeBlocker(campus) {
     const o = b.outline;
     o.forEach((p, i) => { const q = o[(i + 1) % o.length]; putRange(edges, p[0], p[1], q[0], q[1], 3, [p[0], p[1], q[0], q[1]]); });
     const xs = o.map((p) => p[0]), zs = o.map((p) => p[1]);
-    putRange(insides, Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 0, { o, holes: b.holes || [] });
+    putRange(insides, Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 0, o);
   }
   for (const r of campus.roads) {
     const clear = r.width / 2 + (r.car ? 1.5 : 0.6);
@@ -1156,13 +886,12 @@ function makeTreeBlocker(campus) {
     }
   }
   const waters = campus.greens.filter((g) => g.kind === 'water').map((g) => g.outline);
-  for (const o of campus.parking || []) waters.push(o); // 주차장에도 심지 않음 (주차 차량 자리)
 
   return (x, z) => {
     const k = `${Math.floor(x / cell)},${Math.floor(z / cell)}`;
     for (const e of edges.get(k) || []) if (distToSegment(x, z, e) < 3) return true;
     for (const e of roads.get(k) || []) if (distToSegment(x, z, e) < e[4]) return true;
-    for (const { o, holes } of insides.get(k) || []) if (pointInPolygon(x, z, o) && !holes.some((h) => pointInPolygon(x, z, h))) return true;
+    for (const o of insides.get(k) || []) if (pointInPolygon(x, z, o)) return true;
     for (const o of waters) if (pointInPolygon(x, z, o)) return true;
     return false;
   };
@@ -1170,148 +899,67 @@ function makeTreeBlocker(campus) {
 
 // ---------- 정문 ----------
 
-// 실제 정문 (근거: 국토지리정보원 정사영상 2025 — 위치·평면, 위키미디어 공용 사진 "정문사진 01.jpg"(전남대학교, CC BY-SA 4.0,
-// 바깥에서 본 정면)·"Chonnam National University Front Gate.jpg"(Gunarta, CC BY-SA 4.0, 동쪽 글자 벽) — 모양·재료·색):
-// 진입로 양쪽에 짙은 철제 관을 나란히 얹은 지붕. 서쪽(나가는 쪽)은 도로 쪽 끝에 높은 화강석 틀 기둥(두 기둥 + 위 덮개),
-// 바깥 끝에 화강석 기둥. 동쪽(들어오는 쪽)은 양 끝 화강석 기둥, 그 아래 흰 경비실 앞면에 흰 세로 핀과 "전남대학교" 글자.
-// 높이는 사진 원근으로 잰 추정값(도로 차선 폭을 자로 씀). 글자는 실제 대문에 있는 "전남대학교"만, 로고·엠블럼은 넣지 않음.
-export const REAL_GATE = {
-  center: [24.0, 446.0],      // 진입로 가운데 선(노란 중앙선)과 정문이 만나는 곳
-  // [서쪽 끝, 동쪽 끝, 도로 방향 폭(m), 지붕 높이(m)] 게임 좌표. 평면은 정사영상, 높이는 사진 추정
-  spans: {
-    west: [[12.1, 440.2], [19.6, 443.7], 3.6, 6.2],
-    east: [[26.8, 445.3], [42.4, 452.0], 4.2, 5.0],
-  },
-  pylon: { height: 15, width: 3.6, depth: 1.6 }, // 서쪽 도로 쪽 높은 틀 기둥 (사진 추정)
-  pier: [1.6, 1.6],                              // 화강석 기둥 가로·세로
-  guardHouse: { c: [41.9, 447.5], size: [11.2, 9.8], h: 3.6 }, // 수치지도 "경비실" 외곽 크기, 높이는 사진 추정
-  colors: { granite: '#b7b9b7', steel: '#2a313e', wall: '#c8cccf', letters: '#a8874a' }, // 사진 픽셀에서 뽑은 색 (글자색은 눈으로)
-};
+const GATE = { height: 9, pillar: 1.8, beamH: 1.8, depth: 1.6, minOpening: 14, text: '전남대학교' };
 
-// 진입로 위 철제 관 지붕 + 화강석 기둥·틀 기둥 + 경비실 글자 벽. 기둥·경비실은 충돌용 사각형(obstacles)으로도 돌려준다.
-function buildGate() {
-  const G = REAL_GATE;
+// 양쪽 기둥 + 위 가로 보 + "전남대학교" 글자. 로고·엠블럼은 넣지 않는다.
+// 로컬 +z = 캠퍼스 안쪽 방향. 기둥은 충돌용 사각형(obstacles)으로도 돌려준다.
+function buildGate(spawn) {
+  const [gx, gz] = spawn.gate;
+  const [dx, dz] = spawn.dir;
+  const half = Math.max(GATE.minOpening, spawn.gateRoadWidth || 0) / 2 + 1;
+  const px = half + GATE.pillar / 2; // 기둥 중심까지 거리
+
   const group = new THREE.Group();
-  const mat = (color) => new THREE.MeshLambertMaterial({ color });
-  const granite = mat(G.colors.granite), steel = mat(G.colors.steel), wallMat = mat(G.colors.wall);
-  const obstacles = [];
+  const lx = Math.cos(Math.atan2(dx, dz)), lz = -Math.sin(Math.atan2(dx, dz));
+  group.position.set(gx, Math.min(heightAt(gx + lx * px, gz + lz * px), heightAt(gx - lx * px, gz - lz * px)), gz);
+  group.rotation.y = Math.atan2(dx, dz);
 
-  // a→b 방향을 로컬 +x, 바깥(남쪽)을 로컬 +z로 둔 무리
-  const frame = ([a, b]) => {
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
-    const yaw = Math.atan2(ux, uz) - Math.PI / 2;
-    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-    const ground = Math.min(heightAt(...a), heightAt(...b), heightAt(mx, mz));
-    const g = new THREE.Group();
-    g.position.set(mx, ground, mz);
-    g.rotation.y = yaw;
-    group.add(g);
-    const c = Math.cos(yaw), s = Math.sin(yaw);
-    const world = (lx, lz) => [mx + lx * c + lz * s, mz - lx * s + lz * c];
-    const toLocal = (x, z) => [(x - mx) * c - (z - mz) * s, (x - mx) * s + (z - mz) * c];
-    const add = (geo, m, x, y, z) => {
-      const mesh = new THREE.Mesh(geo, m);
-      mesh.position.set(x, y, z);
-      mesh.castShadow = mesh.receiveShadow = true;
-      g.add(mesh);
-      return mesh;
-    };
-    // 충돌 사각형 (로컬 x·z 범위)
-    const block = (x0, x1, z0, z1) => obstacles.push([[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => world(x, z)));
-    return { len, add, block, g, toLocal };
-  };
+  const stone = new THREE.MeshLambertMaterial({ color: '#d4cdbf' });
+  const navy = new THREE.MeshLambertMaterial({ color: '#2f3d5c' });
+  for (const sx of [-1, 1]) {
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(GATE.pillar, GATE.height + 2, GATE.pillar), stone);
+    pillar.position.set(sx * px, GATE.height / 2 - 1, 0);
+    pillar.castShadow = pillar.receiveShadow = true;
+    group.add(pillar);
+  }
+  const beamLen = 2 * (half + GATE.pillar) + 1;
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(beamLen, GATE.beamH, GATE.depth), navy);
+  beam.position.y = GATE.height - GATE.beamH / 2;
+  beam.castShadow = true;
+  group.add(beam);
 
-  // 지붕: 길이 방향 철제 관 6개 + 양쪽 테두리 보
-  const roof = (f, depth, h) => {
-    for (let i = 0; i < 6; i++) {
-      const z = -depth / 2 + (depth * (i + 0.5)) / 6;
-      f.add(new THREE.CylinderGeometry(0.24, 0.24, f.len + 0.6, 10).rotateZ(Math.PI / 2), steel, 0, h - 0.3, z);
-    }
-    for (const z of [-depth / 2, depth / 2]) f.add(new THREE.BoxGeometry(f.len + 0.8, 0.45, 0.3), steel, 0, h - 0.05, z);
-  };
-  const pier = (f, x, h, depth) => {
-    const [pw] = G.pier;
-    f.add(new THREE.BoxGeometry(pw, h + 2, depth + 0.6), granite, x, h / 2 - 1, 0);
-    f.block(x - pw / 2, x + pw / 2, -depth / 2 - 0.3, depth / 2 + 0.3);
-  };
-
-  // 서쪽: 바깥 끝 화강석 기둥 + 도로 쪽 높은 틀 기둥(두 기둥 사이가 비고 위를 덮개로 이음, 위쪽 틈에 짙은 세로 판)
-  {
-    const [a, b, depth, h] = G.spans.west;
-    const f = frame([a, b]);
-    roof(f, depth, h);
-    pier(f, -f.len / 2, h, depth);
-    const P = G.pylon, colW = (P.width - 1.2) / 2, x = f.len / 2;
-    for (const sx of [-1, 1]) f.add(new THREE.BoxGeometry(colW, P.height + 2, P.depth), granite, x + sx * (0.6 + colW / 2), P.height / 2 - 1, 0);
-    f.add(new THREE.BoxGeometry(P.width, 1.0, P.depth), granite, x, P.height - 0.5, 0);
-    f.add(new THREE.BoxGeometry(0.5, P.height * 0.32, P.depth * 0.6), steel, x, P.height * 0.72, 0);
-    f.block(x - P.width / 2, x + P.width / 2, -P.depth / 2, P.depth / 2);
+  const textMat = new THREE.MeshBasicMaterial({ map: makeTextTexture(GATE.text), transparent: true, fog: true });
+  const textGeo = new THREE.PlaneGeometry(beamLen * 0.6, GATE.beamH * 0.8);
+  for (const side of [-1, 1]) {
+    const plane = new THREE.Mesh(textGeo, textMat);
+    plane.position.set(0, beam.position.y, side * (GATE.depth / 2 + 0.02));
+    if (side < 0) plane.rotation.y = Math.PI; // 바깥(출발 쪽)에서도 바로 읽히게
+    group.add(plane);
   }
 
-  // 동쪽: 양 끝 화강석 기둥 + 흰 경비실(앞면 흰 세로 핀과 "전남대학교" 글자)
-  {
-    const [a, b, depth, h] = G.spans.east;
-    const f = frame([a, b]);
-    roof(f, depth, h);
-    pier(f, -f.len / 2, h, depth);
-    pier(f, f.len / 2, h, depth);
-    // 경비실: 수치지도 경비실 중심을 지붕 무리 좌표로
-    const [gx, gz] = G.guardHouse.c, [sw, sd] = G.guardHouse.size, gh = G.guardHouse.h;
-    const [hx, hz] = f.toLocal(gx, gz);
-    f.add(new THREE.BoxGeometry(sw, gh + 1.5, sd), wallMat, hx, (gh + 1.5) / 2 - 1.5, hz);
-    f.block(hx - sw / 2, hx + sw / 2, hz - sd / 2, hz + sd / 2);
-    // 앞면(바깥, 로컬 +z): 사진 순서대로 왼쪽부터 흰 세로 핀 → 글자 판 → 동쪽 끝 화강석 기둥
-    const front = hz + sd / 2;
-    const textX = f.len / 2 - G.pier[0] / 2 - 0.4 - 2.3;
-    for (let i = 0; i < 5; i++) f.add(new THREE.BoxGeometry(0.35, gh, 0.5), wallMat, textX - 2.3 - 0.6 - i * 0.85, gh / 2, front + 0.25);
-    const text = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.6, 0.95),
-      new THREE.MeshLambertMaterial({ map: lettersTexture('전남대학교', G.colors.letters), transparent: true }),
-    );
-    text.position.set(textX, gh * 0.62, front + 0.03);
-    f.g.add(text);
-  }
+  // 기둥 외곽선 (월드 좌표)
+  const rx = [Math.cos(group.rotation.y), -Math.sin(group.rotation.y)]; // 로컬 +x의 월드 방향 (x, z)
+  const obstacles = [-1, 1].map((sx) => {
+    const cx = gx + rx[0] * sx * px, cz = gz + rx[1] * sx * px;
+    const h = GATE.pillar / 2;
+    return [[-h, -h], [h, -h], [h, h], [-h, h]].map(([a, b]) => [cx + rx[0] * a + dx * b, cz + rx[1] * a + dz * b]);
+  });
   return { group, obstacles };
 }
 
-// 투명 바탕에 금속색 글자 (정문 글자 벽)
-function lettersTexture(text, color) {
+function makeTextTexture(text) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
-  canvas.height = 106;
+  canvas.height = 96;
   const g = canvas.getContext('2d');
-  g.fillStyle = color;
-  g.font = '800 80px "Pretendard", "Malgun Gothic", sans-serif';
+  g.fillStyle = '#ffffff';
+  g.font = '800 72px "Pretendard", "Malgun Gothic", sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(text.split('').join(' '), 256, 56);
+  g.fillText(text.split('').join(' '), 256, 52);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
-}
-
-// 출발 위치를 실제 정문 남쪽 25m, 들어오는 차로(동쪽) 위로. 연출(굴착기 앞·옆·뒤)도 여기서
-export function placeSpawnAtGate(campus) {
-  const [cx, cz] = REAL_GATE.center;
-  const entry = campus.roads.find((r) => r.id === 'w256927670');
-  let ux = 0.34, uz = -0.94; // 진입로 방향(북쪽으로)
-  if (entry) {
-    // 정문에 가장 가까운 진입로 선분의 방향
-    let best = Infinity;
-    for (let i = 0; i < entry.points.length - 1; i++) {
-      const [x1, z1] = entry.points[i], [x2, z2] = entry.points[i + 1];
-      const d = Math.hypot((x1 + x2) / 2 - cx, (z1 + z2) / 2 - cz);
-      const L = Math.hypot(x2 - x1, z2 - z1);
-      if (d < best && L > 1) { best = d; ux = (x2 - x1) / L; uz = (z2 - z1) / L; }
-    }
-    if (uz > 0) { ux = -ux; uz = -uz; }
-  }
-  const ex = -uz, ez = ux; // 진행 방향의 오른쪽(동쪽) = 들어오는 차로
-  campus.spawn.gate = [cx, cz];
-  // 동쪽 지붕 안쪽 기둥(가운데 선에서 약 2.4m)을 피해 가운데 선에서 5m 오른쪽
-  campus.spawn.position = [cx - ux * 25 + ex * 5, cz - uz * 25 + ez * 5];
-  campus.spawn.dir = [ux, uz];
 }
 
 // ---------- 도우미 ----------
