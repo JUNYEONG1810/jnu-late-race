@@ -9,6 +9,7 @@ import { Hud } from './hud.js';
 import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
 import { buildSurroundings } from './surroundings.js';
+import { buildRoadMarks } from './roadmarks.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -214,10 +215,10 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus, lawns, widths, styles, monuments, , surroundings] = await Promise.all([
+  const [campus, lawns, widths, styles, monuments, , surroundings, roadMarks] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
     loadCampus('data/building-styles.json?v=7'), loadCampus('data/monuments.json?v=4'),
-    loadTerrain('data/terrain.json?v=4'), loadCampus('data/surroundings.json?v=1'),
+    loadTerrain('data/terrain.json?v=4'), loadCampus('data/surroundings.json?v=1'), loadCampus('data/road-marks.json?v=1'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
@@ -237,6 +238,8 @@ async function start() {
     terrainFar: 1, // 지형 격자 바깥은 먼 지형(바깥 풍경)이 채운다
   });
   world.surroundings = buildSurroundings(scene, surroundings); // 먼 산·둘레 건물 (충돌 없음, scripts/build_surroundings.py)
+  world.roadMarks = buildRoadMarks(campus, roadMarks); // 횡단보도·정지선·화살표·과속방지턱 (scripts/build_road_marks.py)
+  world.group.add(...world.roadMarks.meshes);
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   world.landscape = buildLandscape(scene, campus);

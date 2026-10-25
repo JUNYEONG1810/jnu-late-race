@@ -143,6 +143,7 @@ assets/js/main.js              시작, 화면 전환, 루프
 assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
 assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등, 주차 차단기, 진입로 가로수
 assets/js/terrain.js           지형 높이(heightAt), 지형 메시
+assets/js/roadmarks.js         노면 표시: 횡단보도·정지선·방향 화살표·과속방지턱 (data/road-marks.json, 차선보다 한 단계 위 polygonOffset)
 assets/js/surroundings.js      캠퍼스 바깥 풍경: 먼 지형(무등산 쪽 ±15km, 150m 격자) + 둘레 OSM 건물 덩어리 (data/surroundings.json, 충돌 없음)
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
@@ -156,6 +157,7 @@ assets/js/professor-config.js  교수님 캐릭터 외형 값
 data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, data/building-looks-auto.json
 data/monuments.json            기념물 27곳 형태·크기·재료·근거 등급·출처 (scripts/build_monuments.py로 생성)
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
+scripts/build_road_marks.py   OSM 횡단보도·과속방지턱·차도 태그 → data/road-marks.json
 scripts/fetch_surroundings.py, build_surroundings.py   바깥 풍경: AWS 타일 z11 + Overpass 둘레 건물(data/raw/) → data/surroundings.json
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)

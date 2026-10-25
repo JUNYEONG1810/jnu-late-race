@@ -261,7 +261,7 @@ function buildRoadMeshes(campus) {
   return [roads, lanes, medians];
 }
 
-class DrapeBuilder {
+export class DrapeBuilder {
   constructor(lift) {
     this.lift = lift;
     this.pos = [];
