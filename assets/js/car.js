@@ -27,6 +27,12 @@ export const SLOPE = {
   smooth: 8,       // 기울기가 따라가는 빠르기
   pull: 4.5,       // 경사 1(45°)일 때 앞뒤로 끌리는 가속도 (m/s²)
   topSpeed: 1.6,   // 경사 1당 최고 속도 변화 비율 (오르막 -, 내리막 +)
+  // 수치지도 지형은 옹벽 자리에 짧고 가파른 단차가 있어, 주행만 부드럽게 (지형 모양은 그대로)
+  maxSlope: 0.25,  // 속도 계산에 쓰는 경사 한도
+  maxTilt: 0.32,   // 몸 기울기 한도 (rad, 약 18°)
+  riseRate: 15,    // 땅이 높아질 때 따라 올라가는 빠르기
+  fallRate: 9,     // 땅이 낮아질 때 따라 내려가는 빠르기
+  maxSink: 0.25,   // 따라가는 동안 땅속으로 들어가도 되는 최대 깊이 (m)
 };
 
 export const BOOST = {
@@ -372,12 +378,22 @@ export class Car {
     const L = SLOPE.halfLength, W = SLOPE.halfWidth;
     const hf = heightAt(x + fx * L, z + fz * L), hb = heightAt(x - fx * L, z - fz * L);
     const hl = heightAt(x + fz * W, z - fx * W), hr = heightAt(x - fz * W, z + fx * W); // 왼쪽 = 로컬 +x
-    this.slope = (hf - hb) / (2 * L);
-    const pitch = -Math.atan(this.slope), roll = Math.atan((hl - hr) / (2 * W));
+    const clamp = THREE.MathUtils.clamp;
+    this.slope = clamp((hf - hb) / (2 * L), -SLOPE.maxSlope, SLOPE.maxSlope);
+    const pitch = clamp(-Math.atan((hf - hb) / (2 * L)), -SLOPE.maxTilt, SLOPE.maxTilt);
+    const roll = clamp(Math.atan((hl - hr) / (2 * W)), -SLOPE.maxTilt, SLOPE.maxTilt);
     const k = snap ? 1 : Math.min(1, dt * SLOPE.smooth);
     this.tilt.x += (pitch - this.tilt.x) * k;
     this.tilt.z += (roll - this.tilt.z) * k;
-    this.object.position.set(x, heightAt(x, z), z);
+    // 높이: 단차에서 튀지 않게 부드럽게 따라가되 땅속으로는 maxSink 넘게 들어가지 않음
+    const ground = heightAt(x, z);
+    if (snap || this.groundY === undefined) this.groundY = ground;
+    else {
+      const rate = ground > this.groundY ? SLOPE.riseRate : SLOPE.fallRate;
+      this.groundY += (ground - this.groundY) * Math.min(1, dt * rate);
+      this.groundY = Math.max(this.groundY, ground - SLOPE.maxSink);
+    }
+    this.object.position.set(x, this.groundY, z);
     this.object.rotation.set(this.tilt.x, this.heading, this.tilt.z, 'YXZ');
   }
 }

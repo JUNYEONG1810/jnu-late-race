@@ -215,6 +215,7 @@ class GroundPainter {
 // polygonOffset + 살짝 띄운 높이로 바닥 위에 그려 깜빡이지 않는다. (바닥 그림의 차도는 조금 좁게 칠해 밑에 깔아 둠)
 const ROAD_LIFT = 0.07, LANE_LIFT = 0.11; // 땅에서 띄우는 높이 (m)
 const DRAPE_STEP = 2.5;                     // 지형을 따라가도록 나누는 간격 (m)
+const DRAPE_FINE = 1.0;                     // 옹벽 단차처럼 지형이 급히 꺾이는 곳은 더 잘게
 const JOINT_ANGLE = 0.14;                   // 이보다 많이 꺾이는 곳(약 8°)에만 둥근 이음
 
 function buildRoadMeshes(campus) {
@@ -250,8 +251,10 @@ class DrapeBuilder {
     this.index = [];
   }
 
+  // 둘레 0.6m 안 가장 높은 땅 위에 (격자 대각선 꺾임 때문에 땅이 도로를 뚫고 올라오지 않게)
   vertex(x, z) {
-    this.pos.push(x, heightAt(x, z) + this.lift, z);
+    const y = Math.max(heightAt(x, z), heightAt(x + 0.6, z), heightAt(x - 0.6, z), heightAt(x, z + 0.6), heightAt(x, z - 0.6));
+    this.pos.push(x, y + this.lift, z);
     return this.pos.length / 3 - 1;
   }
 
@@ -260,7 +263,8 @@ class DrapeBuilder {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
     if (len < 1e-6) return;
     const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len;
-    const nu = Math.max(1, Math.ceil(len / DRAPE_STEP)), nv = Math.max(1, Math.ceil((2 * h) / DRAPE_STEP));
+    const step = this.bends(a, ux, uz, len, h) ? DRAPE_FINE : DRAPE_STEP;
+    const nu = Math.max(1, Math.ceil(len / step)), nv = Math.max(1, Math.ceil((2 * h) / step));
     const first = this.pos.length / 3;
     for (let i = 0; i <= nu; i++) {
       for (let j = 0; j <= nv; j++) {
@@ -276,9 +280,26 @@ class DrapeBuilder {
     }
   }
 
+  // 띠 위에서 지형이 2.5m 칸 안에서 6cm 넘게 꺾이는지 (가운데·양 가장자리 선을 0.5m 간격으로 봄)
+  bends(a, ux, uz, len, h) {
+    for (const s of [-h, 0, h]) {
+      const ox = a[0] - uz * s, oz = a[1] + ux * s;
+      for (let t0 = 0; t0 < len; t0 += DRAPE_STEP) {
+        const t1 = Math.min(len, t0 + DRAPE_STEP);
+        const y0 = heightAt(ox + ux * t0, oz + uz * t0), y1 = heightAt(ox + ux * t1, oz + uz * t1);
+        for (let t = t0 + 0.5; t < t1; t += 0.5) {
+          const lin = y0 + ((y1 - y0) * (t - t0)) / (t1 - t0);
+          if (Math.abs(heightAt(ox + ux * t, oz + uz * t) - lin) > 0.06) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // 꺾이는 곳·끝을 메우는 둥근 판 (가운데에서 바깥으로 고리 몇 개)
   disc([x, z], r) {
-    const seg = 12, rings = Math.max(1, Math.ceil(r / DRAPE_STEP));
+    // 둘레·고리 간격 약 1.5m (넓은 도로 끝의 큰 판도 지형을 따라가게)
+    const seg = Math.max(12, Math.ceil((2 * Math.PI * r) / 1.5)), rings = Math.max(1, Math.ceil(r / 1.5));
     const center = this.vertex(x, z);
     const ring = (k) => Array.from({ length: seg }, (_, i) => {
       const a = (i / seg) * Math.PI * 2, rr = (r * k) / rings;
