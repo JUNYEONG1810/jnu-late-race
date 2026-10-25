@@ -100,6 +100,7 @@ export class LateMode {
   get frozen() { return ['paused', 'outro', 'result'].includes(this.state); }
 
   start() {
+    this.onBeforeStart?.(); // 학생이 내려서 걷는 중이면 먼저 운전석으로 (main.js)
     const { position, dir } = this.campus.spawn;
     this.car.place(position[0], position[1], dir[0], dir[1]);
     this.index = 0;

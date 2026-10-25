@@ -153,6 +153,8 @@ export class Car {
 
     // 운전사: 황소 "학생" (driver.js). 운전석에 앉아 앞발굽을 조종 레버에
     this.driver = new Driver();
+    this.driverAboard = true; // 자유 모드에서 E로 내리면 false (walker.js)
+    this.door = 0;            // 타고 내릴 때 왼쪽 문 창 열림 0~1
     this.driver.object.position.set(...DRIVER.seat);
     this.body.add(this.driver.object);
     this.cabin.push(this.driver.object); // 운전석 시점에서는 숨김
@@ -351,8 +353,9 @@ export class Car {
     this.brakeMat.emissiveIntensity = this.braking ? 2.5 : 0.15;
 
     // 운전사 학생 (표정·고개 내밀기·귀 펄럭임), 고개를 내밀면 왼쪽 창이 내려감
-    this.driver.update(dt, this.forwardSpeed);
-    const open = 1 - this.driver.peek * 0.95; // 창을 아래 틀 쪽으로 접어 내림
+    // 학생이 내려서 걷는 중이면 운전석은 비어 있고(의자·레버만), 타고 내릴 때 왼쪽 문 창을 내린다
+    if (this.driverAboard) this.driver.update(dt, this.forwardSpeed);
+    const open = 1 - Math.max(this.driverAboard ? this.driver.peek : 0, this.door) * 0.95; // 창을 아래 틀 쪽으로 접어 내림
     this.leftWindow.scale.y = open;
     this.leftWindow.position.y = this.cab.y - (this.cab.h / 2) * (1 - open);
 
@@ -647,7 +650,7 @@ function closestOnSegment(px, pz, e) {
   return [x1 + t * dx, z1 + t * dz];
 }
 
-function pointInPolygon(x, z, poly) {
+export function pointInPolygon(x, z, poly) {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [xi, zi] = poly[i], [xj, zj] = poly[j];

@@ -493,3 +493,36 @@ body.title #building-name, body.title #minimap, body.title #speedlines { display
 .pin:last-child .pin-num { background: #2f9be0; }
 .pin-emoji { font-size: 24px; line-height: 1; }
 
+
+/* ---------- 학생이 내려서 걷기 (자유 모드) ---------- */
+#walk-hint {
+  display: none;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #55607a;
+}
+body.walking #walk-hint { display: block; }
+body.walking #boost-gauge, body.walking #help { display: none; }
+#walk-hint .wh-board { padding: 3px 6px; border-radius: 9px; transition: background 0.2s, color 0.2s; }
+#walk-hint.near .wh-board { background: #ff8a7a; color: #fff; animation: board-pulse 0.8s ease-in-out infinite alternate; }
+#walk-hint.near .wh-board kbd { color: #2b3240; }
+@keyframes board-pulse { from { box-shadow: 0 0 0 0 rgba(255, 138, 122, 0.6); } to { box-shadow: 0 0 0 6px rgba(255, 138, 122, 0); } }
+
+/* 왼쪽 위 ⚙ 설정 */
+#settings {
+  top: 96px;
+  left: 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+#settings.off { display: none; }
+#settings label { display: block; line-height: 1.9; cursor: pointer; }
+#settings input { vertical-align: -2px; margin-right: 6px; }
+body.title #settings, body.cine #settings { display: none; }

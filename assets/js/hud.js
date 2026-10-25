@@ -7,7 +7,7 @@ const tmp = new THREE.Vector3();
 // 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
 const MINIMAP = { radius: 260, res: 0.7 };
 // 이름표가 가리면 안 되는 HUD 요소들
-const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast'];
+const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings'];
 
 export class Hud {
   constructor({ onQuality, onSound }) {
@@ -41,6 +41,32 @@ export class Hud {
     }
     this.soundBtn = $('sound-btn');
     this.soundBtn.addEventListener('click', () => { onSound(); this.soundBtn.blur(); });
+  }
+
+  // 왼쪽 위 ⚙ 설정: 체크박스(data-set=설정 이름)를 settings 값과 묶는다
+  bindSettings(settings, onChange) {
+    const panel = $('settings'), btn = $('settings-btn');
+    btn.addEventListener('click', () => { panel.classList.toggle('off'); btn.blur(); });
+    for (const box of panel.querySelectorAll('input[data-set]')) {
+      box.checked = !!settings[box.dataset.set];
+      box.addEventListener('change', () => {
+        settings[box.dataset.set] = box.checked;
+        onChange();
+        box.blur(); // Space·방향키가 체크박스를 건드리지 않게
+      });
+    }
+  }
+
+  // 내려서 걸을 때 화면 아래 안내. state: null(숨김) | 'far' | 'near'(굴착기 근처: "E 타기" 강조)
+  setWalkHint(state) {
+    if (state === this.walkHintState) return;
+    this.walkHintState = state;
+    $('walk-hint').classList.toggle('near', state === 'near');
+  }
+
+  hideHelp() {
+    clearTimeout(this.helpTimer);
+    this.helpEl.classList.add('hidden');
   }
 
   setSound(on) {
@@ -93,8 +119,9 @@ export class Hud {
     this.mmCtx = this.mmCanvas.getContext('2d');
   }
 
-  // carPos: Vector2(x, z), heading: rad, target: {x, z} 또는 null
-  drawMinimap(carPos, heading, target) {
+  // carPos: Vector2(x, z) (걷는 중이면 학생 위치), heading: rad, target: {x, z} 또는 null,
+  // parked: 학생이 내려서 걷는 동안 세워 둔 굴착기 위치 Vector2 또는 null
+  drawMinimap(carPos, heading, target, parked = null) {
     const c = this.mmCanvas, g = this.mmCtx;
     const css = c.clientWidth || 184;
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -126,7 +153,21 @@ export class Hud {
       g.stroke();
     }
 
-    // 내 굴착기: 방향 화살표 (앞 = (sin h, cos h), 화면 x = 동쪽, y = 남쪽)
+    // 세워 둔 굴착기: 노란 네모 (범위 밖이면 가장자리에)
+    if (parked) {
+      let dx = (parked.x - carPos.x) * k, dz = (parked.y - carPos.y) * k;
+      const d = Math.hypot(dx, dz), max = R - 10 * dpr;
+      if (d > max) { dx *= max / d; dz *= max / d; }
+      g.fillStyle = '#f5b82e';
+      g.strokeStyle = '#2b3240';
+      g.lineWidth = 2 * dpr;
+      g.beginPath();
+      g.rect(R + dx - 6 * dpr, R + dz - 5 * dpr, 12 * dpr, 10 * dpr);
+      g.fill();
+      g.stroke();
+    }
+
+    // 내 굴착기(걷는 중이면 학생): 방향 화살표 (앞 = (sin h, cos h), 화면 x = 동쪽, y = 남쪽)
     g.translate(R, R);
     g.rotate(Math.atan2(Math.cos(heading), Math.sin(heading)));
     g.fillStyle = '#ff5a3c';

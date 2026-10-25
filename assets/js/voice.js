@@ -131,8 +131,9 @@ export class EngineSound {
     this.nodes = { out, body, lp, lfo, windGain };
   }
 
-  // speed: m/s, throttle: 가속 중, boostFx: 부스터 효과 세기 0~1, active: 엔진 소리를 낼지
-  update(dt, { speed, throttle, boostFx, active }) {
+  // speed: m/s, throttle: 가속 중, boostFx: 부스터 효과 세기 0~1, active: 엔진 소리를 낼지,
+  // quiet: 학생이 내려서 걷는 동안 시동만 걸린 채 작게
+  update(dt, { speed, throttle, boostFx, active, quiet = false }) {
     if (!ctx || ctx.state !== 'running') return;
     if (!this.nodes) this.init(ctx);
     const n = this.nodes, t = ctx.currentTime;
@@ -140,7 +141,7 @@ export class EngineSound {
     if (throttle && !this.prevThrottle) this.kick = 1; // 페달을 밟는 순간 살짝 커짐
     this.prevThrottle = throttle;
     this.kick = Math.max(0, this.kick - dt * 3);
-    const vol = active ? 0.16 + 0.1 * s01 + 0.1 * this.kick + 0.05 * boostFx : 0;
+    const vol = active ? (0.16 + 0.1 * s01 + 0.1 * this.kick + 0.05 * boostFx) * (quiet ? 0.35 : 1) : 0;
     n.out.gain.setTargetAtTime(vol, t, 0.08);
     n.body.frequency.setTargetAtTime(34 + 38 * s01 + 22 * boostFx, t, 0.1); // 부스터 때 한 단계 높게
     n.lfo.frequency.setTargetAtTime(10 + 20 * s01 + 8 * boostFx, t, 0.1);
@@ -251,6 +252,20 @@ export function playWarn() {
   tone(ac, 1046.5, ac.currentTime, 0.09, 0.16, 'square');
 }
 
+// 학생 발소리: 작고 귀여운 "톡" (달리면 조금 높고 또렷하게)
+export function playStep(run = false) {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime, f = (run ? 560 : 470) * (0.92 + Math.random() * 0.16);
+  const o = ac.createOscillator();
+  o.frequency.setValueAtTime(f, t);
+  o.frequency.exponentialRampToValueAtTime(f * 0.55, t + 0.05);
+  o.connect(env(ac, t, run ? 0.07 : 0.05, 0.004, 0.06));
+  o.start(t);
+  o.stop(t + 0.08);
+  burst(ac, t, 0.03, run ? 0.03 : 0.02, 'lowpass', 1200);
+}
+
 // 카운트다운 삐 (go면 높고 길게)
 export function playBeep(go = false) {
   const ac = unlockAudio();
@@ -342,9 +357,9 @@ function blip(ac, out, t, freq, formant, len, vol) {
 }
 
 // 대사를 말한다. 소리를 예약하고, 말풍선 타자 효과용 시간표를 돌려준다.
-// opts.emphasis: 낮고 길게 말할 단어, opts.big: 크고 길게 말할 부분
+// opts.emphasis: 낮고 길게 말할 단어, opts.big: 크고 길게 말할 부분, opts.pitch: 음높이 배수(학생은 높게)
 // 반환: { steps: [{ at: 시작 초, end: 이 소리까지 보일 글자 수 }], duration, stop() }
-export function speak(text, { emphasis, big } = {}) {
+export function speak(text, { emphasis, big, pitch = 1 } = {}) {
   const inRange = (word, u) => {
     if (!word) return false;
     for (let i = text.indexOf(word); i >= 0; i = text.indexOf(word, i + 1)) {
@@ -363,7 +378,7 @@ export function speak(text, { emphasis, big } = {}) {
   const steps = [];
   let at = 0;
   for (const u of syllables(text)) {
-    let dur = u.dur, f = u.sound ? pitchOf(u.key) : 0, vol = VOICE.volume;
+    let dur = u.dur, f = u.sound ? pitchOf(u.key) * pitch : 0, vol = VOICE.volume;
     if (inRange(emphasis, u)) { dur *= 1.9; f *= 0.78; vol *= 1.1; } // "Serious"는 낮고 길게
     if (inRange(big, u)) { dur *= 1.7; f *= 0.9; vol *= 1.6; }       // "F다."는 크고 길게
     if (ac && u.sound) blip(ac, out, t0 + at, f, u.formant, dur * 0.85, vol);

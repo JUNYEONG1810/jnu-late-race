@@ -10,10 +10,23 @@ export const CAMERA_MODES = [
   { id: 'driver', label: '운전석' },
 ];
 
+// 학생이 내려서 걸을 때의 시점 (C 키). 굴착기보다 가깝고 조금 높게
+export const WALK_CAMERA_MODES = [
+  { id: 'follow', label: '따라가기', dist: 3.8, pitch: 0.45 },
+  { id: 'far', label: '멀리서 따라가기', dist: 9, pitch: 0.55 },
+  { id: 'top', label: '위에서 내려다보기' },
+];
+// 걷는 중 마우스 시점: 위아래 각도(rad)와 거리(m) 한도
+export const ORBIT = { pitchMin: 0.05, pitchMax: 1.2, distMin: 2.2, distMax: 12, dragYaw: 0.006, dragPitch: 0.005, lookY: 0.75 };
+
 export class CameraRig {
   constructor(camera) {
     this.camera = camera;
     this.mode = 0;
+    this.walkMode = 0;
+    this.orbit = { yaw: 0, pitch: 0.45, dist: 3.8 }; // 걷기 시점: 카메라가 보는 방향(yaw), 내려다보는 각, 거리
+    this.orbitReset = false; // V: 학생 머리 뒤로 부드럽게 돌아가는 중
+    this.walkTarget = new THREE.Vector3();
     this.pos = new THREE.Vector3();
     this.look = new THREE.Vector3();
     this.camHeading = 0;
@@ -30,6 +43,77 @@ export class CameraRig {
     this.mode = (this.mode + 1) % CAMERA_MODES.length;
     this.snap = CAMERA_MODES[this.mode].id === 'driver';
     return CAMERA_MODES[this.mode];
+  }
+
+  // ---------- 걷기 시점 ----------
+
+  // 내릴 때: 지금 보던 방향(굴착기 뒤)에서 시작
+  startWalk(heading, target) {
+    const m = WALK_CAMERA_MODES[this.walkMode];
+    Object.assign(this.orbit, { yaw: heading, pitch: m.pitch ?? 0.42, dist: m.dist ?? 4.5 });
+    this.walkTarget.copy(target);
+    this.orbitReset = false;
+  }
+
+  nextWalkMode() {
+    this.walkMode = (this.walkMode + 1) % WALK_CAMERA_MODES.length;
+    const m = WALK_CAMERA_MODES[this.walkMode];
+    if (m.dist) Object.assign(this.orbit, { dist: m.dist, pitch: m.pitch });
+    return m;
+  }
+
+  // 마우스로 끌기: 학생 주위로 돌리기 (위아래는 한도 안에서)
+  dragOrbit(dx, dy) {
+    this.orbit.yaw -= dx * ORBIT.dragYaw;
+    this.orbit.pitch = THREE.MathUtils.clamp(this.orbit.pitch + dy * ORBIT.dragPitch, ORBIT.pitchMin, ORBIT.pitchMax);
+    this.orbitReset = false;
+  }
+
+  // 마우스 휠: 거리 (가까이·멀리 한도)
+  zoomOrbit(delta) {
+    this.orbit.dist = THREE.MathUtils.clamp(this.orbit.dist * Math.exp(delta * 0.001), ORBIT.distMin, ORBIT.distMax);
+  }
+
+  // V: 학생 머리 뒤로 부드럽게 돌아가기
+  resetOrbit() { this.orbitReset = true; }
+
+  // walker: { pos(Vector2), y, heading, moving }, autoBehind: 설정 "걸을 때 카메라 자동으로 뒤로"
+  updateWalk(dt, walker, { autoBehind = false, dragging = false } = {}) {
+    const m = WALK_CAMERA_MODES[this.walkMode], O = this.orbit;
+    const goal = new THREE.Vector3(walker.pos.x, walker.y + ORBIT.lookY, walker.pos.y);
+    this.walkTarget.lerp(goal, 1 - Math.exp(-dt * 12));
+    if (this.orbitReset) {
+      const k = Math.min(1, dt * 5);
+      O.yaw += angleDiff(walker.heading, O.yaw) * k;
+      O.pitch += ((m.pitch ?? 0.42) - O.pitch) * k;
+      O.dist += ((m.dist ?? 4.5) - O.dist) * k;
+      if (Math.abs(angleDiff(walker.heading, O.yaw)) < 0.01 && Math.abs(O.pitch - (m.pitch ?? 0.42)) < 0.01
+        && Math.abs(O.dist - (m.dist ?? 4.5)) < 0.02) this.orbitReset = false;
+    } else if (autoBehind && walker.moving && !dragging) {
+      O.yaw += angleDiff(walker.heading, O.yaw) * Math.min(1, dt * 1.5);
+    }
+    const T = this.walkTarget, pos = new THREE.Vector3(), look = T.clone();
+    if (m.id === 'top') {
+      pos.set(T.x, T.y + 28, T.z + 11);
+    } else {
+      const h = Math.cos(O.pitch) * O.dist;
+      pos.set(T.x - Math.sin(O.yaw) * h, T.y + Math.sin(O.pitch) * O.dist, T.z - Math.cos(O.yaw) * h);
+    }
+    // 굴착기에서 내릴 때 따라가기 카메라에서 부드럽게 넘어옴
+    if (this.snap) { this.pos.copy(pos); this.look.copy(look); this.snap = false; }
+    else {
+      const k = 1 - Math.exp(-dt * 10);
+      this.pos.lerp(pos, k);
+      this.look.lerp(look, k);
+    }
+    this.pos.y = Math.max(this.pos.y, heightAt(this.pos.x, this.pos.z) + MIN_CLEARANCE);
+    this.camHeading = O.yaw;
+    if (Math.abs(this.camera.fov - 55) > 0.05) {
+      this.camera.fov += (55 - this.camera.fov) * Math.min(1, dt * 4);
+      this.camera.updateProjectionMatrix();
+    }
+    this.camera.position.copy(this.pos);
+    this.camera.lookAt(this.look);
   }
 
   update(dt, car) {

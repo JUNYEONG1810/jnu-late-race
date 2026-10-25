@@ -6,8 +6,9 @@ import { loadTerrain } from './terrain.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
-import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, setMuted } from './voice.js';
+import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
+import { Walker } from './walker.js';
 
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
@@ -100,9 +101,14 @@ addEventListener('keydown', (e) => {
     else if (e.code === 'Enter') startFree();
     return;
   }
-  if (e.code === 'KeyC') hud.toast(`시점: ${rig.nextMode().label}`);
+  if (e.code === 'KeyC') hud.toast(`시점: ${walker?.active ? rig.nextWalkMode().label : rig.nextMode().label}`);
   if (e.code === 'KeyH') hud.showHelp();
-  if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
+  if (walker?.active) {
+    if (onWalkKey(e.code)) return;
+  } else {
+    if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
+    if (e.code === 'KeyE' && !lateMode?.active) getOff();
+  }
   lateMode?.onKey(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -110,7 +116,24 @@ addEventListener('pointerdown', () => {
   unlockAudio();
   lateMode?.advance(); // 연출 대사 넘기기
 });
-addEventListener('blur', () => keys.clear());
+addEventListener('blur', () => { keys.clear(); dragging = false; });
+
+// 걷는 중 마우스 시점: 누른 채 끌면 학생 주위로 돌리고, 휠로 거리 조절
+let dragging = false;
+const canvas = renderer.domElement;
+canvas.addEventListener('pointerdown', (e) => {
+  if (!walker?.active) return;
+  dragging = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch {} // 창 밖으로 끌어도 계속
+});
+canvas.addEventListener('pointermove', (e) => { if (dragging && walker?.active) rig.dragOrbit(e.movementX, e.movementY); });
+for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, () => { dragging = false; });
+canvas.addEventListener('wheel', (e) => {
+  if (!walker?.active) return;
+  e.preventDefault();
+  rig.zoomOrbit(e.deltaY);
+}, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function readInput() {
   return {
@@ -127,6 +150,10 @@ const NO_INPUT = { up: false, down: false, left: false, right: false, drift: fal
 // ---------- 시작 ----------
 
 const hud = new Hud({ onQuality: setQuality, onSound: toggleSound });
+// 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐)
+const settings = { walkCamAuto: false };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
+hud.bindSettings(settings, () => { try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {} });
 const rig = new CameraRig(camera);
 const car = new Car();
 car.onBoostStart = playBoost;
@@ -201,6 +228,51 @@ function updateTitleCamera(time) {
 let collider = null;
 let world = null;
 let lateMode = null;
+let walker = null;
+
+// ---------- 내려서 걷기 (자유 모드) ----------
+
+// E: 굴착기 왼쪽 문으로 내린다 (멈춰 있을 때만)
+function getOff() {
+  if (car.speedKmh > 4) { hud.toast('굴착기를 멈추면 내릴 수 있어요'); return; }
+  car.setCockpitView(false);
+  walker.exit();
+  rig.startWalk(car.heading, new THREE.Vector3(car.pos.x, car.object.position.y + 1.5, car.pos.y));
+  hud.hideHelp();
+}
+
+// 걷는 중의 키. 처리했으면 true (지각 모드 키로 넘기지 않음)
+function onWalkKey(code) {
+  if (!walker.walking) return code === 'KeyE' || code === 'KeyL'; // 타고 내리는 중
+  if (code === 'KeyE') {
+    if (walker.nearCar()) walker.board();
+    else hud.toast('굴착기 가까이 가면 탈 수 있어요');
+    return true;
+  }
+  if (code === 'KeyR') {
+    const r = walker.summon();
+    hud.toast(r === 'ok' ? '굴착기를 불렀어요' : r === 'near' ? '굴착기가 가까이 있어요' : '여기는 굴착기를 세울 자리가 없어요');
+    return true;
+  }
+  if (code === 'KeyV') { rig.resetOrbit(); return true; }
+  if (code === 'KeyL') { walker.board(() => lateMode.start()); return true; } // 먼저 굴착기에 타고 지각 모드
+  return false;
+}
+
+// 걷는 방향의 기준: 카메라가 보는 쪽 (땅 위 방향)
+const camDirTmp = new THREE.Vector3();
+function cameraGroundDir() {
+  camera.getWorldDirection(camDirTmp);
+  const v = new THREE.Vector2(camDirTmp.x, camDirTmp.z);
+  return v.lengthSq() > 1e-6 ? v.normalize() : new THREE.Vector2(0, -1);
+}
+
+let walkingUi = false;
+function setWalkingUi(on) {
+  if (on === walkingUi) return;
+  walkingUi = on;
+  document.body.classList.toggle('walking', on);
+}
 
 async function start() {
   const [campus, lawns, widths] = await Promise.all([
@@ -231,6 +303,10 @@ async function start() {
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
   lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
+  walker = new Walker(car, { campus, collider });
+  walker.onStep = playStep;
+  scene.add(walker.object);
+  lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
   hud.initMinimap(campus);
   setupTitle();
 
@@ -238,7 +314,7 @@ async function start() {
   updateTitleCamera(0);
   rig.update(0, car);
   document.getElementById('loading').remove();
-  window.game = { car, rig, collider, campus, renderer, world, lateMode }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
 }
@@ -276,30 +352,41 @@ function loop() {
   const input = onTitle || lateMode.inputLocked ? NO_INPUT : readInput();
   if (onTitle) updateTitleCamera(clock.elapsedTime);
 
+  const walking = walker.active; // 학생이 내려서 걷는 중 (굴착기는 시동만 걸린 채 서 있음)
+
   // 프레임이 길면 잘게 나눠서 벽을 뚫지 않게. 일시정지·결과 화면에서는 멈춤
   if (!lateMode.frozen) {
     const steps = Math.ceil(dt / (1 / 60));
-    for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
+    for (let i = 0; i < steps; i++) {
+      car.update(dt / steps, walking ? NO_INPUT : input, collider);
+      if (walking) walker.update(dt / steps, input, cameraGroundDir());
+    }
   }
+  if (!walking) walker.update(dt); // 타고 나서 문 닫기
   lateMode.update(dt);
   car.driver.setExpression(driverExpression());
   if (lateMode.frozen) car.driver.update(dt, 0); // 결과 화면 등 굴착기가 멈춘 동안에도 표정·만세 움직임
-  world.landscape.update(dt, car.pos.x, car.pos.y); // 주차 차단기
+  const focus = walking ? walker.pos : car.pos; // 화면·소리·미니맵의 중심
+  const focusY = walking ? walker.y : car.object.position.y;
+  world.landscape.update(dt, focus.x, focus.y); // 주차 차단기
 
-  rig.update(dt, car);
+  if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
+  else rig.update(dt, car);
   sky.position.copy(camera.position);
-  sun.target.position.set(car.pos.x, car.object.position.y, car.pos.y);
+  sun.target.position.set(focus.x, focusY, focus.y);
   sun.position.copy(sun.target.position).add(SUN_OFFSET);
 
   engine.update(dt, {
-    speed: Math.abs(car.forwardSpeed), throttle: car.throttle, boostFx: car.boostFx,
-    active: !onTitle && !lateMode.frozen,
+    speed: walking ? 0 : Math.abs(car.forwardSpeed), throttle: !walking && car.throttle, boostFx: car.boostFx,
+    active: !onTitle && !lateMode.frozen, quiet: walking,
   });
 
-  hud.setSpeed(car.speedKmh);
+  setWalkingUi(walking);
+  hud.setWalkHint(walking ? (walker.walking && walker.nearCar() ? 'near' : 'far') : null);
+  hud.setSpeed(walking ? walker.speed * 3.6 : car.speedKmh);
   if (!onTitle) {
     const target = lateMode.active && lateMode.target ? lateMode.target : null;
-    hud.drawMinimap(car.pos, car.heading, target);
+    hud.drawMinimap(focus, walking ? walker.heading : car.heading, target, walking ? car.pos : null);
   }
   hud.setBoost(car.boost, car.boosting ? 'active' : car.boostReady ? 'ready' : '');
   hud.drawSpeedLines(car.boostFx);
@@ -307,7 +394,7 @@ function loop() {
   nameTimer -= dt;
   if (nameTimer <= 0) {
     nameTimer = 0.2;
-    hud.setBuilding(collider.nearestNamed(car.pos.x, car.pos.y, 22));
+    hud.setBuilding(collider.nearestNamed(focus.x, focus.y, 22));
   }
 
   fpsFrames++;

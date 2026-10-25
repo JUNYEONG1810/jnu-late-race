@@ -50,6 +50,7 @@ export class Driver {
     this.peek = 0;
     this.peekGoal = 0;
     this.time = 0;
+    this.standing = false; // 내려서 걷는 중이면 자세·몸짓은 walker.js가 맡는다
 
     // ---- 의자 + 조종 레버 (움직이지 않음) ----
     const L = D.lever;
@@ -200,6 +201,7 @@ export class Driver {
   // speed: 굴착기 앞뒤 속도(m/s) — 귀 펄럭임에만 씀
   update(dt, speed = 0) {
     this.time += dt;
+    if (this.standing) return;
     const t = this.time, P = D.peek;
     this.peek += (this.peekGoal - this.peek) * Math.min(1, dt * P.speed);
     const k = this.peek * this.peek * (3 - 2 * this.peek);
