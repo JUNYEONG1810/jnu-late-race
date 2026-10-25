@@ -63,7 +63,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}
   const trees = buildTrees(campus);
   group.add(trees.group);
 
-  const gate = buildGate(campus.spawn);
+  const gate = buildGate();
   group.add(gate.group);
 
   scene.add(group);
@@ -787,7 +787,7 @@ function buildTrees(campus) {
   const spots = []; // [x, z, 크기, 원뿔형?]
 
   const [gx, gz] = campus.spawn.gate;
-  const gateClear = Math.max(GATE.minOpening, campus.spawn.gateRoadWidth || 0) / 2 + GATE.pillar + 4;
+  const gateClear = 22; // 정문 루버 지붕(동쪽 끝까지 약 19m) 둘레
   const add = (x, z, coniferChance) => {
     if (spots.length >= TREE.max || blocked(x, z) || Math.hypot(x - gx, z - gz) < gateClear) return;
     spots.push([x, z, 0.8 + rand() * 0.5, rand() < coniferChance]);
@@ -920,67 +920,89 @@ function makeTreeBlocker(campus) {
 
 // ---------- 정문 ----------
 
-const GATE = { height: 9, pillar: 1.8, beamH: 1.8, depth: 1.6, minOpening: 14, text: '전남대학교' };
+// 실제 정문 (국토지리정보원 정사영상 2025, docs/참고-조사.md·docs/진행상황.md [D]):
+// 진입로를 가로지르는 짙은 회색 가로 루버(평행한 보 6~7개) 지붕 두 덩어리 + 양 끝의 흰 사각 틀 기둥.
+// 동쪽(들어오는 차로·경비실 쪽 보도) 약 17m, 서쪽(나가는 차로 바깥쪽) 약 8m. OSM 정문 점보다 약 60m 북쪽.
+// 위에서 본 사진뿐이라 높이·글자는 확인 못 함 → 높이는 7m로, 글자·로고는 넣지 않음.
+export const REAL_GATE = {
+  center: [24.0, 446.0],      // 진입로 가운데 선(노란 중앙선)과 정문이 만나는 곳
+  spans: [                    // [한쪽 끝, 다른 끝, 도로 방향 폭(m)] 게임 좌표
+    [[26.8, 445.3], [42.4, 452.0], 4.2],
+    [[12.1, 440.2], [19.6, 443.7], 3.6],
+  ],
+  height: 7,                  // 루버 지붕 아래면 높이 (추정)
+  louvers: 6,
+  pier: [0.8, 3.0],           // 흰 틀 기둥: 가로, 도로 방향 길이
+};
 
-// 양쪽 기둥 + 위 가로 보 + "전남대학교" 글자. 로고·엠블럼은 넣지 않는다.
-// 로컬 +z = 캠퍼스 안쪽 방향. 기둥은 충돌용 사각형(obstacles)으로도 돌려준다.
-function buildGate(spawn) {
-  const [gx, gz] = spawn.gate;
-  const [dx, dz] = spawn.dir;
-  const half = Math.max(GATE.minOpening, spawn.gateRoadWidth || 0) / 2 + 1;
-  const px = half + GATE.pillar / 2; // 기둥 중심까지 거리
-
+// 진입로 위 루버 지붕 + 흰 틀 기둥. 기둥은 충돌용 사각형(obstacles)으로도 돌려준다.
+function buildGate() {
   const group = new THREE.Group();
-  const lx = Math.cos(Math.atan2(dx, dz)), lz = -Math.sin(Math.atan2(dx, dz));
-  group.position.set(gx, Math.min(heightAt(gx + lx * px, gz + lz * px), heightAt(gx - lx * px, gz - lz * px)), gz);
-  group.rotation.y = Math.atan2(dx, dz);
-
-  const stone = new THREE.MeshLambertMaterial({ color: '#d4cdbf' });
-  const navy = new THREE.MeshLambertMaterial({ color: '#2f3d5c' });
-  for (const sx of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(GATE.pillar, GATE.height + 2, GATE.pillar), stone);
-    pillar.position.set(sx * px, GATE.height / 2 - 1, 0);
-    pillar.castShadow = pillar.receiveShadow = true;
-    group.add(pillar);
+  const white = new THREE.MeshLambertMaterial({ color: '#e7e7e3' });
+  const dark = new THREE.MeshLambertMaterial({ color: '#41474d' });
+  const obstacles = [];
+  const G = REAL_GATE;
+  for (const [a, b, depth] of G.spans) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len; // 지붕 길이 방향
+    const yaw = Math.atan2(ux, uz) - Math.PI / 2;               // 로컬 +x = 길이 방향
+    const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+    const ground = Math.min(heightAt(...a), heightAt(...b), heightAt(mx, mz));
+    const span = new THREE.Group();
+    span.position.set(mx, ground, mz);
+    span.rotation.y = yaw;
+    const add = (geo, mat, x, y, z) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = m.receiveShadow = true;
+      span.add(m);
+    };
+    // 루버: 길이 방향으로 긴 보 여러 개를 도로 방향으로 나란히
+    for (let i = 0; i < G.louvers; i++) {
+      const z = -depth / 2 + (depth * (i + 0.5)) / G.louvers;
+      add(new THREE.BoxGeometry(len, 0.55, 0.28), dark, 0, G.height + 0.3, z);
+    }
+    // 루버를 받치는 양쪽 테두리 보
+    for (const z of [-depth / 2, depth / 2]) add(new THREE.BoxGeometry(len + 0.4, 0.35, 0.3), dark, 0, G.height + 0.62, z);
+    // 양 끝 흰 틀 기둥 (가운데가 빈 사각 틀처럼 보이게 앞뒤 두 기둥 + 위아래 가로대)
+    const [pw, pl] = G.pier;
+    for (const sx of [-1, 1]) {
+      const x = sx * (len / 2);
+      const h = G.height + 0.9 + (ground - Math.min(heightAt(...(sx < 0 ? a : b)), ground)) + 2;
+      for (const z of [-pl / 2, pl / 2]) add(new THREE.BoxGeometry(pw, h, 0.5), white, x, h / 2 - 2, z);
+      add(new THREE.BoxGeometry(pw, 0.6, pl + 0.5), white, x, G.height + 0.9, 0);
+      add(new THREE.BoxGeometry(pw, 0.4, pl + 0.5), white, x, 0.2, 0);
+      const wx = mx + Math.cos(yaw) * x, wz = mz - Math.sin(yaw) * x;
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      obstacles.push([[-pw / 2, -pl / 2 - 0.25], [pw / 2, -pl / 2 - 0.25], [pw / 2, pl / 2 + 0.25], [-pw / 2, pl / 2 + 0.25]]
+        .map(([lx, lz]) => [wx + lx * c + lz * s, wz - lx * s + lz * c]));
+    }
+    group.add(span);
   }
-  const beamLen = 2 * (half + GATE.pillar) + 1;
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(beamLen, GATE.beamH, GATE.depth), navy);
-  beam.position.y = GATE.height - GATE.beamH / 2;
-  beam.castShadow = true;
-  group.add(beam);
-
-  const textMat = new THREE.MeshBasicMaterial({ map: makeTextTexture(GATE.text), transparent: true, fog: true });
-  const textGeo = new THREE.PlaneGeometry(beamLen * 0.6, GATE.beamH * 0.8);
-  for (const side of [-1, 1]) {
-    const plane = new THREE.Mesh(textGeo, textMat);
-    plane.position.set(0, beam.position.y, side * (GATE.depth / 2 + 0.02));
-    if (side < 0) plane.rotation.y = Math.PI; // 바깥(출발 쪽)에서도 바로 읽히게
-    group.add(plane);
-  }
-
-  // 기둥 외곽선 (월드 좌표)
-  const rx = [Math.cos(group.rotation.y), -Math.sin(group.rotation.y)]; // 로컬 +x의 월드 방향 (x, z)
-  const obstacles = [-1, 1].map((sx) => {
-    const cx = gx + rx[0] * sx * px, cz = gz + rx[1] * sx * px;
-    const h = GATE.pillar / 2;
-    return [[-h, -h], [h, -h], [h, h], [-h, h]].map(([a, b]) => [cx + rx[0] * a + dx * b, cz + rx[1] * a + dz * b]);
-  });
   return { group, obstacles };
 }
 
-function makeTextTexture(text) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 96;
-  const g = canvas.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.font = '800 72px "Pretendard", "Malgun Gothic", sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(text.split('').join(' '), 256, 52);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+// 출발 위치를 실제 정문 남쪽 25m, 들어오는 차로(동쪽) 위로. 연출(굴착기 앞·옆·뒤)도 여기서
+export function placeSpawnAtGate(campus) {
+  const [cx, cz] = REAL_GATE.center;
+  const entry = campus.roads.find((r) => r.id === 'w256927670');
+  let ux = 0.34, uz = -0.94; // 진입로 방향(북쪽으로)
+  if (entry) {
+    // 정문에 가장 가까운 진입로 선분의 방향
+    let best = Infinity;
+    for (let i = 0; i < entry.points.length - 1; i++) {
+      const [x1, z1] = entry.points[i], [x2, z2] = entry.points[i + 1];
+      const d = Math.hypot((x1 + x2) / 2 - cx, (z1 + z2) / 2 - cz);
+      const L = Math.hypot(x2 - x1, z2 - z1);
+      if (d < best && L > 1) { best = d; ux = (x2 - x1) / L; uz = (z2 - z1) / L; }
+    }
+    if (uz > 0) { ux = -ux; uz = -uz; }
+  }
+  const ex = -uz, ez = ux; // 진행 방향의 오른쪽(동쪽) = 들어오는 차로
+  campus.spawn.gate = [cx, cz];
+  // 동쪽 지붕 안쪽 기둥(가운데 선에서 약 2.4m)을 피해 가운데 선에서 5m 오른쪽
+  campus.spawn.position = [cx - ux * 25 + ex * 5, cz - uz * 25 + ez * 5];
+  campus.spawn.dir = [ux, uz];
 }
 
 // ---------- 도우미 ----------

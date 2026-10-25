@@ -1,6 +1,6 @@
 // 시작(첫 화면), 화면 구성, 입력, 소리, 게임 루프.
 import * as THREE from 'three';
-import { loadCampus, buildMap } from './map.js';
+import { loadCampus, buildMap, placeSpawnAtGate } from './map.js';
 import { buildLandscape, removeReplacedBuildings } from './landscape.js';
 import { loadTerrain } from './terrain.js';
 import { Car, Collider } from './car.js';
@@ -207,6 +207,7 @@ async function start() {
     loadTerrain('data/terrain.json?v=2'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
+  placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
