@@ -1,0 +1,1002 @@
+{
+ "_설명": "조형물·기념물 형태·크기·재료와 근거. 등급: 확실(사진) / 준확실(정사영상·태그) / 근거 없음. 근거 없는 값은 단순한 기본 형태·크기. 이름표는 OSM의 공식 이름만.",
+ "monuments": [
+  {
+   "no": 1,
+   "name": "새마을 운동비",
+   "osm": "n10135949511",
+   "tags": {
+    "historic": "memorial",
+    "inscription": "근면 자조 협동",
+    "material": "stone",
+    "memorial": "plaque",
+    "name": "새마을 운동비"
+   },
+   "p": [
+    -578.9,
+    561.9
+   ],
+   "form": "stele",
+   "grade": "근거 없음",
+   "evidence": {
+    "형태": "근거 없음 — 정사영상 범위 밖(서쪽 끝)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 2,
+   "name": "임을 위한 행진",
+   "osm": "n10252819862",
+   "tags": {
+    "artist_name": "Dae-Gil Kim",
+    "artwork_type": "statue",
+    "material": "stone",
+    "name": "임을 위한 행진",
+    "name:en": "March for the Beloved",
+    "name:ko": "임을 위한 행진",
+    "start_date": "2004-05-18",
+    "tourism": "artwork",
+    "website": "https://518trail.jnu.ac.kr/SubPage.aspx?PageCode=K20800"
+   },
+   "p": [
+    167.5,
+    -26.1
+   ],
+   "form": "marker",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "위치·바닥": "정사영상: OSM 점에서 서쪽 3.8m에 지름 약 4.5m의 흰 원형 받침",
+    "재료": "OSM material=stone, artwork_type=statue",
+    "조각 형태": "근거 없음 (사진 없음 → 인물 형상은 넣지 않고, 받침 위에 이름을 새긴 낮은 판석 하나로 단순화)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 2번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0",
+   "base": {
+    "shape": "round",
+    "d": 4.5,
+    "h": 0.5,
+    "color": "#d9e1d7"
+   }
+  },
+  {
+   "no": 3,
+   "name": "우리의 교육지표",
+   "osm": "n10271456968",
+   "tags": {
+    "artwork_type": "sculpture",
+    "material": "stone",
+    "name": "우리의 교육지표",
+    "name:en": "Education Manifesto",
+    "name:ko": "우리의 교육지표",
+    "tourism": "artwork"
+   },
+   "p": [
+    46.7,
+    -50.1
+   ],
+   "form": "sculpture",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "재료·종류": "OSM material=stone, artwork_type=sculpture",
+    "형태·크기": "근거 없음 (정사영상에서 식별 안 됨)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 3번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 4,
+   "name": "5.18사적비",
+   "osm": "n10271456997",
+   "tags": {
+    "historic": "memorial",
+    "memorial": "stone",
+    "name": "5.18사적비",
+    "name:en": "Memorial Site No. 1 of the May 18 Gwangju Democratic Uprising",
+    "name:ko": "5.18사적비"
+   },
+   "p": [
+    54.9,
+    466.5
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류": "OSM historic=memorial, memorial=stone",
+    "형태·크기": "근거 없음 (정사영상에서 나무에 가림)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 4번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 5,
+   "name": "혁명정신 계승비",
+   "osm": "n10271466753",
+   "tags": {
+    "historic": "memorial",
+    "material": "stone",
+    "memorial": "stone",
+    "name": "혁명정신 계승비"
+   },
+   "p": [
+    -13.7,
+    395.5
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "바닥 크기·방향": "정사영상: 길이 약 8.7m × 폭 1.7m의 흰 돌 판이 북동-남서로 놓임",
+    "재료": "OSM material=stone",
+    "높이": "근거 없음 (기본 1.5m)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 5번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0",
+   "length": 8.7,
+   "width": 1.7,
+   "angle": 46
+  },
+  {
+   "no": 6,
+   "name": "윤상원 열사 흉상",
+   "osm": "n10271466822",
+   "tags": {
+    "artist_name": "최은태",
+    "artwork_type": "bust",
+    "name": "윤상원 열사 흉상",
+    "name:en": "Bust of Yoon Sang-won",
+    "name:ko": "윤상원 열사 흉상",
+    "tourism": "artwork"
+   },
+   "p": [
+    -39.4,
+    179.0
+   ],
+   "form": "bust",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류": "OSM artwork_type=bust (작가 최은태)",
+    "재료·크기·자세": "근거 없음 (사진 없음 → 받침대 + 이목구비 없는 매끈한 고전 흉상, 실물 크기)",
+    "주변": "정사영상: 나무 아래, 옆에 OSM 기념 공간(27번)",
+    "재료": "근거 없음 (청동색 기본값)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 6번 칸)"
+   ],
+   "material": null,
+   "color": "#5b5a4f"
+  },
+  {
+   "no": 7,
+   "name": "피어나다",
+   "osm": "n10271624785",
+   "tags": {
+    "artwork_type": "installation",
+    "name": "피어나다",
+    "name:en": "Bloom",
+    "name:ko": "피어나다",
+    "tourism": "artwork"
+   },
+   "p": [
+    -15.4,
+    462.1
+   ],
+   "form": "installation",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "위치·크기·색": "정사영상: 잔디밭에 지름 약 3.5m로 노랑·주황·흰 작은 조각들이 모여 있음",
+    "형태·높이": "근거 없음 (낮은 꽃잎 모양 덩이로 단순화)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 7번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0",
+   "d": 3.5,
+   "pieceColors": [
+    "#dcb786",
+    "#cca87e"
+   ]
+  },
+  {
+   "no": 8,
+   "name": "용봉탑",
+   "osm": "n10271663903",
+   "tags": {
+    "artwork_type": "installation",
+    "name": "용봉탑",
+    "name:en": "Yongbong Tower",
+    "name:ko": "용봉탑",
+    "tourism": "artwork"
+   },
+   "p": [
+    116.3,
+    185.2
+   ],
+   "form": "tower",
+   "grade": "확실(사진)",
+   "evidence": {
+    "형태·재료·색": "위키미디어 공용 \"CNU Yongbong Tower.JPG\" (Wikicnu, CC BY 3.0, 2010) — 높은 흰 돌 받침(위에 비스듬한 돌 판) 위 짙은 청동 몸체(둥근 마디가 엉킨 모양), 꼭대기에 목이 길고 꼬리 깃이 부채처럼 펼쳐진 새. 색은 사진 픽셀",
+    "위치": "정사영상: OSM 점에서 서쪽 5m에 밝은 받침",
+    "높이": "추정(사진) — 받침 폭 약 3.6m를 자로 삼은 사진 비례: 받침 약 6m, 청동 몸체 약 8.6m, 새 약 2m, 전체 약 17m",
+    "넣지 않은 것": "사진 속 받침 앞 낮은 비스듬한 돌 벽은 정확한 자리를 몰라 넣지 않음",
+    "표현": "몸체의 인물 모양은 얼굴 없이 둥근 마디 기둥으로 단순화"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_1.png 8번 칸)",
+    "위키미디어 공용 \"CNU Yongbong Tower.JPG\" (Wikicnu, CC BY 3.0, 2010)"
+   ],
+   "material": "bronze",
+   "color": "#404848",
+   "height": 17,
+   "baseColor": "#b2afa4"
+  },
+  {
+   "no": 9,
+   "name": "김남주 시비",
+   "osm": "n10289009803",
+   "tags": {
+    "historic": "memorial",
+    "inscription": "함께 가자 우리 이 길을",
+    "material": "metal",
+    "memorial": "stone",
+    "name": "김남주 시비",
+    "name:en": "Poetry of Kim Nam-ju",
+    "name:ko": "김남주 시비"
+   },
+   "p": [
+    -48.2,
+    -15.0
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "위치": "정사영상: OSM 점 서쪽 2m에 약 1.2m 크기 갈색 물체",
+    "재료": "OSM material=metal",
+    "형태·높이": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 1번 칸)"
+   ],
+   "material": "metal",
+   "color": "#5b5a4f"
+  },
+  {
+   "no": 10,
+   "name": "광주민중항쟁도",
+   "osm": "n10290650730",
+   "tags": {
+    "artwork_type": "mural",
+    "image": "https://518trail.jnu.ac.kr/images/sub/sub0207_01.jpg",
+    "name": "광주민중항쟁도",
+    "name:en": "Painting of the Democratic Uprising",
+    "name:ko": "광주민중항쟁도",
+    "tourism": "artwork",
+    "website": "https://518trail.jnu.ac.kr/SubPage.aspx?PageCode=K20700"
+   },
+   "p": [
+    117.9,
+    -108.6
+   ],
+   "form": "mural",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류": "OSM artwork_type=mural (건물 벽 옆)",
+    "그림·크기": "근거 없음 (안내 사이트는 robots.txt로 막혀 보지 않음)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 2번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0"
+  },
+  {
+   "no": 11,
+   "name": "사범대학 교육목표",
+   "osm": "n10291816047",
+   "tags": {
+    "historic": "memorial",
+    "inscription": "지성과 덕성으로 미래 교육을 선도할 교사 양성",
+    "material": "stone",
+    "memorial": "stone",
+    "name": "사범대학 교육목표",
+    "name:en": "College of Education Mission Stone",
+    "name:ko": "사범대학 교육목표"
+   },
+   "p": [
+    122.9,
+    -208.4
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "재료": "OSM material=stone, memorial=stone",
+    "형태·크기": "근거 없음 (정사영상의 흰 상자 모양이 비석인지 설비인지 확실하지 않아 쓰지 않음)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 3번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 12,
+   "name": "문인상",
+   "osm": "n10310832460",
+   "tags": {
+    "artwork_type": "statue",
+    "material": "stone",
+    "name": "문인상",
+    "name:en": "Literary Person",
+    "name:ko": "문인상",
+    "tourism": "artwork"
+   },
+   "p": [
+    181.2,
+    158.9
+   ],
+   "form": "stoneFigure",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류·재료": "OSM artwork_type=statue, material=stone",
+    "형태·크기": "근거 없음 (정사영상에서 1m 남짓한 회색 물체만 보임)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 4번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 13,
+   "name": "석인상",
+   "osm": "n10310832463",
+   "tags": {
+    "artwork_type": "statue",
+    "name": "석인상",
+    "name:en": "Stone Statue",
+    "name:ko": "석인상",
+    "tourism": "artwork"
+   },
+   "p": [
+    180.5,
+    174.7
+   ],
+   "form": "stoneFigure",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류": "OSM artwork_type=statue",
+    "재료·형태·크기": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 5번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0"
+  },
+  {
+   "no": 14,
+   "name": "석장승",
+   "osm": "n10310832464",
+   "tags": {
+    "artwork_type": "statue",
+    "material": "stone",
+    "name": "석장승",
+    "name:en": "Stone Totem Pole",
+    "name:ko": "석장승",
+    "tourism": "artwork"
+   },
+   "p": [
+    220.9,
+    197.2
+   ],
+   "form": "jangseung",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류·재료": "OSM artwork_type=statue, material=stone, 이름 석장승",
+    "형태·크기": "근거 없음 (정사영상에서 작은 회색 물체만 보임)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 6번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 15,
+   "name": "석장승",
+   "osm": "n10310832468",
+   "tags": {
+    "artwork_type": "statue",
+    "material": "stone",
+    "name": "석장승",
+    "name:en": "Stone Totem Pole",
+    "name:ko": "석장승",
+    "tourism": "artwork"
+   },
+   "p": [
+    212.1,
+    193.5
+   ],
+   "form": "jangseung",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류·재료": "OSM artwork_type=statue, material=stone, 이름 석장승",
+    "형태·크기": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 7번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 16,
+   "name": "공과대학 교육목표",
+   "osm": "n10310865058",
+   "tags": {
+    "historic": "memorial",
+    "inscription": "기술로 세계로 미래로",
+    "material": "stone",
+    "memorial": "stone",
+    "name": "공과대학 교육목표",
+    "name:en": "College of Engineering Mission Stone",
+    "name:ko": "공과대학 교육목표"
+   },
+   "p": [
+    451.2,
+    -271.1
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "바닥": "정사영상: 지름 약 10.5m 원형 포장에 동심원 띠 3개, 가운데 약 2m 물체",
+    "재료": "OSM material=stone",
+    "비석 형태·높이": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_2.png 8번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0",
+   "plaza": {
+    "shape": "rings",
+    "d": 10.5,
+    "rings": [
+     5.2,
+     3.6,
+     2.2
+    ],
+    "color": "#ad8a83",
+    "ringColor": "#a5857d"
+   }
+  },
+  {
+   "no": 17,
+   "name": "",
+   "osm": "n10562957650",
+   "tags": {
+    "artwork_type": "sculpture",
+    "tourism": "artwork"
+   },
+   "p": [
+    586.5,
+    122.0
+   ],
+   "form": "sculpture",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "받침": "정사영상: 붉은 벽돌 포장 광장 안 지름 약 4.2m 원형 받침",
+    "종류": "OSM artwork_type=sculpture",
+    "형태·재료·높이": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_3.png 1번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0",
+   "base": {
+    "shape": "round",
+    "d": 4.2,
+    "h": 0.5,
+    "color": "#c8c4bd"
+   }
+  },
+  {
+   "no": 18,
+   "name": "도시의 찬가",
+   "osm": "n10564450264",
+   "tags": {
+    "artist_name": "최규철",
+    "artwork_type": "sculpture",
+    "material": "stone",
+    "name": "도시의 찬가",
+    "name:en": "Panegyric of City",
+    "name:ko": "도시의 찬가",
+    "tourism": "artwork"
+   },
+   "p": [
+    684.7,
+    319.4
+   ],
+   "form": "sculpture",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류·재료": "OSM artwork_type=sculpture, material=stone (작가 최규철)",
+    "형태·크기": "근거 없음 (정사영상에서 식별 안 됨)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_3.png 2번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 19,
+   "name": "노벨 흉상",
+   "osm": "n10824990920",
+   "tags": {
+    "artwork_type": "bust",
+    "name": "노벨 흉상",
+    "name:en": "Chonnam National University Alfred Nobel bust",
+    "tourism": "artwork"
+   },
+   "p": [
+    518.7,
+    51.0
+   ],
+   "form": "bust",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류": "OSM artwork_type=bust",
+    "재료·크기": "근거 없음 (사진 없음 → 받침대 + 이목구비 없는 매끈한 고전 흉상)",
+    "재료": "근거 없음 (청동색 기본값)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_3.png 3번 칸)"
+   ],
+   "material": null,
+   "color": "#5b5a4f"
+  },
+  {
+   "no": 20,
+   "name": "",
+   "osm": "n12728259055",
+   "tags": {
+    "artwork_type": "sculpture",
+    "tourism": "artwork"
+   },
+   "p": [
+    189.3,
+    -394.1
+   ],
+   "form": "sculpture",
+   "grade": "근거 없음",
+   "evidence": {
+    "종류": "OSM artwork_type=sculpture (이름 없음)",
+    "형태": "근거 없음 (나무에 가림)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)"
+   ],
+   "material": null,
+   "color": "#cfcac0"
+  },
+  {
+   "no": 21,
+   "name": "",
+   "osm": "n13879947560",
+   "tags": {
+    "artwork_type": "sculpture",
+    "tourism": "artwork"
+   },
+   "p": [
+    634.3,
+    149.9
+   ],
+   "form": "sculpture",
+   "grade": "근거 없음",
+   "evidence": {
+    "종류": "OSM artwork_type=sculpture (이름 없음)",
+    "형태": "근거 없음 (나무·주차장)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)"
+   ],
+   "material": null,
+   "color": "#cfcac0"
+  },
+  {
+   "no": 22,
+   "name": "참교육",
+   "osm": "n14012158996",
+   "tags": {
+    "historic": "memorial",
+    "inscription": "참교육",
+    "material": "stone",
+    "memorial": "stone",
+    "name": "참교육"
+   },
+   "p": [
+    121.7,
+    -190.7
+   ],
+   "form": "stele",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "재료·글자": "OSM material=stone, inscription 있음(게임에 넣지 않음)",
+    "형태·크기": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_3.png 6번 칸)"
+   ],
+   "material": "stone",
+   "color": "#cfcac0"
+  },
+  {
+   "no": 23,
+   "name": "남강 최상채 박사 동상",
+   "osm": "n14012248529",
+   "tags": {
+    "artist_name": "김행신",
+    "artwork_type": "statue",
+    "material": "metal",
+    "name": "남강 최상채 박사 동상",
+    "name:en": "Dr. Sang-chae Choi",
+    "tourism": "artwork"
+   },
+   "p": [
+    103.2,
+    124.8
+   ],
+   "form": "statue",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "종류·재료": "OSM artwork_type=statue, material=metal (작가 김행신)",
+    "자세·크기": "근거 없음 (사진 없음 → 받침대 + 긴 외투를 입고 선 매끈한 동상, 사람 키, 이목구비 없음)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_3.png 7번 칸)"
+   ],
+   "material": "metal",
+   "color": "#5b5a4f"
+  },
+  {
+   "no": 24,
+   "name": "",
+   "osm": "w1125454148",
+   "tags": {
+    "artwork_type": "mural",
+    "tourism": "artwork"
+   },
+   "p": [
+    179.5,
+    -379.5
+   ],
+   "form": "mural",
+   "grade": "근거 없음",
+   "evidence": {
+    "종류": "OSM artwork_type=mural (선 3점, 이름 없음)",
+    "그림": "근거 없음 (나무에 가림)"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)"
+   ],
+   "material": null,
+   "color": "#cfcac0"
+  },
+  {
+   "no": 25,
+   "name": "",
+   "osm": "w1128214515",
+   "tags": {
+    "historic": "memorial"
+   },
+   "p": [
+    572.9,
+    -297.2
+   ],
+   "form": "plaza",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "바닥": "OSM 외곽선 + 정사영상: 지름 약 7m 둥근 화단 섬, 안에 작은 흰 물체들",
+    "기념물 형태": "근거 없음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_4.png 1번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0",
+   "plaza": {
+    "shape": "osm",
+    "outline": [
+     [
+      577.47,
+      -295.61
+     ],
+     [
+      577.72,
+      -297.17
+     ],
+     [
+      577.46,
+      -298.73
+     ],
+     [
+      576.71,
+      -300.12
+     ],
+     [
+      575.55,
+      -301.2
+     ],
+     [
+      574.1,
+      -301.85
+     ],
+     [
+      572.53,
+      -301.98
+     ],
+     [
+      571.0,
+      -301.6
+     ],
+     [
+      569.65,
+      -300.74
+     ],
+     [
+      568.66,
+      -299.49
+     ],
+     [
+      568.13,
+      -297.97
+     ],
+     [
+      568.13,
+      -296.38
+     ],
+     [
+      568.65,
+      -294.87
+     ],
+     [
+      569.63,
+      -293.61
+     ],
+     [
+      570.97,
+      -292.74
+     ],
+     [
+      572.53,
+      -292.35
+     ],
+     [
+      574.12,
+      -292.5
+     ],
+     [
+      575.57,
+      -293.14
+     ],
+     [
+      576.72,
+      -294.22
+     ],
+     [
+      577.47,
+      -295.61
+     ]
+    ],
+    "color": "#837c7d",
+    "innerColor": "#807a7a"
+   }
+  },
+  {
+   "no": 26,
+   "name": "",
+   "osm": "w1373562998",
+   "tags": {
+    "historic": "memorial"
+   },
+   "p": [
+    286.0,
+    -136.0
+   ],
+   "form": "plaza",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "바닥": "OSM 외곽선 + 정사영상: 둥근 잔디 둘레의 포장 고리",
+    "기념물 형태": "근거 없음",
+    "바닥 색": "정사영상 색이 잔디·나무 그늘(초록 또는 어두움)인 곳은 포장으로 칠하지 않음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_4.png 2번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0",
+   "plaza": {
+    "shape": "osm",
+    "outline": [
+     [
+      295.35,
+      -142.4
+     ],
+     [
+      295.29,
+      -128.66
+     ],
+     [
+      280.2,
+      -128.8
+     ],
+     [
+      274.37,
+      -135.72
+     ],
+     [
+      278.85,
+      -143.45
+     ],
+     [
+      295.35,
+      -142.4
+     ]
+    ],
+    "color": null,
+    "innerColor": null
+   }
+  },
+  {
+   "no": 27,
+   "name": "",
+   "osm": "w1376385757",
+   "tags": {
+    "historic": "memorial"
+   },
+   "p": [
+    -38.0,
+    187.0
+   ],
+   "form": "plaza",
+   "grade": "준확실(정사영상·태그)",
+   "evidence": {
+    "바닥": "OSM 외곽선 + 정사영상: 윤상원 열사 흉상 옆 포장 공간, 둥근 화분 여러 개",
+    "기념물 형태": "근거 없음",
+    "바닥 색": "정사영상 색이 잔디·나무 그늘(초록 또는 어두움)인 곳은 포장으로 칠하지 않음"
+   },
+   "source": [
+    "OpenStreetMap 태그 (ODbL)",
+    "국토지리정보원 정사영상 2025 (ref/monuments/sheet_4.png 3번 칸)"
+   ],
+   "material": null,
+   "color": "#cfcac0",
+   "plaza": {
+    "shape": "osm",
+    "outline": [
+     [
+      -36.17,
+      191.11
+     ],
+     [
+      -35.0,
+      190.34
+     ],
+     [
+      -34.12,
+      189.24
+     ],
+     [
+      -33.64,
+      187.92
+     ],
+     [
+      -33.59,
+      186.51
+     ],
+     [
+      -33.98,
+      185.16
+     ],
+     [
+      -34.76,
+      184.0
+     ],
+     [
+      -35.88,
+      183.15
+     ],
+     [
+      -37.2,
+      182.68
+     ],
+     [
+      -38.74,
+      182.67
+     ],
+     [
+      -40.18,
+      183.17
+     ],
+     [
+      -41.36,
+      184.14
+     ],
+     [
+      -42.16,
+      185.45
+     ],
+     [
+      -42.46,
+      186.95
+     ],
+     [
+      -42.22,
+      188.47
+     ],
+     [
+      -41.49,
+      189.83
+     ],
+     [
+      -40.35,
+      190.84
+     ],
+     [
+      -38.93,
+      191.41
+     ],
+     [
+      -37.52,
+      191.48
+     ],
+     [
+      -36.17,
+      191.11
+     ]
+    ],
+    "color": null,
+    "innerColor": "#8a897b"
+   }
+  }
+ ]
+}

@@ -332,6 +332,7 @@ export class Walker {
     this.hit = 0;
     const n = this.collider.resolve(this.pos, WALK.radius);
     if (n) this.pushBack(n);
+    if (n && this.collider.lastQuiet) this.hit = 0; // 기념물에는 꽈당 같은 웃긴 반응 없이 조용히 멈춤
     const m = this.pushOutOfCar();
     if (m) this.pushBack(m);
     if (this.running && this.hit > CUTE.fallHit && !this.busy) this.startFall(); // 달리다 세게 부딪히면 꽈당
