@@ -2,13 +2,14 @@
 // 연출(공대 2호관 입구로 날아감 → 교수님 등장·대사 → 천천히 위로 올라가 캠퍼스 전체 → 미션 장소 5곳이 차례로 떠오름
 //      → 정문 굴착기로 천천히 내려옴 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
 // → 미션들 → 공과대 2호관 도착 → 교수님 판정(A+ / F) → 결과.
+// 시간이 0이 되면 그 자리에서 "시간 초과!"(약 1초) → 바로 교수님 F 연출 → 결과.
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
 import { MISSIONS } from './missions-data.js';
 import { DIALOGUE, SPEAKER } from './dialogue-data.js';
 import { Professor, SpeechBubble } from './professor.js';
 import { PROFESSOR } from './professor-config.js';
-import { playDing, playBeep, playMissionRise, playCharge } from './voice.js';
+import { playDing, playBeep, playMissionRise, playCharge, playWarn } from './voice.js';
 
 // 제한 시간(초). 참고: 차도 최단 경로는 3,861m라 부스터와 지름길이 필요하다
 export const TIME_LIMIT = 180;
@@ -17,6 +18,8 @@ const MISSION_SECONDS = 2;  // E를 누른 뒤 진행 막대 시간
 const STOP_KMH = 3;         // 이보다 느리면 멈춘 것으로 본다
 const BOOST_REWARD = 0.5;   // 미션 완료 시 부스터 게이지 보충량
 const GO_SHOW = 0.8;        // "GO!" 글자가 떠 있는 시간
+const TIMEUP_SHOW = 1.0;    // "시간 초과!" 글자를 보여 주는 시간 (그동안 굴착기는 부드럽게 멈춤)
+const WARN_FROM = 10;       // 남은 시간이 이 초 이하이면 1초마다 경고음
 
 // 연출 길이(초). 대사 3줄(약 7초)과 카운트다운 3초를 더해 전체 25초 안쪽.
 // 멀미 방지: 모든 이동은 ease-in-out, 카메라는 기울지 않고(수평선 유지) 시야각(FOV)도 그대로, 빠른 회전 없음
@@ -37,7 +40,7 @@ const CINE = {
 export class LateMode {
   constructor({ scene, car, hud, campus, camera, rig, trees }) {
     Object.assign(this, { car, hud, campus, camera, rig });
-    this.state = 'off'; // off | intro | countdown | playing | mission | paused | outro | result
+    this.state = 'off'; // off | intro | countdown | playing | mission | timeup | paused | outro | result
     this.targets = MISSIONS.map((m) => {
       const b = campus.buildings.find((x) => x.name === m.building);
       if (!b) console.warn('미션 건물을 찾지 못함:', m.building);
@@ -99,6 +102,8 @@ export class LateMode {
     this.index = 0;
     this.elapsed = 0;
     this.goTimer = 0;
+    this.timedOut = false;
+    this.lastWarn = null;
     this.hud.setLateMode(true);
     this.hud.setCinematic(true);
     this.hud.showPause(false);
@@ -223,9 +228,14 @@ export class LateMode {
       if (this.goTimer <= 0) this.hud.showCountdown(null);
     }
 
+    if (this.state === 'timeup') return this.updateTimeUp(dt);
     if (this.state === 'playing' || this.state === 'mission') {
       this.elapsed += dt;
-      this.hud.setTimer(TIME_LIMIT - this.elapsed);
+      const left = TIME_LIMIT - this.elapsed;
+      this.hud.setTimer(left);
+      if (left <= 0) return this.timeUp();
+      const sec = Math.ceil(left);
+      if (sec <= WARN_FROM && sec !== this.lastWarn) { this.lastWarn = sec; playWarn(); } // 마지막 10초: 1초마다 경고음
       const dist = this.distToTarget();
       const t = this.target;
       if (this.state === 'playing') {
@@ -381,14 +391,36 @@ export class LateMode {
     setTimeout(() => { if (this.state !== 'mission') this.hud.showProgress(null); }, 1200); // 대사를 잠깐 보여 주고 닫기
   }
 
+  // ---------- 시간 초과 → 바로 실패 ----------
+
+  timeUp() {
+    this.elapsed = TIME_LIMIT;
+    this.timedOut = true;
+    this.state = 'timeup'; // 입력 막힘(굴착기는 멈춰 감), 미션 진행도 취소
+    this.timeUpT = 0;
+    this.hud.setTimer(0);
+    this.hud.setHint(null);
+    this.hud.showProgress(null);
+    this.hud.updateTarget(this.camera, null);
+    this.hud.showCountdown('시간 초과!', 'timeup');
+    playBeep(true);
+  }
+
+  updateTimeUp(dt) {
+    this.timeUpT += dt;
+    this.car.vel.multiplyScalar(Math.exp(-dt * 3.5)); // 부드럽게 감속
+    if (this.timeUpT >= TIMEUP_SHOW) this.finish();
+  }
+
   // ---------- 도착 → 판정 ----------
 
   finish() {
     this.remaining = TIME_LIMIT - this.elapsed;
-    this.success = this.remaining >= 0;
+    this.success = !this.timedOut && this.remaining >= 0;
+    this.done = this.timedOut ? this.index : this.targets.length; // 완료한 미션 수 (마지막 도착 포함)
     this.state = 'outro';
     this.car.vel.set(0, 0);
-    this.hud.setMissions(this.targets, this.targets.length); // 목록 전부 체크
+    if (!this.timedOut) this.hud.setMissions(this.targets, this.targets.length); // 목록 전부 체크
     this.hud.setHint(null);
     this.hud.showCountdown(null);
     this.hud.updateTarget(this.camera, null);
@@ -425,7 +457,8 @@ export class LateMode {
     this.state = 'result';
     this.professor.talking = false;
     if (this.success) playDing();
-    this.hud.showResult({ grade: this.success ? 'A+' : 'F', elapsed: this.elapsed, remaining: this.remaining });
+    this.hud.showResult({ grade: this.success ? 'A+' : 'F', elapsed: this.elapsed, remaining: this.remaining,
+      done: this.done, total: this.targets.length, timedOut: this.timedOut });
   }
 
   // ---------- 도우미 ----------
