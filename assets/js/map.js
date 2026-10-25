@@ -610,6 +610,27 @@ function courtLines(b, g, color) {
 
 // ---------- 건물 ----------
 
+// 밤(T): 외관 텍스처의 창(푸르스름한 칸) 중 약 1/3만 따뜻하게 스스로 빛남. 조명·빛 번짐·새 텍스처 없이 셰이더에서
+// 칸 번호(텍스처 반복 칸)로 고른다. NIGHT.value 0 = 낮(그대로), 1 = 밤
+const NIGHT = { value: 0 };
+export function setWindowGlow(v) { NIGHT.value = v; }
+function nightWindows(mat) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uNight = NIGHT;
+    shader.fragmentShader = 'uniform float uNight;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      #ifdef USE_MAP
+      if (uNight > 0.0) {
+        float wmask = smoothstep(0.1, 0.16, sampledDiffuseColor.b - sampledDiffuseColor.r); // 창 유리 그림(b−r 약 0.18~0.2)만, 벽 재료 무늬는 빼고
+        vec2 cell = floor(vMapUv + 0.001);
+        float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453); // 칸 번호만 (벽 아래 음영 정점 색은 화소마다 바뀌어 반짝임이 생김)
+        totalEmissiveRadiance += uNight * wmask * step(h, 0.32) * vec3(1.0, 0.78, 0.46) * (0.75 + 0.25 * fract(h * 7.0));
+      }
+      #endif`);
+  };
+  mat.customProgramCacheKey = () => 'night-windows';
+  return mat;
+}
+
 // 외관 텍스처: 한 칸 = 가로 3m(bay) × 한 층. 재료 무늬 × 창 형태(개별창/띠창/전면유리) × 층 띠. 색은 정점 색(외벽색)과 곱해진다
 const textureCache = new Map();
 function facadeTexture(key, anisotropy) {
@@ -859,8 +880,8 @@ function buildBuildings(list, anisotropy) {
     const glass = key.startsWith('커튼월') || key.includes('전면유리');
     const map = facadeTexture(key, anisotropy);
     // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임
-    const mat = glass ? new THREE.MeshPhongMaterial({ vertexColors: true, map, shininess: 90, specular: '#ffffff' })
-      : new THREE.MeshLambertMaterial({ vertexColors: true, map });
+    const mat = nightWindows(glass ? new THREE.MeshPhongMaterial({ vertexColors: true, map, shininess: 90, specular: '#ffffff' })
+      : new THREE.MeshLambertMaterial({ vertexColors: true, map }));
     return new THREE.Mesh(w.geometry(), mat);
   });
   meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
@@ -1056,6 +1077,14 @@ const TREE = {
   perArea: { forest: 80, park: 260, grass: 450 }, // 나무 한 그루당 넓이 (m²)
   max: 7000,
 };
+// 계절 수관 색 (null = 여름 색 그대로). 침엽수는 겨울에만 눈 빛을 섞음
+const SEASON = {
+  spring: { broad: ['#f6b8cc', '#f9d0dc', '#f2a9c0', null, '#a8d46e', null, '#b5dc7c'] },
+  autumn: { broad: ['#e0802b', '#d4562a', '#e8b232', '#c8692e', '#b84a2a', '#a8a03a', '#e39a2c'] },
+  winter: { broad: ['#e9eef2', '#dfe6ea', '#a39888', '#e4eaee', '#9c8f84'], conifer: ['#eef3f6', '#e2e9ee', null] },
+};
+const seasonColor = new THREE.Color();
+const seasonRand = (x, z) => { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); };
 const CROWN_COLORS = ['#5f9e4a', '#6fae52', '#4f8c42', '#7db85a', '#5a9550', '#86b85e', '#4a7f3e', '#6a9a48'];
 // 나무 종류 (모양·크기·색 변형, 근거 없음: 시각적 다양성용 임의 비율). 진입로 가로수는 landscape.js에서 따로
 // [이름, 차도 옆 비율, 공원·잔디 비율, 숲 비율]
@@ -1200,6 +1229,26 @@ function buildTrees(campus) {
     setDensity(f) { density = f; refresh(); },
     // 가벼운 모드: 둥근 활엽수만 남기고 다른 종류(넓은 활엽수·관목·침엽수)와 그 줄기는 숨김
     setVariety(on) { variety = on; refresh(); },
+    // 계절(Y): 수관 색만 바꿈. spring 벚꽃(활엽수 일부 분홍) | summer 원래 | autumn 단풍 | winter 눈 덮인 가지
+    setSeason(name) {
+      for (const [mesh, list] of meshes.slice(1)) {
+        if (!mesh.instanceColor) continue;
+        if (!mesh.userData.summer) mesh.userData.summer = mesh.instanceColor.array.slice();
+        const base = mesh.userData.summer, arr = mesh.instanceColor.array;
+        list.forEach((t, i) => {
+          const conifer = t[3] === 'cone' || t[3] === 'slim', r = seasonRand(t[0], t[1]);
+          color.setRGB(base[i * 3], base[i * 3 + 1], base[i * 3 + 2]);
+          const pal = SEASON[name];
+          if (pal && !(conifer && name !== 'winter')) {
+            const c = conifer ? pal.conifer : pal.broad;
+            const pick = c[Math.floor(r * c.length)];
+            if (pick) color.lerp(seasonColor.set(pick), conifer ? 0.45 : 0.9);
+          }
+          arr[i * 3] = color.r; arr[i * 3 + 1] = color.g; arr[i * 3 + 2] = color.b;
+        });
+        mesh.instanceColor.needsUpdate = true;
+      }
+    },
     // (x, z) 둘레 r 안의 나무를 없앤다 (연출 카메라를 가리지 않게)
     clearAround(x, z, r) {
       const zero = new THREE.Matrix4().makeScale(0, 0, 0);

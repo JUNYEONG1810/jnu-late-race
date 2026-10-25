@@ -149,7 +149,9 @@ function buildAvenue(campus, barrierAt) {
   trunks.castShadow = crowns.castShadow = true;
   const group = new THREE.Group();
   group.add(trunks, crowns);
-  return { group, spots };
+  // 계절(Y): 진입로 가로수 수관 색 (봄 벚꽃 · 여름 · 가을 단풍 · 겨울 눈)
+  const SEASON_COLOR = { spring: '#f3b7c9', summer: '#4f8a42', autumn: '#d9822f', winter: '#dfe5e8' };
+  return { group, spots, setSeason(name) { crowns.material.color.set(SEASON_COLOR[name] || SEASON_COLOR.summer); } };
 }
 
 // ---------- 주차 차단기 ----------

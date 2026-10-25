@@ -1,6 +1,6 @@
 // 시작(첫 화면), 화면 구성, 입력, 소리, 게임 루프.
 import * as THREE from 'three';
-import { loadCampus, buildMap, placeSpawnAtGate } from './map.js';
+import { loadCampus, buildMap, placeSpawnAtGate, setWindowGlow } from './map.js';
 import { buildLandscape, removeReplacedBuildings } from './landscape.js';
 import { loadTerrain, heightAt, flattenWater } from './terrain.js';
 import { Car, Collider } from './car.js';
@@ -54,7 +54,8 @@ scene.fog = new THREE.FogExp2(SKY_HORIZON, 0.000105);
 
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 22000);
 
-scene.add(new THREE.HemisphereLight('#d9ebff', '#b3ab98', 1.55)); // 하늘빛(위) · 땅에서 튀는 빛(아래)
+const hemi = new THREE.HemisphereLight('#d9ebff', '#b3ab98', 1.55); // 하늘빛(위) · 땅에서 튀는 빛(아래)
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(SUN_COLOR, 2.35);
 const SUN_OFFSET = SUN_DIR.clone().multiplyScalar(170);
 sun.shadow.mapSize.set(1024, 1024); // 2048 → 1024: 그림자 맵 메모리 1/4 (품질 높음에서만 그림자)
@@ -174,6 +175,8 @@ addEventListener('keydown', (e) => {
     else if (e.code === 'Enter') startFree();
     return;
   }
+  if (e.code === 'KeyT') cycleLook('time');   // 시간대: 아침 → 낮 → 노을 → 밤
+  if (e.code === 'KeyY') cycleLook('season'); // 계절: 봄 → 여름 → 가을 → 겨울
   if (e.code === 'KeyC') hud.toast(`시점: ${walker?.active ? rig.nextWalkMode().label : rig.nextMode().label}`);
   if (e.code === 'KeyP' && (!lateMode?.active || lateMode.state === 'result')) { setPhoto(true); return; }
   if (walker?.active) {
@@ -600,6 +603,59 @@ function wrapText(g, text, x, y, maxW, lh) {
 }
 document.getElementById('res-save').addEventListener('click', (e) => { e.currentTarget.blur(); saveResultImage(); });
 
+// ---------- 시간대(T)·계절(Y): 색만 바꿈 (빛을 더하거나 빛 번짐 없이). 지각 모드는 언제나 아침 ----------
+const TIMES = {
+  morning: { label: '🌅 아침', top: '#5ea8ec', horizon: '#e6f1fb', sun: '#ffeccf', sunI: 2.35, glow: '#fff1d6', hemiSky: '#d9ebff', hemiGround: '#b3ab98', hemiI: 1.55, night: 0 },
+  day: { label: '☀️ 낮', top: '#3d8be0', horizon: '#d9ecfd', sun: '#ffffff', sunI: 2.6, glow: '#ffffff', hemiSky: '#e4f1ff', hemiGround: '#b8b29f', hemiI: 1.65, night: 0 },
+  sunset: { label: '🌇 노을', top: '#4b5f9c', horizon: '#ffb27a', sun: '#ff9d5c', sunI: 1.9, glow: '#ff9a5a', hemiSky: '#ffcaa3', hemiGround: '#8a7062', hemiI: 1.2, night: 0.25 },
+  night: { label: '🌙 밤', top: '#0b1630', horizon: '#23345c', sun: '#8ea6dc', sunI: 0.5, glow: '#cfd8ff', hemiSky: '#4a5f8f', hemiGround: '#2a2f3a', hemiI: 0.75, night: 1 },
+};
+const TIME_ORDER = ['morning', 'day', 'sunset', 'night'];
+const SEASONS = { spring: '🌸 봄', summer: '🌳 여름', autumn: '🍁 가을', winter: '❄️ 겨울' };
+const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'];
+const look = { time: 'morning', season: 'summer', appliedTime: null };
+try {
+  const t = localStorage.getItem('timeOfDay'), s = localStorage.getItem('season');
+  if (TIMES[t]) look.time = t;
+  if (SEASONS[s]) look.season = s;
+} catch {}
+function applyTime(name) {
+  const P = TIMES[name];
+  look.appliedTime = name;
+  const u = sky.material.uniforms;
+  u.top.value.set(P.top);
+  u.horizon.value.set(P.horizon);
+  u.sunColor.value.set(P.glow);
+  scene.fog.color.set(P.horizon);
+  sun.color.set(P.sun);
+  sun.intensity = P.sunI;
+  hemi.color.set(P.hemiSky);
+  hemi.groundColor.set(P.hemiGround);
+  hemi.intensity = P.hemiI;
+  setWindowGlow(P.night);
+}
+function cycleLook(kind) {
+  if (kind === 'time') {
+    if (lateMode?.active) { hud.toast('지각 모드는 언제나 아침이에요', 1500); return; }
+    look.time = TIME_ORDER[(TIME_ORDER.indexOf(look.time) + 1) % TIME_ORDER.length];
+    hud.toast(`시간대: ${TIMES[look.time].label}`, 1500);
+  } else {
+    look.season = SEASON_ORDER[(SEASON_ORDER.indexOf(look.season) + 1) % SEASON_ORDER.length];
+    applySeason(look.season);
+    hud.toast(`계절: ${SEASONS[look.season]}`, 1500);
+  }
+  try { localStorage.setItem('timeOfDay', look.time); localStorage.setItem('season', look.season); } catch {}
+}
+function applySeason(name) { // 캠퍼스 나무 + 진입로 가로수
+  world.trees.setSeason(name);
+  world.landscape.avenue.setSeason?.(name);
+}
+// 매 프레임: 지각 모드면 아침, 아니면 고른 시간대 (바뀔 때만 칠함)
+function updateLook() {
+  const want = lateMode?.active ? 'morning' : look.time;
+  if (want !== look.appliedTime) applyTime(want);
+}
+
 let walkingUi = false;
 function setWalkingUi(on) {
   if (on === walkingUi) return;
@@ -765,6 +821,7 @@ async function start() {
 
   setQuality(quality);
   applyLight();
+  if (look.season !== 'summer') applySeason(look.season);
   updateTitleCamera(0);
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
@@ -893,6 +950,7 @@ function loop() {
 
   setWalkingUi(walking);
   updateMusicAndClock(dt);
+  updateLook();
   hud.updatePhone();
   hud.setWalkHint(walking ? (walker.walking && walker.nearCar() ? 'near' : 'far') : null);
   hud.setSpeed(walking ? walker.speed * 3.6 : car.speedKmh);
