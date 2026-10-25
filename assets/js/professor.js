@@ -1,6 +1,7 @@
 // 교수님: 도형으로 만든 3등신 캐릭터. 몸 위에 셔츠·배바지·재킷을 따로 만든 껍데기로 입힌다.
 // 뒤뚱 걷기·숨쉬기·말할 때 몸짓, 그리고 말풍선. 캐릭터의 앞은 로컬 +z.
 import * as THREE from 'three';
+import { heightAt } from './terrain.js';
 import { PROFESSOR as P } from './professor-config.js';
 import { speak } from './voice.js';
 
@@ -275,7 +276,7 @@ export class Professor {
 
   // 위치 (x, z)와 바라보는 방향 (dx, dz)
   place(x, z, dx, dz) {
-    this.object.position.set(x, 0, z);
+    this.object.position.set(x, heightAt(x, z), z);
     this.face(dx, dz);
   }
 

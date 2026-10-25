@@ -1,6 +1,7 @@
 // 미니 굴착기(미니 포크레인) 모델, 아케이드 주행, 부스터 게이지, 건물 충돌.
 // 차량의 앞은 로컬 +z. heading h일 때 앞 방향 = (sin h, cos h) (x 동쪽, z 남쪽).
 import * as THREE from 'three';
+import { heightAt } from './terrain.js';
 
 export const DRIVE = {
   maxSpeed: 60 / 3.6,    // 기본 최고 속도 (m/s)
@@ -17,6 +18,15 @@ export const DRIVE = {
   radius: 1.9,           // 충돌 원 반지름 (m) — 앞으로 뻗은 팔까지 덮도록
   radiusOffset: 0.5,     // 충돌 원 중심을 앞으로 옮기는 거리 (m)
   wallMargin: 40,        // 캠퍼스 경계 밖으로 나갈 수 있는 거리 (m)
+};
+
+// 비탈: 궤도 앞뒤·좌우 땅 높이로 몸 전체를 기울이고, 오르막은 살짝 느리게·내리막은 살짝 빠르게
+export const SLOPE = {
+  halfLength: 1.5, // 궤도 앞뒤 끝까지 (m)
+  halfWidth: 1.1,  // 좌우 궤도까지 (m)
+  smooth: 8,       // 기울기가 따라가는 빠르기
+  pull: 4.5,       // 경사 1(45°)일 때 앞뒤로 끌리는 가속도 (m/s²)
+  topSpeed: 1.6,   // 경사 1당 최고 속도 변화 비율 (오르막 -, 내리막 +)
 };
 
 export const BOOST = {
@@ -46,6 +56,8 @@ export class Car {
     this.pos = new THREE.Vector2();
     this.vel = new THREE.Vector2();
     this.heading = 0;
+    this.slope = 0;   // 앞쪽이 높으면 + (높이차 / 거리)
+    this.tilt = { x: 0, z: 0 };
     this.steer = 0;
     this.forwardSpeed = 0;
     this.lateralSpeed = 0;
@@ -181,7 +193,7 @@ export class Car {
     this.pos.set(x, z);
     this.vel.set(0, 0);
     this.heading = Math.atan2(dirX, dirZ);
-    this.syncObject();
+    this.syncObject(true);
   }
 
   get speedKmh() {
@@ -206,7 +218,8 @@ export class Car {
     // 멈춰 있다가 가속을 시작하는 순간 배기구에서 검은 디젤 연기 "푹"
     if (throttle && !this.throttle && Math.abs(fs) < 1) this.puffPending = true;
     this.throttle = throttle;
-    const top = this.boosting ? D.boostSpeed : D.maxSpeed;
+    const slopeK = THREE.MathUtils.clamp(1 - this.slope * SLOPE.topSpeed, 0.85, 1.15);
+    const top = (this.boosting ? D.boostSpeed : D.maxSpeed) * slopeK;
     this.braking = false;
 
     if (throttle) {
@@ -219,6 +232,8 @@ export class Car {
     } else {
       fs -= Math.sign(fs) * Math.min(Math.abs(fs), D.coastDrag * dt);
     }
+
+    if (Math.abs(fs) > 0.3 || throttle) fs -= this.slope * SLOPE.pull * dt; // 멈춰 있을 땐 미끄러지지 않게
 
     this.drifting = input.drift && Math.abs(fs) > 4;
     if (input.drift) {
@@ -266,7 +281,7 @@ export class Car {
     this.lateralSpeed = this.vel.dot(nr);
     this.hitTimer = Math.max(0, this.hitTimer - dt);
     this.animate(dt);
-    this.syncObject();
+    this.syncObject(false, dt);
     this.updateExhaust(dt);
   }
 
@@ -350,9 +365,20 @@ export class Car {
     for (const t of this.tracks) t.instanceMatrix.needsUpdate = true;
   }
 
-  syncObject() {
-    this.object.position.set(this.pos.x, 0, this.pos.y);
-    this.object.rotation.y = this.heading;
+  // 땅 높이에 올려놓고, 궤도 앞뒤·좌우 땅 높이로 기울인다 (snap이면 바로, 아니면 부드럽게)
+  syncObject(snap = false, dt = 1 / 60) {
+    const { x, y: z } = this.pos;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    const L = SLOPE.halfLength, W = SLOPE.halfWidth;
+    const hf = heightAt(x + fx * L, z + fz * L), hb = heightAt(x - fx * L, z - fz * L);
+    const hl = heightAt(x + fz * W, z - fx * W), hr = heightAt(x - fz * W, z + fx * W); // 왼쪽 = 로컬 +x
+    this.slope = (hf - hb) / (2 * L);
+    const pitch = -Math.atan(this.slope), roll = Math.atan((hl - hr) / (2 * W));
+    const k = snap ? 1 : Math.min(1, dt * SLOPE.smooth);
+    this.tilt.x += (pitch - this.tilt.x) * k;
+    this.tilt.z += (roll - this.tilt.z) * k;
+    this.object.position.set(x, heightAt(x, z), z);
+    this.object.rotation.set(this.tilt.x, this.heading, this.tilt.z, 'YXZ');
   }
 }
 

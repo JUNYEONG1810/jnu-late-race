@@ -1,6 +1,9 @@
-// campus.json → 바닥·녹지·도로·건물 3D.
-// 성능을 위해 종류마다 한 덩어리(메시 하나)로 합치고, 색은 정점 색으로 넣는다.
+// campus.json → 지형 위의 바닥 그림·건물·나무·정문 3D.
+// 땅·녹지·도로·차선·주차장·보행로·운동장은 위에서 내려다본 큰 캔버스 한 장(품질 높음 4096px, 낮음 2048px)에
+// 그려서 지형 메시의 텍스처로 입힌다 → 언덕 뒤 도로가 비쳐 보이거나 겹친 층이 깜빡이지 않는다.
+// 건물은 성능을 위해 종류마다 한 덩어리(메시 하나)로 합치고, 색은 정점 색으로 넣는다.
 import * as THREE from 'three';
+import { heightAt, heightRange, buildTerrainGeometry } from './terrain.js';
 
 // 벽: 밝은 베이지, 흰색, 연회색, 붉은 벽돌 중 건물마다 하나
 const WALL_COLORS = ['#ece0c6', '#f5f3ee', '#d7d9db', '#b86b52'];
@@ -12,9 +15,11 @@ const OUTSIDE_MIX = 0.45;
 
 const FLOOR_M = 4; // 층 높이 (campus.json 높이 = 층수 × 4m + 난간 1m)
 const BAY_M = 3;     // 창문 하나의 가로 폭
+const BURY_M = 1.5;  // 벽을 가장 낮은 땅보다 더 내려 묻는 깊이
 
 const GROUND_COLOR = '#d3d2cd';
 const CAMPUS_COLOR = '#e4e3de'; // 연한 회색 포장면
+const GROUND_MARGIN = 80;       // 바닥 그림이 덮는 범위: 캠퍼스 경계 사각형 + 80m
 // park(광장·조경 구역)는 칠하지 않는다 → 포장면 위에 나무만
 const GREEN_COLORS = {
   grass: '#9fd07a', pitch: '#7cc46a', forest: '#5e9e4f',
@@ -41,54 +46,12 @@ export async function loadCampus(url) {
   return res.json();
 }
 
-export function buildMap(scene, campus, { anisotropy = 1 } = {}) {
+export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}) {
   const group = new THREE.Group();
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(6000, 6000).rotateX(-Math.PI / 2),
-    flatMaterial({ color: GROUND_COLOR }),
-  );
-  ground.renderOrder = -5;
-  ground.receiveShadow = true;
-  group.add(ground);
-
-  const campusArea = new FlatBuilder();
-  campusArea.polygon(campus.boundary, new THREE.Color(CAMPUS_COLOR));
-  group.add(campusArea.mesh(-4));
-
-  // 큰 녹지를 먼저, 작은 녹지를 나중에 (겹치면 작은 것이 위에 보이도록). 물은 따로
-  const greens = new FlatBuilder();
-  const sorted = campus.greens.filter((g) => GREEN_COLORS[g.kind] && g.kind !== 'water')
-    .sort((a, b) => Math.abs(area(b.outline)) - Math.abs(area(a.outline)));
-  for (const g of sorted) greens.polygon(g.outline, new THREE.Color(groundColor(g)));
-  group.add(greens.mesh(-3));
-
-  group.add(...buildWater(campus.greens.filter((g) => g.kind === 'water')));
-
-  // 주차장 바닥 → 주차선·코트 라인 → 도로
-  const parking = new FlatBuilder();
-  for (const o of campus.parking || []) parking.polygon(o, new THREE.Color(PARKING_COLOR));
-  group.add(parking.mesh(-2.6));
-
-  const marks = new FlatBuilder();
-  const mark = new THREE.Color(MARK_COLOR);
-  for (const o of campus.parking || []) parkingLines(marks, o, mark);
-  for (const g of sorted) if ((g.kind === 'pitch' || g.kind === 'dirt') && Math.abs(area(g.outline)) > 150) courtLines(marks, g, mark);
-  group.add(marks.mesh(-2.5));
-
-  // 보행로를 먼저, 차도를 위에
-  const roads = new FlatBuilder();
-  const foot = new THREE.Color(FOOT_COLOR), asphalt = new THREE.Color(ASPHALT_COLOR);
-  for (const r of campus.roads) if (!r.car) roads.ribbon(r.points, r.width, foot);
-  for (const r of campus.roads) if (r.car) roads.ribbon(r.points, r.width, asphalt);
-  group.add(roads.mesh(-2));
-
-  // 차선 점선 + 계단 줄무늬
-  const lanes = new FlatBuilder();
-  const lane = new THREE.Color(LANE_COLOR), step = new THREE.Color(STEP_COLOR);
-  for (const r of campus.roads) if (r.car) lanes.dashes(r.points, 0.3, 3, 4, lane);
-  for (const r of campus.roads) if (r.type === 'steps') lanes.dashes(r.points, r.width, 0.18, 0.5, step);
-  group.add(lanes.mesh(-1));
+  const ground = buildGround(campus, groundPx, anisotropy);
+  group.add(ground.mesh);
+  group.add(buildWater(campus.greens.filter((g) => g.kind === 'water')));
 
   const buildings = buildBuildings(campus.buildings, anisotropy);
   group.add(...buildings);
@@ -100,100 +63,126 @@ export function buildMap(scene, campus, { anisotropy = 1 } = {}) {
   group.add(gate.group);
 
   scene.add(group);
-  return { group, trees, gateObstacles: gate.obstacles };
+  return { group, trees, gateObstacles: gate.obstacles, ground };
 }
 
-// ---------- 바닥에 붙은 납작한 층 (녹지, 도로) ----------
+// ---------- 지형 + 바닥 그림 ----------
 
-// 바닥 층들은 깊이를 쓰지 않고 renderOrder 순서대로 덮어 그린다 → 겹쳐도 깜빡이지 않음
-function flatMaterial(opts) {
-  return new THREE.MeshLambertMaterial({ ...opts, depthWrite: false });
+function buildGround(campus, px, anisotropy) {
+  const xs = campus.boundary.map((p) => p[0]), zs = campus.boundary.map((p) => p[1]);
+  const bounds = {
+    x0: Math.min(...xs) - GROUND_MARGIN, x1: Math.max(...xs) + GROUND_MARGIN,
+    z0: Math.min(...zs) - GROUND_MARGIN, z1: Math.max(...zs) + GROUND_MARGIN,
+  };
+  const material = new THREE.MeshLambertMaterial();
+  const paint = (size) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = Math.round((size * (bounds.z1 - bounds.z0)) / (bounds.x1 - bounds.x0));
+    paintGround(canvas, campus, bounds);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = anisotropy;
+    material.map?.dispose();
+    material.map = tex;
+    material.needsUpdate = true;
+  };
+  paint(px);
+  const mesh = new THREE.Mesh(buildTerrainGeometry(bounds), material);
+  mesh.receiveShadow = true;
+  return {
+    mesh, bounds,
+    // 품질을 바꾸면 바닥 그림 해상도도 바꾼다 (높음 4096, 낮음 2048)
+    setResolution(size) {
+      if (material.map.image.width !== size) paint(size);
+    },
+  };
 }
 
-class FlatBuilder {
-  constructor() {
-    this.pos = [];
-    this.col = [];
+// 바닥 그림 순서: 땅 → 캠퍼스 포장면 → 녹지·운동장(큰 것부터) → 물 → 주차장 → 주차선·코트 라인 → 보행로 → 차도 → 차선·계단
+function paintGround(canvas, campus, bounds) {
+  const g = canvas.getContext('2d');
+  const P = new GroundPainter(g, bounds, canvas.width / (bounds.x1 - bounds.x0));
+  g.fillStyle = GROUND_COLOR;
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  P.polygon(campus.boundary, CAMPUS_COLOR);
+
+  const sorted = campus.greens.filter((x) => GREEN_COLORS[x.kind] && x.kind !== 'water')
+    .sort((a, b) => Math.abs(area(b.outline)) - Math.abs(area(a.outline)));
+  for (const x of sorted) P.polygon(x.outline, groundColor(x));
+  for (const w of campus.greens.filter((x) => x.kind === 'water')) {
+    P.polygon(w.outline, WATER_COLOR);
+    P.ribbon([...w.outline, w.outline[0]], 1.1, WATER_EDGE_COLOR);
   }
 
-  tri(a, b, c, color) {
-    // 위(+y)를 보도록 감기 방향을 맞춘다
-    const cross = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
-    if (cross < 0) [b, c] = [c, b];
-    for (const p of [a, b, c]) {
-      this.pos.push(p[0], 0, p[1]);
-      this.col.push(color.r, color.g, color.b);
-    }
+  for (const o of campus.parking || []) P.polygon(o, PARKING_COLOR);
+  for (const o of campus.parking || []) parkingLines(P, o, MARK_COLOR);
+  for (const x of sorted) if ((x.kind === 'pitch' || x.kind === 'dirt') && Math.abs(area(x.outline)) > 150) courtLines(P, x, MARK_COLOR);
+
+  for (const r of campus.roads) if (!r.car) P.ribbon(r.points, r.width, FOOT_COLOR);
+  for (const r of campus.roads) if (r.car) P.ribbon(r.points, r.width, ASPHALT_COLOR);
+  for (const r of campus.roads) if (r.car) P.dashes(r.points, 0.3, 3, 4, LANE_COLOR);
+  for (const r of campus.roads) if (r.type === 'steps') P.dashes(r.points, r.width, 0.3, 0.45, STEP_COLOR);
+
+  // 가장자리를 땅 색으로 → 그림 밖 지형(텍스처 가장자리 색이 늘어남)도 땅 색
+  g.strokeStyle = GROUND_COLOR;
+  g.lineWidth = 6;
+  g.strokeRect(0, 0, canvas.width, canvas.height);
+}
+
+// 바닥 좌표(m)로 캔버스에 그리는 붓. 아주 가는 선도 1픽셀 이상으로
+class GroundPainter {
+  constructor(g, bounds, scale) {
+    Object.assign(this, { g, bounds, s: scale });
   }
 
-  quad(x1, z1, x2, z2, h, color) {
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    if (len < 1e-6) return;
-    const nx = (-(z2 - z1) / len) * h, nz = ((x2 - x1) / len) * h;
-    const a = [x1 + nx, z1 + nz], b = [x2 + nx, z2 + nz];
-    const c = [x2 - nx, z2 - nz], d = [x1 - nx, z1 - nz];
-    this.tri(a, b, c, color);
-    this.tri(a, c, d, color);
+  path(points, close) {
+    const { g, bounds: b, s } = this;
+    g.beginPath();
+    points.forEach(([x, z], i) => {
+      if (i) g.lineTo((x - b.x0) * s, (z - b.z0) * s);
+      else g.moveTo((x - b.x0) * s, (z - b.z0) * s);
+    });
+    if (close) g.closePath();
   }
 
   polygon(outline, color) {
-    const contour = outline.map(([x, z]) => new THREE.Vector2(x, z));
-    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) {
-      this.tri(outline[i], outline[j], outline[k], color);
-    }
+    this.path(outline, true);
+    this.g.fillStyle = color;
+    this.g.fill();
   }
 
+  // 폭 width(m)의 띠, 꺾이는 곳과 끝은 둥글게
   ribbon(points, width, color) {
-    for (let i = 0; i < points.length - 1; i++) {
-      this.quad(...points[i], ...points[i + 1], width / 2, color);
-    }
-    // 꺾이는 곳과 끝을 둥글게 메운다
-    const n = width > 6 ? 12 : 8;
-    for (const p of points) this.disc(p, width / 2, color, n);
+    const { g } = this;
+    this.path(points, false);
+    g.lineWidth = Math.max(1, width * this.s);
+    g.lineJoin = g.lineCap = 'round';
+    g.strokeStyle = color;
+    g.stroke();
   }
 
-  // 선을 따라 dash m 칠하고 gap m 비우는 점선
+  // (x1, z1)→(x2, z2) 선분을 반폭 h(m)로
+  quad(x1, z1, x2, z2, h, color) {
+    const { g } = this;
+    this.path([[x1, z1], [x2, z2]], false);
+    g.lineWidth = Math.max(1, 2 * h * this.s);
+    g.lineCap = 'butt';
+    g.strokeStyle = color;
+    g.stroke();
+  }
+
+  // 선을 따라 dash m 칠하고 gap m 비우는 점선 (폭 width m)
   dashes(points, width, dash, gap, color) {
-    let phase = 0; // 지금 칸(dash+gap) 안에서 간 거리
-    for (let i = 0; i < points.length - 1; i++) {
-      const [x1, z1] = points[i], [x2, z2] = points[i + 1];
-      const len = Math.hypot(x2 - x1, z2 - z1);
-      if (len < 1e-6) continue;
-      const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
-      let t = 0;
-      while (t < len) {
-        const step = Math.min(len - t, (phase < dash ? dash : dash + gap) - phase);
-        if (phase < dash) this.quad(x1 + ux * t, z1 + uz * t, x1 + ux * (t + step), z1 + uz * (t + step), width / 2, color);
-        t += step;
-        phase = (phase + step) % (dash + gap);
-      }
-    }
-  }
-
-  disc([x, z], r, color, n = 8) {
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-      this.tri([x, z], [x + Math.cos(a0) * r, z + Math.sin(a0) * r], [x + Math.cos(a1) * r, z + Math.sin(a1) * r], color);
-    }
-  }
-
-  // uvScale: 텍스처를 쓸 때 바닥 좌표(m) × uvScale = uv
-  mesh(renderOrder, material = flatMaterial({ vertexColors: true }), uvScale = 0) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    const normals = new Float32Array(this.pos.length);
-    for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
-    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-    if (uvScale) {
-      const uv = new Float32Array((this.pos.length / 3) * 2);
-      for (let i = 0, j = 0; i < this.pos.length; i += 3, j += 2) { uv[j] = this.pos[i] * uvScale; uv[j + 1] = this.pos[i + 2] * uvScale; }
-      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    }
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.renderOrder = renderOrder;
-    mesh.receiveShadow = true;
-    return mesh;
+    const { g, s } = this;
+    this.path(points, false);
+    g.setLineDash([dash * s, gap * s]);
+    g.lineWidth = Math.max(1.2, width * s);
+    g.lineCap = 'butt';
+    g.lineJoin = 'round';
+    g.strokeStyle = color;
+    g.stroke();
+    g.setLineDash([]);
   }
 }
 
@@ -205,24 +194,43 @@ function groundColor(g) {
   return GREEN_COLORS[g.kind];
 }
 
-// 연못: 살짝 반짝이는 수면(잔물결 텍스처가 천천히 흐름) + 가장자리 돌
+// 연못: 바닥 그림의 물 위에, 지형을 따라 얹은 살짝 반짝이는 수면(잔물결 텍스처가 천천히 흐름)
 function buildWater(list) {
-  const water = new FlatBuilder(), edge = new FlatBuilder();
-  const white = new THREE.Color('#ffffff'), stone = new THREE.Color(WATER_EDGE_COLOR);
-  for (const g of list) {
-    water.polygon(g.outline, white);
-    edge.ribbon([...g.outline, g.outline[0]], 1.1, stone);
+  const pos = [];
+  const add = (a, b, c) => {
+    const L = Math.max(Math.hypot(a[0] - b[0], a[1] - b[1]), Math.hypot(b[0] - c[0], b[1] - c[1]), Math.hypot(c[0] - a[0], c[1] - a[1]));
+    if (L > 4) { // 지형을 따라가도록 잘게 나눈다
+      const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+      add(a, ab, ca); add(ab, b, bc); add(ca, bc, c); add(ab, bc, ca);
+      return;
+    }
+    const cross = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
+    for (const p of cross < 0 ? [a, c, b] : [a, b, c]) pos.push(p[0], heightAt(p[0], p[1]) + 0.08, p[1]);
+  };
+  for (const w of list) {
+    const contour = w.outline.map(([x, z]) => new THREE.Vector2(x, z));
+    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) add(w.outline[i], w.outline[j], w.outline[k]);
   }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const uv = new Float32Array((pos.length / 3) * 2);
+  for (let i = 0, j = 0; i < pos.length; i += 3, j += 2) { uv[j] = pos[i] / 9; uv[j + 1] = pos[i + 2] / 9; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
   const tex = makeRippleTexture();
-  const mat = new THREE.MeshPhongMaterial({
-    color: WATER_COLOR, map: tex, shininess: 80, specular: '#cfe6f2', depthWrite: false,
-  });
-  const surface = water.mesh(-2.95, mat, 1 / 9);
+  const surface = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
+    color: WATER_COLOR, map: tex, shininess: 80, specular: '#cfe6f2',
+    polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
+  }));
   surface.onBeforeRender = () => {
     const t = performance.now() / 1000;
     tex.offset.set(t * 0.012, t * 0.007);
   };
-  return [surface, edge.mesh(-2.9)];
+  return surface;
+}
+
+function mid(a, b) {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 
 function makeRippleTexture() {
@@ -419,10 +427,10 @@ class MeshBuilder {
     });
   }
 
-  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n
-  wall(p1, p2, y0, y1, n, color, u1 = 0) {
+  // 세로 벽 사각형 (p1→p2, 높이 y0~y1), 바깥 법선 n. 창문 층은 높이 base부터 센다
+  wall(p1, p2, y0, y1, n, color, u1 = 0, base = 0) {
     const a = [p1[0], y0, p1[1]], b = [p2[0], y0, p2[1]], c = [p2[0], y1, p2[1]], d = [p1[0], y1, p1[1]];
-    const v0 = y0 / FLOOR_M, v1 = y1 / FLOOR_M;
+    const v0 = (y0 - base) / FLOOR_M, v1 = (y1 - base) / FLOOR_M;
     this.tri(a, b, c, n, color, [[0, v0], [u1, v0], [u1, v1]]);
     this.tri(a, c, d, n, color, [[0, v0], [u1, v1], [0, v1]]);
   }
@@ -455,7 +463,10 @@ function buildBuildings(list, anisotropy) {
       wall.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
       roof.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
     }
-    const h = b.height;
+    // 외곽선 안 가장 낮은 땅에서 시작하고, 벽은 그보다 더 내려 비탈 쪽이 뜨지 않게 묻는다
+    const base = heightRange(o).lo;
+    b.base = base;
+    const h = base + b.height;
     const sign = area(o) > 0 ? 1 : -1;
     let longest = null;
 
@@ -466,7 +477,7 @@ function buildBuildings(list, anisotropy) {
       // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
       const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
       // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
-      walls.wall(p1, p2, 0, h, n, wall, Math.max(1, Math.round(len / BAY_M)));
+      walls.wall(p1, p2, base - BURY_M, h, n, wall, Math.max(1, Math.round(len / BAY_M)), base);
       if (!longest || len > longest.len) longest = { p1, p2, n, len };
     }
 
@@ -476,14 +487,16 @@ function buildBuildings(list, anisotropy) {
     }
 
     // 가장 긴 벽 가운데 1층에 어두운 입구
-    if (longest && longest.len >= 6 && h >= 3.5) {
+    if (longest && longest.len >= 6 && b.height >= 3.5) {
       const { p1, p2, n, len } = longest;
       const w = Math.min(6, len * 0.4) / 2 / len;
       const off = 0.06;
       const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
-      plain.wall(q(0.5 - w), q(0.5 + w), 0, 3, n, entrance);
+      // 입구는 그 자리 땅 높이에서 (언덕 쪽이면 그만큼 위에)
+      const gy = heightAt(...q(0.5));
+      plain.wall(q(0.5 - w), q(0.5 + w), gy - 0.3, gy + 3, n, entrance);
       // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
-      b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2] };
+      b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2], y: gy };
     }
   }
 
@@ -580,7 +593,7 @@ function buildTrees(campus) {
   for (const [mesh, list] of meshes) {
     list.forEach(([x, z, size], i) => {
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
-      m.compose(p.set(x, 0, z), q, s.set(size, size * (0.9 + rand() * 0.25), size));
+      m.compose(p.set(x, heightAt(x, z) - 0.2, z), q, s.set(size, size * (0.9 + rand() * 0.25), size));
       mesh.setMatrixAt(i, m);
       if (mesh.material === crownMat) mesh.setColorAt(i, color.set(CROWN_COLORS[Math.floor(rand() * CROWN_COLORS.length)]));
     });
@@ -660,14 +673,15 @@ function buildGate(spawn) {
   const px = half + GATE.pillar / 2; // 기둥 중심까지 거리
 
   const group = new THREE.Group();
-  group.position.set(gx, 0, gz);
+  const lx = Math.cos(Math.atan2(dx, dz)), lz = -Math.sin(Math.atan2(dx, dz));
+  group.position.set(gx, Math.min(heightAt(gx + lx * px, gz + lz * px), heightAt(gx - lx * px, gz - lz * px)), gz);
   group.rotation.y = Math.atan2(dx, dz);
 
   const stone = new THREE.MeshLambertMaterial({ color: '#d4cdbf' });
   const navy = new THREE.MeshLambertMaterial({ color: '#2f3d5c' });
   for (const sx of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(GATE.pillar, GATE.height, GATE.pillar), stone);
-    pillar.position.set(sx * px, GATE.height / 2, 0);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(GATE.pillar, GATE.height + 2, GATE.pillar), stone);
+    pillar.position.set(sx * px, GATE.height / 2 - 1, 0);
     pillar.castShadow = pillar.receiveShadow = true;
     group.add(pillar);
   }

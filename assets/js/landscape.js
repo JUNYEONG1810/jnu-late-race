@@ -3,6 +3,7 @@
 // 기념물은 인물 모양을 만들지 않고 단정한 비석·받침대·탑으로만 표현한다.
 import * as THREE from 'three';
 import { mulberry32, distToSegment, pointInPolygon } from './map.js';
+import { heightAt } from './terrain.js';
 
 const LAMP = {
   spacing: 30,   // 같은 쪽 가로등 간격 (m)
@@ -36,7 +37,7 @@ export function buildLandscape(scene, campus) {
     const yaw = near ? Math.atan2(near.x - x, near.z - z) : 0;
     const { top, half } = monument(parts, m.shape, x, z, yaw);
     obstacles.push(square(x, z, half, yaw));
-    if (m.name) labels.push({ text: m.name, x, y: top + 1.2, z, maxDist: m.shape === 'tower' ? 160 : MONUMENT_LABEL_DIST });
+    if (m.name) labels.push({ text: m.name, x, y: heightAt(x, z) + top + 1.2, z, maxDist: m.shape === 'tower' ? 160 : MONUMENT_LABEL_DIST });
   }
 
   const propMesh = parts.mesh();
@@ -89,7 +90,7 @@ function monument(b, shape, x, z, yaw) {
   const T = b.frame(x, z, yaw);
   switch (shape) {
     case 'tower': { // 용봉탑: 넓은 단 + 위로 좁아지는 사각 탑 + 머릿돌
-      b.box(T, 0, 0.3, 0, 7, 0.6, 7, STONE);
+      b.box(T, 0, -0.45, 0, 7, 2.1, 7, STONE); // 비탈에서도 뜨지 않게 아래로 길게
       b.box(T, 0, 0.9, 0, 4.6, 0.6, 4.6, STONE);
       b.prism(T, 0, 1.2, 0, 1.5, 0.75, 15, 4, '#e2ddd2');
       b.prism(T, 0, 16.2, 0, 0.9, 0.05, 2.2, 4, '#e2ddd2');
@@ -161,7 +162,7 @@ function buildLamps(campus, roads) {
   const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshLambertMaterial({ color: '#fff6d8', emissive: '#7a6f4e' }), spots.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
   spots.forEach(([x, z, a], i) => {
-    m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, a), one);
+    m.compose(new THREE.Vector3(x, heightAt(x, z) - 0.1, z), q.setFromAxisAngle(up, a), one);
     poles.setMatrixAt(i, m);
     heads.setMatrixAt(i, m);
   });
@@ -265,9 +266,9 @@ class PartBuilder {
     this.m = new THREE.Matrix4();
   }
 
-  // 소품 하나의 좌표계: (x, z)에 놓고 yaw만큼 돌림
+  // 소품 하나의 좌표계: (x, z)의 땅 위에 놓고 yaw만큼 돌림 (받침이 비탈에 뜨지 않게 살짝 묻음)
   frame(x, z, yaw) {
-    return new THREE.Matrix4().makeRotationY(yaw).setPosition(x, 0, z);
+    return new THREE.Matrix4().makeRotationY(yaw).setPosition(x, heightAt(x, z) - 0.1, z);
   }
 
   add(geo, T, color) {

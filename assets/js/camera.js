@@ -1,5 +1,8 @@
 // 차를 따라가는 카메라. C 키로 뒤 / 위에서 / 운전석 시점을 바꾼다.
 import * as THREE from 'three';
+import { heightAt } from './terrain.js';
+
+const MIN_CLEARANCE = 1.2; // 카메라가 땅에서 떨어져 있어야 하는 최소 높이 (m)
 
 export const CAMERA_MODES = [
   { id: 'chase', label: '뒤에서 따라가기' },
@@ -36,6 +39,7 @@ export class CameraRig {
       this.look.copy(look);
       this.camHeading = car.heading;
       this.camera.position.copy(pos);
+      this.camera.position.y = Math.max(pos.y, heightAt(pos.x, pos.z) + MIN_CLEARANCE);
       this.camera.lookAt(look);
       if (fov && this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
       car.setCockpitView(false);
@@ -43,6 +47,7 @@ export class CameraRig {
     }
     const id = CAMERA_MODES[this.mode].id;
     const cx = car.pos.x, cz = car.pos.y;
+    const cy = car.object.position.y; // 굴착기가 선 땅 높이
 
     // 카메라 방향은 차 방향을 천천히 따라가서 드리프트할 때 옆모습이 보이게
     if (this.snap) this.camHeading = car.heading;
@@ -57,19 +62,18 @@ export class CameraRig {
     if (id === 'chase') {
       const speed01 = Math.min(1, car.speedKmh / 60);
       const back = 8.5 + speed01 * 1.5;
-      pos.set(cx - fx * back, 4 + speed01 * 0.6, cz - fz * back);
-      look.set(cx + fx * 4, 1.6, cz + fz * 4);
+      pos.set(cx - fx * back, cy + 4 + speed01 * 0.6, cz - fz * back);
+      look.set(cx + fx * 4, cy + 1.6, cz + fz * 4);
       fov = 60 + speed01 * 8 + boost * 16;
     } else if (id === 'top') {
-      pos.set(cx, 110, cz + 45);
-      look.set(cx, 0, cz);
+      pos.set(cx, cy + 110, cz + 45);
+      look.set(cx, cy, cz);
       fov = 50 + boost * 10;
     } else {
-      // 운전석 캐빈 (왼쪽 좌석) — 흔들리지 않게 바로 따라감
-      const hx = Math.sin(car.heading), hz = Math.cos(car.heading);
-      const sx = 0.34; // 차량 기준 왼쪽 = 로컬 +x
-      pos.set(cx + hz * sx + hx * 0.35, 2.05, cz - hx * sx + hz * 0.35);
-      look.set(pos.x + hx * 10, 1.5, pos.z + hz * 10);
+      // 운전석 캐빈 (왼쪽 좌석, 차량 기준 왼쪽 = 로컬 +x) — 비탈 기울기까지 그대로 따라감
+      car.object.updateMatrixWorld();
+      pos.set(0.34, 2.05, 0.35).applyMatrix4(car.object.matrixWorld);
+      look.set(0.34, 1.5, 10.35).applyMatrix4(car.object.matrixWorld);
       fov = 65 + boost * 20;
     }
     car.setCockpitView(id === 'driver');
@@ -87,6 +91,8 @@ export class CameraRig {
       this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 4);
       this.camera.updateProjectionMatrix();
     }
+    // 언덕 속으로 들어가지 않게 (따라가기 카메라가 뒤쪽 오르막에 묻힐 때)
+    if (id !== 'driver') this.pos.y = Math.max(this.pos.y, heightAt(this.pos.x, this.pos.z) + MIN_CLEARANCE);
     this.camera.position.copy(this.pos);
     // 부스터 중 카메라 미세 흔들림
     if (boost > 0.02) {

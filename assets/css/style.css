@@ -449,3 +449,4 @@ body.title #speedo, body.title #boost-gauge, body.title #help, body.title #late-
 body.title #building-name, body.title #minimap, body.title #speedlines { display: none; }
 /* 화면이 낮으면 첫 화면 카드를 줄여서 다 보이게 */
 @media (max-height: 560px) { .title-card { transform: scale(0.72); } }
+.credit-en { font-size: 12px; opacity: 0.8; }

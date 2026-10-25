@@ -2,6 +2,7 @@
 // 연출(공대 2호관 입구로 날아감 → 교수님 등장·대사 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
 // → 미션들 → 공과대 2호관 도착 → 교수님 판정(A+ / F) → 결과.
 import * as THREE from 'three';
+import { heightAt } from './terrain.js';
 import { MISSIONS } from './missions-data.js';
 import { DIALOGUE, SPEAKER } from './dialogue-data.js';
 import { Professor, SpeechBubble } from './professor.js';
@@ -72,10 +73,12 @@ export class LateMode {
     const walk = PROFESSOR.walk.speed * PROFESSOR.scale * CINE.walk;
     const from = new THREE.Vector3(e.x + e.nx * 0.6, 0, e.z + e.nz * 0.6);
     const to = new THREE.Vector3(e.x + e.nx * (0.6 + walk), 0, e.z + e.nz * (0.6 + walk));
+    from.y = heightAt(from.x, from.z);
+    to.y = heightAt(to.x, to.z);
     const side = new THREE.Vector3(-e.nz, 0, e.nx);
     const camPos = to.clone().addScaledVector(new THREE.Vector3(e.nx, 0, e.nz), 6.5).addScaledVector(side, 1.4);
-    camPos.y = 2.4;
-    return { from, to, n: new THREE.Vector3(e.nx, 0, e.nz), camPos, lookY: 1.5 * PROFESSOR.scale };
+    camPos.y = Math.max(to.y, heightAt(camPos.x, camPos.z)) + 2.4;
+    return { from, to, n: new THREE.Vector3(e.nx, 0, e.nz), camPos, lookY: to.y + 1.5 * PROFESSOR.scale };
   }
 
   get active() { return this.state !== 'off'; }
@@ -226,7 +229,7 @@ export class LateMode {
         this.hud.showProgress(t, this.progress);
         if (this.progress >= 1) this.completeMission();
       }
-      this.hud.updateTarget(this.camera, tmp.set(t.x, 6.5, t.z), dist);
+      this.hud.updateTarget(this.camera, tmp.set(t.x, heightAt(t.x, t.z) + 6.5, t.z), dist);
     }
   }
 
@@ -298,10 +301,12 @@ export class LateMode {
     const dx = f.x * Math.cos(a) + f.y * Math.sin(a);
     const dz = f.y * Math.cos(a) - f.x * Math.sin(a);
     const r = 6.5 + 2 * k;
-    out.pos.set(c.pos.x + dx * r, 2.0 + 2 * k, c.pos.y + dz * r);
+    const gy = c.object.position.y; // 굴착기가 선 땅 높이
+    out.pos.set(c.pos.x + dx * r, 0, c.pos.y + dz * r);
+    out.pos.y = Math.max(gy + 2.0 + 2 * k, heightAt(out.pos.x, out.pos.z) + 1.5); // 언덕 속으로 들어가지 않게
     // 마지막엔 따라가기 카메라처럼 앞쪽을 보게
     const w = k * k;
-    out.look.set(c.pos.x + f.x * 4 * w, 1.3 + 0.3 * w, c.pos.y + f.y * 4 * w);
+    out.look.set(c.pos.x + f.x * 4 * w, gy + 1.3 + 0.3 * w, c.pos.y + f.y * 4 * w);
     return out;
   }
 
@@ -411,10 +416,8 @@ function buildMarker() {
 
   const ringMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 48).rotateX(-Math.PI / 2), ringMat);
-  ring.position.y = 0.06;
   const discMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.22, depthWrite: false });
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(0.86, 48).rotateX(-Math.PI / 2), discMat);
-  disc.position.y = 0.05;
+  const disc = new THREE.Mesh(new THREE.RingGeometry(0, 0.86, 48, 6).rotateX(-Math.PI / 2), discMat);
 
   // 아래는 진하고 위로 갈수록 투명한 빛 기둥
   const c = document.createElement('canvas');
@@ -427,6 +430,8 @@ function buildMarker() {
   g.fillRect(0, 0, 4, 64);
   const wallMat = new THREE.MeshBasicMaterial({ color: '#ffd23f', transparent: true, opacity: 0.45, alphaMap: new THREE.CanvasTexture(c), depthWrite: false, side: THREE.DoubleSide });
   const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 3, 48, 1, true).translate(0, 1.5, 0), wallMat);
+  // 원 크기 1의 원래 모양을 기억해 두고, 놓을 때마다 반지름을 곱하고 땅 높이를 따라 휜다
+  const shapes = [ring, disc, wall].map((m) => [m, m.geometry.attributes.position.array.slice()]);
 
   for (const m of [ring, disc, wall]) m.renderOrder = 1;
   const circle = new THREE.Group();
@@ -446,8 +451,18 @@ function buildMarker() {
     group,
     place(t) {
       group.visible = true;
-      group.position.set(t.x, 0, t.z);
-      circle.scale.set(t.radius, 1, t.radius);
+      const gy = heightAt(t.x, t.z);
+      group.position.set(t.x, gy, t.z);
+      for (const [m, src] of shapes) {
+        const a = m.geometry.attributes.position;
+        for (let i = 0; i < src.length; i += 3) {
+          const x = src[i] * t.radius, z = src[i + 2] * t.radius;
+          a.array[i] = x; a.array[i + 2] = z;
+          a.array[i + 1] = src[i + 1] + heightAt(t.x + x, t.z + z) - gy + 0.12;
+        }
+        a.needsUpdate = true;
+        m.geometry.computeBoundingSphere();
+      }
       const color = t.final ? '#5fd3ff' : '#ffd23f';
       ringMat.color.set(color); discMat.color.set(color); wallMat.color.set(color);
       const ctx = emojiCanvas.getContext('2d');
@@ -461,7 +476,7 @@ function buildMarker() {
     animate(time) {
       sprite.position.y = 5 + Math.sin(time * 2.2) * 0.6;
       ringMat.opacity = 0.65 + Math.sin(time * 4) * 0.25;
-      wall.scale.y = 1 + Math.sin(time * 3) * 0.12;
+      wallMat.opacity = 0.4 + Math.sin(time * 3) * 0.08;
     },
   };
 }

@@ -87,7 +87,7 @@
 - 빌드 없는 정적 사이트. three.js r160을 CDN(jsDelivr) + import map으로 불러온다. 프레임워크·번들러 없음.
 - **물리: 직접 만든 아케이드 주행**(속도, 가속, 브레이크, 조향, 가벼운 드리프트). 무거운 물리 엔진은 쓰지 않는다 (시간 절약, 조작감 조절 쉬움).
 - 충돌: 차를 원 하나로 보고, 건물 외곽선(2D 다각형)과 부딪히면 밀어내고 감속. 높이 방향 충돌은 없음.
-- 땅은 우선 평평하게. 지형 높이는 시간이 남을 때만 (선택).
+- 지형(terrain 브랜치): AWS Terrain Tiles를 5m 격자로 구운 `data/terrain.json`(`scripts/build_terrain.py`, 정문 앞 출발점 = 0m). `terrain.js`의 `heightAt(x, z)`가 지형 메시와 같은 삼각형으로 보간한다. 땅·녹지·도로·차선·주차장·보행로·운동장은 위에서 본 캔버스 한 장(높음 4096px, 낮음 2048px)에 그려 지형 메시 텍스처로 입힌다(바닥 층 겹침·깜빡임 없음). 건물은 외곽선 안 가장 낮은 땅에서 시작해 벽을 1.5m 더 묻고, 나무·정문·소품·이름표·미션 원(지형 따라 휨)·교수님은 땅 위에. 굴착기는 궤도 앞뒤·좌우 땅 높이로 부드럽게 기울고 오르막에서 살짝 느려진다. 카메라는 땅보다 1.2m 이상 위. 크레딧에 Terrain Tiles 출처(ETOPO1 NOAA, GMTED2010·SRTM USGS). main에는 아직 합치지 않음.
 - 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 성능: 내장 그래픽 노트북에서 60fps 목표. 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위). 기본값은 "높음" (정문 출발 화면 1366×768 품질 높음 60fps 측정, 50 미만이면 "낮음"으로 바꾼다).
@@ -131,6 +131,7 @@ assets/css/style.css
 assets/js/main.js              시작, 화면 전환, 루프
 assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
 assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등
+assets/js/terrain.js           지형 높이(heightAt), 지형 메시
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
 assets/js/hud.js               속도계, 타이머, 미션 목록, 미니맵, 건물 이름
@@ -140,8 +141,8 @@ assets/js/voice.js             꿍싯꿍싯 목소리 + 효과음 합성
 assets/js/missions-data.js     미션 데이터
 assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
-data/campus.json
-scripts/fetch_osm.py, scripts/build_map.py
+data/campus.json, data/terrain.json
+scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
 README.md, 제작로그.md, CLAUDE.md
