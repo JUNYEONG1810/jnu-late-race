@@ -269,7 +269,11 @@ export class Car {
       if (n) {
         this.pos.copy(center).addScaledVector(nf, -D.radiusOffset);
         const vn = this.vel.dot(n);
-        if (vn < 0) {
+        if (vn < 0 && collider.lastQuiet) {
+          // 기념물: 튕기거나 소리 내지 않고 그 자리에서 조용히 멈춤
+          this.vel.addScaledVector(n, -vn);
+          this.vel.multiplyScalar(0.3);
+        } else if (vn < 0) {
           this.vel.addScaledVector(n, -vn * 1.25); // 벽 쪽 속도를 없애고 살짝 튕김
           this.vel.multiplyScalar(0.8);
           if (vn < -3 && this.hitTimer === 0) this.onHit?.(Math.min(1, -vn / 15)); // 충돌음 (세기 0~1)
@@ -528,8 +532,9 @@ export class Collider {
   }
 
   // 건물이 아닌 장애물(정문 기둥 등)도 같은 방식으로 넣는다
-  addObstacle(outline, name = '') {
-    const bi = this.buildings.push({ name }) - 1;
+  // quiet: 부딪혀도 튕김·충돌음 없이 조용히 멈추는 장애물 (기념물)
+  addObstacle(outline, name = '', { quiet = false } = {}) {
+    const bi = this.buildings.push({ name, quiet }) - 1;
     for (let i = 0; i < outline.length; i++) {
       const [x1, z1] = outline[i];
       const [x2, z2] = outline[(i + 1) % outline.length];
@@ -572,6 +577,7 @@ export class Collider {
   // pos(Vector2)를 건물 밖으로 밀어낸다. 부딪혔으면 밀어낸 방향(단위 벡터)을 돌려줌
   resolve(pos, radius) {
     let hit = null;
+    this.lastQuiet = true; // 이번에 부딪힌 것이 모두 조용한 장애물인지
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       this.forEachEdge(pos.x, pos.y, radius, (e) => {
@@ -585,6 +591,7 @@ export class Collider {
         pos.x += dx * (radius - d);
         pos.y += dz * (radius - d);
         hit = (hit || new THREE.Vector2()).set(dx, dz);
+        if (!this.buildings[e[4]].quiet) this.lastQuiet = false;
         moved = true;
       });
       if (!moved) break;

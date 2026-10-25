@@ -202,13 +202,14 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus, lawns, widths, styles] = await Promise.all([
+  const [campus, lawns, widths, styles, monuments] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadCampus('data/building-styles.json?v=6'),
+    loadCampus('data/building-styles.json?v=6'), loadCampus('data/monuments.json?v=3'),
     loadTerrain('data/terrain.json?v=2'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
+  campus.monumentsData = monuments.monuments; // 기념물 형태·크기·근거 (scripts/build_monuments.py)
   // 건물 외관 지정 (data/building-styles.json, 가장 우선). 층수도 근거가 있으면 여기서 바꾼다 (높이 = 층수 × 4m + 난간 1m)
   for (const b of campus.buildings) {
     const st = styles[b.id];
@@ -227,8 +228,9 @@ async function start() {
   world.landscape = buildLandscape(scene, campus);
   for (const o of world.gateObstacles) collider.addObstacle(o);
   for (const o of world.landscape.obstacles) collider.addObstacle(o);
+  for (const o of world.landscape.quietObstacles) collider.addObstacle(o, '', { quiet: true }); // 기념물: 조용히 멈춤
   for (const l of world.landscape.labels) hud.addLabel(l.text, l.x, l.y, l.z, { maxDist: l.maxDist, small: true });
-  for (const m of campus.monuments || []) world.trees.clearAround(m.p[0], m.p[1], m.shape === 'tower' ? 6 : 3);
+  for (const m of campus.monumentsData) world.trees.clearAround(m.p[0], m.p[1], m.form === 'tower' ? 6 : m.base ? m.base.d / 2 + 1.5 : 3);
   world.trees.clearAround(...world.landscape.barrier.center, 12); // 차단기 지붕·부스 자리
   for (const [x, z] of world.landscape.avenue.spots) world.trees.clearAround(x, z, 4); // 진입로 가로수 자리의 작은 나무
   for (const [osmName, label] of LANDMARKS) {
