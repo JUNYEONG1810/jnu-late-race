@@ -1104,8 +1104,9 @@ function buildTrees(campus) {
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.4, 5).translate(0, 1.2, 0);
   const crowns = {
     round: new THREE.IcosahedronGeometry(2.1, 0).translate(0, 3.9, 0),
-    broad: new THREE.DodecahedronGeometry(2.0, 0).scale(1.45, 0.72, 1.45).translate(0, 3.4, 0),
-    shrub: new THREE.DodecahedronGeometry(1.0, 0).scale(1.2, 0.75, 1.2).translate(0, 0.65, 0),
+    // 넓은 활엽수·관목은 둥근 나무와 같은 20면체를 납작하게 (12면체 36삼각형 → 20삼각형, 나무 수가 많아 삼각형을 아낌)
+    broad: new THREE.IcosahedronGeometry(2.05, 0).scale(1.45, 0.72, 1.45).translate(0, 3.4, 0),
+    shrub: new THREE.IcosahedronGeometry(1.05, 0).scale(1.2, 0.75, 1.2).translate(0, 0.65, 0),
     cone: new THREE.ConeGeometry(1.9, 5.2, 7).translate(0, 4.6, 0),
     slim: new THREE.ConeGeometry(1.15, 7.0, 6).translate(0, 5.2, 0),
   };
@@ -1139,20 +1140,49 @@ function buildTrees(campus) {
     group.add(mesh);
   }
 
+  // 줄기는 한 메시라, 보이는 수관(종류마다 앞에서부터 density만큼, 가벼운 모드면 둥근 것만)과 같은 나무만 보이게 행렬로 고른다
+  const trunkMesh = meshes[0][0];
+  const trunkSaved = trunkMesh.instanceMatrix.array.slice();
+  const kindIndex = new Map(), kindTotal = {};
+  for (const [, list] of meshes.slice(1)) list.forEach((t, i) => { kindIndex.set(t, i); kindTotal[t[3]] = list.length; });
+  let density = 1, variety = true;
+  const refresh = () => {
+    for (const [mesh, list] of meshes.slice(1)) {
+      mesh.count = Math.floor(mesh.userData.total * density);
+      mesh.visible = variety || list[0]?.[3] === 'round';
+    }
+    // 보이는 줄기만 앞으로 모아 개수(count)를 줄인다 (숨긴 줄기를 크기 0으로 그리지 않게). 줄기는 색이 하나라 순서는 상관없음
+    const arr = trunkMesh.instanceMatrix.array;
+    let n = 0;
+    withTrunk.forEach((t, i) => {
+      const show = (variety || t[3] === 'round') && kindIndex.get(t) < Math.floor(kindTotal[t[3]] * density);
+      if (!show || trunkSaved[i * 16 + 15] === 0) return; // 숨김 또는 clearAround로 지운 나무
+      arr.set(trunkSaved.subarray(i * 16, i * 16 + 16), n * 16);
+      n++;
+    });
+    trunkMesh.count = n;
+    trunkMesh.instanceMatrix.needsUpdate = true;
+  };
+
   return {
     group,
     count: spots.length,
     // 1 = 전부, 0.5 = 절반
-    setDensity(f) {
-      for (const [mesh] of meshes) mesh.count = Math.floor(mesh.userData.total * f);
-    },
+    setDensity(f) { density = f; refresh(); },
+    // 가벼운 모드: 둥근 활엽수만 남기고 다른 종류(넓은 활엽수·관목·침엽수)와 그 줄기는 숨김
+    setVariety(on) { variety = on; refresh(); },
     // (x, z) 둘레 r 안의 나무를 없앤다 (연출 카메라를 가리지 않게)
     clearAround(x, z, r) {
       const zero = new THREE.Matrix4().makeScale(0, 0, 0);
       for (const [mesh, list] of meshes) {
-        list.forEach(([tx, tz], i) => { if (Math.hypot(tx - x, tz - z) < r) mesh.setMatrixAt(i, zero); });
+        list.forEach(([tx, tz], i) => {
+          if (Math.hypot(tx - x, tz - z) >= r) return;
+          if (mesh === trunkMesh) trunkSaved.fill(0, i * 16, i * 16 + 16);
+          else mesh.setMatrixAt(i, zero);
+        });
         mesh.instanceMatrix.needsUpdate = true;
       }
+      refresh();
     },
   };
 }

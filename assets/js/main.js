@@ -11,6 +11,8 @@ import { LateMode } from './late-mode.js';
 import { Walker } from './walker.js';
 import { STUDENT_LINES } from './dialogue-data.js';
 import { buildFarTerrain } from './surroundings.js';
+import { buildRoadMarks } from './roadmarks.js';
+import { buildShuttles } from './life.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -109,6 +111,7 @@ function setQuality(q, byUser = false) {
   world.trees.setDensity(high ? 1 : 0.5);
   world.ground.setResolution(GROUND_PX[q]); // 바닥 그림 해상도
   world.landscape.lamps.visible = high; // 가로등은 품질 높음에서만
+  world.shuttle.setCount(high ? 2 : 1); // 셔틀버스 수
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
 }
@@ -202,10 +205,24 @@ const NO_INPUT = { up: false, down: false, left: false, right: false, drift: fal
 // ---------- 시작 ----------
 
 const hud = new Hud({ onQuality: (q) => setQuality(q, true), onSound: toggleSound });
-// 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬)
-const settings = { walkCamAuto: false, chatter: true };
+// 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬),
+// 가벼운 모드 (기본 꺼짐: 켜면 장식 요소를 한꺼번에 끔)
+const settings = { walkCamAuto: false, chatter: true, light: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
-hud.bindSettings(settings, () => { try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {} });
+hud.bindSettings(settings, () => {
+  try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {}
+  applyLight();
+});
+
+// 가벼운 모드: 장식(먼 산, 나무 다양화, 도로 표시, 셔틀버스 …)을 끈다. 게임 진행에 필요한 것은 그대로
+function applyLight() {
+  if (!world) return;
+  const on = !settings.light;
+  world.far.mesh.visible = on;
+  world.trees.setVariety(on);
+  for (const m of world.roadMarks.meshes) m.visible = on;
+  world.shuttle.group.visible = on;
+}
 const rig = new CameraRig(camera);
 const car = new Car();
 car.onBoostStart = playBoost;
@@ -382,10 +399,10 @@ async function start() {
   let got = 0;
   const count = (p) => p.then((v) => { got++; loadingUi.set(got * 0.07, '캠퍼스 지도 받는 중…'); return v; });
   loadingUi.set(0, '캠퍼스 지도 받는 중…');
-  const [campus, lawns, widths, styles, monuments, , farTerrain] = await Promise.all([
+  const [campus, lawns, widths, styles, monuments, , farTerrain, roadMarks] = await Promise.all([
     count(loadCampus('data/campus.json?v=9')), count(loadCampus('data/lawns.json?v=1')), count(loadCampus('data/road-widths.json?v=1')),
     count(loadCampus('data/building-styles.json?v=8')), count(loadCampus('data/monuments.json?v=4')),
-    count(loadTerrain('data/terrain.json?v=4')), count(loadCampus('data/far-terrain.json?v=1')),
+    count(loadTerrain('data/terrain.json?v=4')), count(loadCampus('data/far-terrain.json?v=1')), count(loadCampus('data/road-marks.json?v=1')),
   ]);
   loadingUi.set(0.5, '땅과 건물 만드는 중…');
   await breathe();
@@ -406,10 +423,12 @@ async function start() {
     groundPx: GROUND_PX[quality],
     terrainFar: 1, // 지형 격자 바깥은 먼 지형(바깥 풍경)이 채운다
     // 차도 메시 간격: 5m (지형이 급히 꺾이는 곳 2.5m, 둥근 이음 3m). 차도 위 땅은 scripts/smooth_road_terrain.py로 미리 부드럽게
-    treeKinds: false, wallShade: false, // 나무 다양화·벽 아래 음영은 4단계
   });
   world.campus = campus;
   world.far = buildFarTerrain(scene, farTerrain); // 먼 산 능선 (300m 격자, 충돌 없음). 둘레 건물은 넣지 않음
+  world.roadMarks = buildRoadMarks(campus, roadMarks); // 횡단보도·정지선·화살표·과속방지턱을 흰색·노란색 두 메시로 (scripts/build_road_marks.py)
+  world.group.add(...world.roadMarks.meshes);
+  world.shuttle = buildShuttles(scene, campus); // 순환로 셔틀버스 1~2대 (주차 차량·걷는 학생은 넣지 않음)
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   loadingUi.set(0.72, '나무와 조형물 놓는 중…');
@@ -443,6 +462,7 @@ async function start() {
   setupTitle();
 
   setQuality(quality);
+  applyLight();
   updateTitleCamera(0);
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
@@ -505,6 +525,10 @@ function loop() {
   const focus = walking ? walker.pos : car.pos; // 화면·소리·미니맵의 중심
   const focusY = walking ? walker.y : car.object.position.y;
   world.landscape.update(dt, focus.x, focus.y); // 주차 차단기
+  // 셔틀버스: 굴착기·걷는 황소가 다가오면 멈춤. 연출 중에는 교수님·굴착기 둘레에서 숨김
+  const cineHide = lateMode.active && lateMode.inputLocked && lateMode.state !== 'mission' && lateMode.state !== 'paused';
+  world.shuttle.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null,
+    cineHide ? [[lateMode.stage.to.x, lateMode.stage.to.z], [car.pos.x, car.pos.y]] : []);
 
   if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
   else rig.update(dt, car);
