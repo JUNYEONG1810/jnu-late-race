@@ -68,8 +68,25 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terra
   const gate = buildGate();
   group.add(gate.group);
 
+  freeAfterUpload(group); // 정점 배열은 GPU에 올린 뒤 램에서 해제 (나무 위치 행렬은 그대로)
   scene.add(group);
   return { group, trees, gateObstacles: gate.obstacles, ground };
+}
+
+// 메모리 절약: 바뀌지 않는 메시의 정점·색·uv·인덱스 배열을 GPU에 올린 직후 자바스크립트 쪽에서 버린다.
+// (내장 그래픽은 GPU 메모리도 램을 쓰므로 같은 데이터가 두 번 램을 차지하던 것을 한 번으로)
+// 경계 구는 미리 계산해 둔다. 나중에 정점을 다시 읽거나 고치는 메시에는 쓰지 않는다.
+const dropArray = function () { this.array = null; };
+export function freeAfterUpload(obj) {
+  obj.traverse((o) => {
+    const g = o.geometry;
+    if (!g || g.userData.keepArrays) return;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if (!g.boundingBox) g.computeBoundingBox();
+    for (const a of Object.values(g.attributes)) a.onUpload(dropArray);
+    if (g.index) g.index.onUpload(dropArray);
+  });
+  return obj;
 }
 
 // ---------- 지형 + 바닥 그림 ----------
@@ -81,7 +98,9 @@ function buildGround(campus, px, anisotropy, far) {
     z0: Math.min(...zs) - GROUND_MARGIN, z1: Math.max(...zs) + GROUND_MARGIN,
   };
   const material = new THREE.MeshLambertMaterial();
+  let painted = 0;
   const paint = (size) => {
+    painted = size;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = Math.round((size * (bounds.z1 - bounds.z0)) / (bounds.x1 - bounds.x0));
@@ -89,6 +108,8 @@ function buildGround(campus, px, anisotropy, far) {
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = anisotropy;
+    tex.userData.size = [canvas.width, canvas.height]; // 해제한 뒤에도 크기를 알 수 있게 (메모리 측정용)
+    tex.onUpdate = () => { canvas.width = canvas.height = 1; }; // GPU에 올린 뒤 원본 캔버스(최대 55MB)를 해제
     material.map?.dispose();
     material.map = tex;
     material.needsUpdate = true;
@@ -100,7 +121,7 @@ function buildGround(campus, px, anisotropy, far) {
     mesh, bounds,
     // 품질을 바꾸면 바닥 그림 해상도도 바꾼다 (높음 4096, 낮음 2048)
     setResolution(size) {
-      if (material.map.image.width !== size) paint(size);
+      if (painted !== size) paint(size);
     },
   };
 }
@@ -231,8 +252,8 @@ class GroundPainter {
 // 차도와 차선만 지형 위에 얇게 얹은 메시로 다시 그린다. 깊이 테스트를 켜서 언덕 뒤에선 가려지고,
 // polygonOffset + 살짝 띄운 높이로 바닥 위에 그려 깜빡이지 않는다. (바닥 그림의 차도는 조금 좁게 칠해 밑에 깔아 둠)
 const ROAD_LIFT = 0.07, LANE_LIFT = 0.11; // 땅에서 띄우는 높이 (m)
-const DRAPE_STEP = 2.5;                     // 지형을 따라가도록 나누는 간격 (m)
-const DRAPE_FINE = 1.0;                     // 옹벽 단차처럼 지형이 급히 꺾이는 곳은 더 잘게
+const DRAPE_STEP = 5;                       // 지형을 따라가도록 나누는 간격 (m). 차도 위 땅을 부드럽게 고친 뒤라 5m로 (삼각형 약 1/4)
+const DRAPE_FINE = 2.5;                     // 지형이 급히 꺾이는 곳은 더 잘게
 const JOINT_ANGLE = 0.14;                   // 이보다 많이 꺾이는 곳(약 8°)에만 둥근 이음
 
 function buildRoadMeshes(campus) {
@@ -315,8 +336,8 @@ export class DrapeBuilder {
 
   // 꺾이는 곳·끝을 메우는 둥근 판 (가운데에서 바깥으로 고리 몇 개)
   disc([x, z], r) {
-    // 둘레·고리 간격 약 1.5m (넓은 도로 끝의 큰 판도 지형을 따라가게)
-    const seg = Math.max(12, Math.ceil((2 * Math.PI * r) / 1.5)), rings = Math.max(1, Math.ceil(r / 1.5));
+    // 둘레·고리 간격 약 3m (넓은 도로 끝의 큰 판도 지형을 따라가게, 삼각형 수를 줄이려고 1.5m → 3m)
+    const seg = Math.max(10, Math.ceil((2 * Math.PI * r) / 3)), rings = Math.max(1, Math.ceil(r / 3));
     const center = this.vertex(x, z);
     const ring = (k) => Array.from({ length: seg }, (_, i) => {
       const a = (i / seg) * Math.PI * 2, rr = (r * k) / rings;

@@ -4,26 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전남대 지각 레이스</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=65">
+  <link rel="stylesheet" href="assets/css/style.css?v=70">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=65",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=65",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=65",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=65",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=65",
-      "./assets/js/life.js": "./assets/js/life.js?v=65",
-      "./assets/js/car.js": "./assets/js/car.js?v=65",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=65",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=65",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=65",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=65",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=65",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=65",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=65",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=65"
+      "./assets/js/map.js": "./assets/js/map.js?v=70",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=70",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=70",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=70",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=70",
+      "./assets/js/life.js": "./assets/js/life.js?v=70",
+      "./assets/js/car.js": "./assets/js/car.js?v=70",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=70",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=70",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=70",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=70",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=70",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=70",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=70",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=70"
     }
   }
   </script>
@@ -47,6 +47,8 @@
       <span>그래픽</span>
       <button data-q="low">낮음</button>
       <button data-q="high">높음</button>
+      <button data-opt="outside" title="캠퍼스 둘레 건물 (메모리를 더 씀, 기본 꺼짐)">바깥 건물</button>
+      <button data-opt="life" title="주차 차량·셔틀버스·걷는 학생 (메모리를 더 씀, 기본 꺼짐)">사람·차</button>
       <button id="sound-btn" title="소리 켜기/끄기 (M)">🔊</button>
     </div>
     <div id="fps" class="hidden"></div>
@@ -147,6 +149,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=65"></script>
+  <script type="module" src="assets/js/main.js?v=70"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 // 소품과 조형물은 종류마다 한 메시로 합치고(정점 색), 가로등은 InstancedMesh.
 // 기념물은 단정한 비석·받침대·탑으로. 흉상·동상만 이목구비 없는 매끈한 조각으로(마네킹 같은 인물 형상은 쓰지 않음).
 import * as THREE from 'three';
-import { mulberry32, distToSegment, pointInPolygon } from './map.js';
+import { mulberry32, distToSegment, pointInPolygon, freeAfterUpload } from './map.js';
 import { heightAt } from './terrain.js';
 
 const LAMP = {
@@ -99,6 +99,7 @@ export function buildLandscape(scene, campus) {
   const avenue = buildAvenue(campus, barrier.center);
   group.add(avenue.group);
 
+  freeAfterUpload(group); // 정점 배열은 GPU에 올린 뒤 해제
   scene.add(group);
   return {
     group, lamps, obstacles, quietObstacles, labels, barrier, removed, avenue,

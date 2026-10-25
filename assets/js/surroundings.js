@@ -1,25 +1,30 @@
-// 캠퍼스 바깥 풍경 (data/surroundings.json): 먼 지형(±15km, 150m 격자, 무등산 능선 포함)과 둘레 OSM 건물 덩어리.
+// 캠퍼스 바깥 풍경: 먼 지형(data/far-terrain.json, ±15km, 300m 격자, 무등산 능선 포함, 늘 켬)과
+// 둘레 OSM 건물 덩어리(data/surroundings.json, 설정 "바깥 건물"을 켤 때만 늦게 불러옴).
 // 충돌 없음, 그림자 없음. 가까운 지형 격자(terrain.json) 안쪽은 먼 지형을 그 아래로 내려 겹치지 않게 한다.
+// 정점 배열은 GPU에 올린 뒤 해제(freeAfterUpload).
 import * as THREE from 'three';
 import { heightAt, terrainBounds } from './terrain.js';
+import { freeAfterUpload } from './map.js';
 
 const LOW = new THREE.Color('#c9c5bc');     // 낮은 땅(시가지): 가까운 바닥 그림 바깥 땅 색과 같게
 const FIELD = new THREE.Color('#a9b48f');   // 들·낮은 언덕
 const FOREST = new THREE.Color('#5f7f4f');  // 산 (높거나 가파른 곳)
 const BLD_COLORS = ['#d9d4c8', '#cfcabe', '#e3ded3', '#c4c2bc', '#d6cbbb'].map((c) => new THREE.Color(c)); // 임의 (창·재질 없음)
-const SINK = [2.5, 40, 300]; // 가까운 지형 안쪽에서 먼 지형을 내리는 깊이: 가장자리 2.5m → 안쪽 300m부터 40m (150m 칸이 움푹한 땅 위로 튀어나오지 않게)
+const SINK = [2.5, 40, 300]; // 가까운 지형 안쪽에서 먼 지형을 내리는 깊이: 가장자리 2.5m → 안쪽 300m부터 40m (큰 칸이 움푹한 땅 위로 튀어나오지 않게)
 
-export function buildSurroundings(scene, data) {
-  const group = new THREE.Group();
-  const far = decodeFar(data.far);
-  group.add(farTerrainMesh(far));
-  const blds = buildingBlocks(data.buildings, far);
-  group.add(blds);
-  scene.add(group);
-  return {
-    group, buildings: blds,
-    count: data.buildings.length,
-  };
+// 먼 지형 메시. 돌려준 far.at(x, z)은 둘레 건물 바닥 높이에 쓴다
+export function buildFarTerrain(scene, data) {
+  const far = decodeFar(data);
+  const mesh = freeAfterUpload(farTerrainMesh(far));
+  scene.add(mesh);
+  return { mesh, far };
+}
+
+// 둘레 건물 덩어리 한 메시
+export function buildOutsideBuildings(scene, data, far) {
+  const mesh = freeAfterUpload(buildingBlocks(data.buildings, far));
+  scene.add(mesh);
+  return { mesh, count: data.buildings.length };
 }
 
 function decodeFar(f) {

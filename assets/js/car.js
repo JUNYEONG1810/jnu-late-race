@@ -533,13 +533,19 @@ export class Collider {
 
   // 건물이 아닌 장애물(정문 기둥 등)도 같은 방식으로 넣는다
   // quiet: 부딪혀도 튕김·충돌음 없이 조용히 멈추는 장애물 (기념물)
+  // 돌려준 번호로 setEnabled(번호, false)하면 그 장애물을 잠시 뺀다 (설정에서 끈 주차 차량 등)
   addObstacle(outline, name = '', { quiet = false } = {}) {
-    const bi = this.buildings.push({ name, quiet }) - 1;
+    const bi = this.buildings.push({ name, quiet, off: false }) - 1;
     for (let i = 0; i < outline.length; i++) {
       const [x1, z1] = outline[i];
       const [x2, z2] = outline[(i + 1) % outline.length];
       this.addEdge([x1, z1, x2, z2, bi]);
     }
+    return bi;
+  }
+
+  setEnabled(ids, on) {
+    for (const i of ids) this.buildings[i].off = !on;
   }
 
   addEdge(e) {
@@ -581,6 +587,7 @@ export class Collider {
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       this.forEachEdge(pos.x, pos.y, radius, (e) => {
+        if (this.buildings[e[4]].off) return;
         const [qx, qz] = closestOnSegment(pos.x, pos.y, e);
         let dx = pos.x - qx, dz = pos.y - qz;
         const d = Math.hypot(dx, dz);

@@ -1,14 +1,14 @@
 // 생동감: 주차장의 주차 차량(충돌 있음), 순환 도로를 천천히 도는 셔틀버스(굴착기가 다가오면 멈춤),
 // 보행로를 걷는 학생(굴착기가 다가오면 미리 비켜서 절대 닿지 않음). 브랜드·로고 없음.
-// 모두 InstancedMesh로 몇 번의 그리기 호출만 쓴다. 품질 낮음에서는 학생·버스 수를 줄인다.
+// 모두 InstancedMesh로 몇 번의 그리기 호출만 쓴다. 기본은 꺼짐(설정 "사람·차"로 켬), 품질 낮음에서는 학생·버스 수를 줄인다.
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
-import { orientedRect, rectPoint, pointInPolygon, mulberry32 } from './map.js';
+import { orientedRect, rectPoint, pointInPolygon, mulberry32, freeAfterUpload } from './map.js';
 
-const PARK = { fill: 0.6, stall: 2.5, depth: 5, len: 4.3, wid: 1.8, clear: 14 }; // 주차 칸에 차가 있을 비율(임의), 칸 크기, 차 크기, 미션 장소·출발점 둘레 비움
+const PARK = { fill: 0.35, stall: 2.5, depth: 5, len: 4.3, wid: 1.8, clear: 14 }; // 주차 칸에 차가 있을 비율(임의), 칸 크기, 차 크기, 미션 장소·출발점 둘레 비움
 const CAR_COLORS = ['#f4f4f2', '#f4f4f2', '#c9ccd0', '#c9ccd0', '#2b2e33', '#5b6068', '#3a5a8c', '#9b2f2f', '#d8d2c2'];
 const BUS = { speed: 6.5, accel: 2.5, stopAhead: 16, stopNear: 9, len: 9, wid: 2.4, h: 3.0, loop: [900, 4000], best: 2000 };
-const STU = { high: 40, low: 14, speed: 1.25, dodge: 12, look: 2.0, side: 5.0, sideSpeed: 6.5, safe: 3.4, missionClear: 9 }; // 비키기: 굴착기 앞 look초 경로가 dodge m 안이면 옆으로 side m, 마지막 안전 거리 safe m
+const STU = { high: 24, low: 10, speed: 1.25, dodge: 12, look: 2.0, side: 5.0, sideSpeed: 6.5, safe: 3.4, missionClear: 9 }; // 비키기: 굴착기 앞 look초 경로가 dodge m 안이면 옆으로 side m, 마지막 안전 거리 safe m
 const SHIRTS = ['#e85d4a', '#3f7fd9', '#f2b632', '#3fae6a', '#8e5bd1', '#f08ab0', '#ffffff', '#2fb5b0'];
 const PANTS = ['#2f3a56', '#3b3b3b', '#6b5a48', '#4a6b8c'];
 const HAIR = ['#2a211c', '#3b2a20', '#1d1a19', '#5a3b22'];
@@ -31,9 +31,15 @@ export function buildLife(scene, campus, collider, { avoidPoints = [] } = {}) {
   const students = buildStudents(campus, rand, avoid);
   group.add(students.group);
 
+  freeAfterUpload(group); // 모양 정점 배열은 GPU에 올린 뒤 해제 (위치 행렬은 그대로)
   return {
     group,
     stat: { parked: parked.count, busRoute: Math.round(route?.length || 0), buses: buses.list.length, students: students.list.length },
+    // 켜고 끄기: 끄면 안 보이고 주차 차량 충돌도 빠짐
+    setVisible(on) {
+      group.visible = on;
+      collider.setEnabled(parked.ids, on);
+    },
     setQuality(high) {
       students.setCount(high ? STU.high : STU.low);
       buses.setCount(high ? 2 : 1);
@@ -68,6 +74,7 @@ function buildParkedCars(campus, collider, rand, avoid) {
     }
   }
   const geo = carGeometry();
+  const ids = [];
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }), spots.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), c = new THREE.Color();
   spots.forEach((s, i) => {
@@ -76,10 +83,10 @@ function buildParkedCars(campus, collider, rand, avoid) {
     mesh.setColorAt(i, c.set(s.color));
     // 충돌: 차 크기 사각형 (부딪히면 건물처럼 튕김·소리)
     const cs = Math.cos(s.yaw), sn = Math.sin(s.yaw), hw = PARK.wid / 2 + 0.05, hl = PARK.len / 2 + 0.05;
-    collider.addObstacle([[-hw, -hl], [hw, -hl], [hw, hl], [-hw, hl]].map(([lx, lz]) => [s.x + lx * cs + lz * sn, s.z - lx * sn + lz * cs]));
+    ids.push(collider.addObstacle([[-hw, -hl], [hw, -hl], [hw, hl], [-hw, hl]].map(([lx, lz]) => [s.x + lx * cs + lz * sn, s.z - lx * sn + lz * cs])));
   });
   mesh.receiveShadow = true; // 그림자는 받기만 (그림자 그리기 비용 절약)
-  return { mesh, count: spots.length };
+  return { mesh, count: spots.length, ids };
 }
 
 // 승용차 한 대 (지역 +z가 앞): 몸체(흰색 → 인스턴스 색), 유리, 바퀴, 불빛. 로고·글자 없음
@@ -91,7 +98,7 @@ function carGeometry() {
   box(1.62, 0.36, 2.0, 0, 1.08, -0.25, '#2a3440');        // 옆·앞뒤 유리 띠
   box(1.5, 0.06, 2.1, 0, 1.36, -0.25, '#ffffff');         // 지붕판
   for (const [x, z] of [[-0.82, 1.35], [0.82, 1.35], [-0.82, -1.35], [0.82, -1.35]]) {
-    P.push([new THREE.CylinderGeometry(0.33, 0.33, 0.24, 10).rotateZ(Math.PI / 2).translate(x, 0.33, z), '#1c1c1e']);
+    P.push([new THREE.CylinderGeometry(0.33, 0.33, 0.24, 6).rotateZ(Math.PI / 2).translate(x, 0.33, z), '#1c1c1e']);
   }
   box(1.5, 0.12, 0.04, 0, 0.66, 2.16, '#f6f1d0');         // 앞 불빛
   box(1.5, 0.12, 0.04, 0, 0.66, -2.16, '#c4362e');        // 뒤 불빛
@@ -247,7 +254,7 @@ function busGeometry() {
   box(BUS.wid - 0.3, 1.0, 0.04, 0, 2.0, BUS.len / 2 + 0.01, '#25303b');  // 앞 유리
   box(BUS.wid - 0.2, 0.1, BUS.len - 0.4, 0, BUS.h + 0.05, 0, '#d9dbd8');  // 지붕
   for (const [x, z] of [[-1.05, 2.9], [1.05, 2.9], [-1.05, -2.9], [1.05, -2.9]]) {
-    P.push([new THREE.CylinderGeometry(0.48, 0.48, 0.3, 12).rotateZ(Math.PI / 2).translate(x, 0.48, z), '#1c1c1e']);
+    P.push([new THREE.CylinderGeometry(0.48, 0.48, 0.3, 8).rotateZ(Math.PI / 2).translate(x, 0.48, z), '#1c1c1e']);
   }
   return mergeColored(P);
 }
@@ -271,14 +278,14 @@ function buildStudents(campus, rand, avoid) {
   // 부위별 InstancedMesh (지역 +z가 앞, 키 약 1.45m: 큰 머리의 귀여운 비율)
   const lam = (opts = {}) => new THREE.MeshLambertMaterial(opts);
   const parts = {
-    torso: [new THREE.CapsuleGeometry(0.2, 0.28, 4, 10).scale(1, 1, 0.8), 0],
-    head: [new THREE.IcosahedronGeometry(0.24, 2), SKIN],
-    hair: [new THREE.SphereGeometry(0.255, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), 2],
+    torso: [new THREE.CapsuleGeometry(0.2, 0.28, 2, 7).scale(1, 1, 0.8), 0],
+    head: [new THREE.IcosahedronGeometry(0.24, 1), SKIN],
+    hair: [new THREE.SphereGeometry(0.255, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), 2],
     bag: [new THREE.BoxGeometry(0.3, 0.34, 0.14), 3],
-    legL: [new THREE.CapsuleGeometry(0.075, 0.3, 3, 8).translate(0, -0.22, 0), 1],
-    legR: [new THREE.CapsuleGeometry(0.075, 0.3, 3, 8).translate(0, -0.22, 0), 1],
-    eyeL: [new THREE.SphereGeometry(0.032, 8, 6), '#1b1b1b'],
-    eyeR: [new THREE.SphereGeometry(0.032, 8, 6), '#1b1b1b'],
+    legL: [new THREE.CapsuleGeometry(0.075, 0.3, 2, 5).translate(0, -0.22, 0), 1],
+    legR: [new THREE.CapsuleGeometry(0.075, 0.3, 2, 5).translate(0, -0.22, 0), 1],
+    eyeL: [new THREE.SphereGeometry(0.032, 5, 4), '#1b1b1b'],
+    eyeR: [new THREE.SphereGeometry(0.032, 5, 4), '#1b1b1b'],
   };
   const group = new THREE.Group();
   const meshes = {};

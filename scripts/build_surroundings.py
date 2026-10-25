@@ -1,9 +1,9 @@
 """캠퍼스 바깥 풍경 → data/surroundings.json
 
 사용법:  python scripts/fetch_surroundings.py  (먼저)  →  python scripts/build_surroundings.py
-- far: AWS Terrain Tiles z11로 캠퍼스 둘레 ±15km를 150m 격자로 (무등산 능선 포함, 낮은 정밀도).
+- data/far-terrain.json (늘 불러옴, 작음): AWS Terrain Tiles z11로 캠퍼스 둘레 ±15km를 300m 격자로 (무등산 능선 포함, 낮은 정밀도).
   높이는 data/terrain.json과 같은 기준(정문 앞 출발점 = 0)의 상대 높이, 10cm 단위 int16 → base64.
-- buildings: 지형 격자 둘레 1.3km 안 OSM 건물(campus.json에 이미 있는 것 빼고) 외곽선을 1m 단순화.
+- data/surroundings.json (설정에서 "바깥 건물"을 켤 때만 불러옴): 지형 격자 둘레 1.3km 안 OSM 건물(campus.json에 이미 있는 것 빼고) 외곽선을 1m 단순화.
   높이 = building:levels × 4m + 1 (게임 규칙과 같음). 층수 태그가 없으면 house·detached 2층(태그로 정한 추정), 나머지 기본 4층(근거 없음).
 Python 표준 라이브러리만 사용.
 """
@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"
 TILES = RAW / "terrain_far"
 OUT = ROOT / "data" / "surroundings.json"
+FAR_OUT = ROOT / "data" / "far-terrain.json"
 EARTH_R = 6378137.0
-STEP = 150
+STEP = 300  # 메모리·삼각형을 줄이려고 150m → 300m (먼 산 능선은 그대로 보임)
 HALF = 15000
 MIN_AREA = 30
 
@@ -135,10 +136,13 @@ def main():
     from collections import Counter
     c = Counter(b["s"] for b in blds)
     print(f"둘레 건물 {len(blds)}개 (작은 것 {skipped}개 뺌): 층수 태그 {c['l']}, 종류로 정함 {c['t']}, 기본 4층 {c['d']}")
+    far = {"source": "AWS Terrain Tiles(terrarium z11), 정문 앞 출발점 기준 상대 높이",
+           "step": STEP, "x0": -HALF, "z0": -HALF, "n": n, "unit": 0.1,
+           "data": base64.b64encode(struct.pack(f"<{len(dm)}h", *dm)).decode("ascii")}
+    FAR_OUT.write_text(json.dumps(far, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"저장 → {FAR_OUT.relative_to(ROOT)} ({FAR_OUT.stat().st_size / 1024:.0f} KB)")
     out = {
-        "source": "먼 지형: AWS Terrain Tiles(terrarium z11) / 둘레 건물: OpenStreetMap 기여자(ODbL)",
-        "far": {"step": STEP, "x0": -HALF, "z0": -HALF, "n": n, "unit": 0.1,
-                "data": base64.b64encode(struct.pack(f"<{len(dm)}h", *dm)).decode("ascii")},
+        "source": "둘레 건물: OpenStreetMap 기여자(ODbL)",
         "buildings": blds,
         "근거": {"높이": "층수 태그 → 층수 × 4m + 1 / house·detached 2층·창고류 1층(태그로 정한 추정) / 나머지 기본 4층(근거 없음)",
                  "모양": "OSM 외곽선을 1m로 단순화한 덩어리, 창·재질 없음(임의 색)"},

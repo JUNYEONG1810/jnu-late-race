@@ -10,7 +10,7 @@ const MINIMAP = { radius: 260, res: 0.7 };
 const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast'];
 
 export class Hud {
-  constructor({ onQuality, onSound }) {
+  constructor({ onQuality, onSound, onOption }) {
     this.speedEl = $('speed');
     this.buildingEl = $('building-name');
     this.toastEl = $('toast');
@@ -38,6 +38,11 @@ export class Hud {
         onQuality(btn.dataset.q);
         btn.blur(); // Space가 버튼을 다시 누르지 않도록
       });
+    }
+    // 설정: 바깥 건물·사람·차 켜고 끄기 (기본 꺼짐)
+    this.optionButtons = [...document.querySelectorAll('#quality button[data-opt]')];
+    for (const btn of this.optionButtons) {
+      btn.addEventListener('click', () => { onOption?.(btn.dataset.opt); btn.blur(); });
     }
     this.soundBtn = $('sound-btn');
     this.soundBtn.addEventListener('click', () => { onSound(); this.soundBtn.blur(); });
@@ -156,6 +161,10 @@ export class Hud {
 
   setQuality(q) {
     for (const btn of this.qualityButtons) btn.classList.toggle('on', btn.dataset.q === q);
+  }
+
+  setOption(name, on) {
+    for (const btn of this.optionButtons) if (btn.dataset.opt === name) btn.classList.toggle('on', on);
   }
 
   setSpeed(kmh) {

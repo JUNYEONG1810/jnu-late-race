@@ -2,7 +2,7 @@
 // 차선과 같은 방식(지형을 따라 휘는 얇은 메시 + polygonOffset)으로, 차선보다 한 단계 위에 그려 깜빡이지 않게 한다.
 // 근거: data/road-marks.json(scripts/build_road_marks.py). 정지선·화살표 자리는 규칙(교차로·차도 폭·일방통행 태그).
 import * as THREE from 'three';
-import { DrapeBuilder } from './map.js';
+import { DrapeBuilder, freeAfterUpload } from './map.js';
 
 const MARK_LIFT = 0.12;
 const WHITE = '#f1f1ec', YELLOW = '#f0bf2c';
@@ -124,7 +124,7 @@ export function buildRoadMarks(campus, marks) {
 
   const mat = (color) => new THREE.MeshLambertMaterial({ color, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -6 });
   const meshes = [white.mesh(mat(WHITE)), yellow.mesh(mat(YELLOW))];
-  for (const m of meshes) m.receiveShadow = true;
+  for (const m of meshes) { m.receiveShadow = true; freeAfterUpload(m); }
   return { meshes, stat };
 }
 

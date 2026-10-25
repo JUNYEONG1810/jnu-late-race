@@ -93,9 +93,14 @@
 - 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 주소 뒤 `?fps=1`이면 왼쪽 위 구석에 fps 표시(기본 숨김).
-- 바깥 풍경: 지형 격자(terrain.json) 바깥은 먼 지형 메시가 채운다(가까운 지형의 3km 바깥 띠는 쓰지 않음, buildMap terrainFar: 1). 안개는 지수 안개(FogExp2 0.000105), 카메라 먼 거리 22km. 둘레 건물 높이 = 층수 태그 × 4m + 1, 없으면 house·detached 2층, 나머지 4층.
+- 바깥 풍경: 지형 격자(terrain.json) 바깥은 먼 지형 메시(data/far-terrain.json, 300m 격자, 늘 켬)가 채운다(가까운 지형의 3km 바깥 띠는 쓰지 않음, buildMap terrainFar: 1). 둘레 건물(data/surroundings.json)은 설정에서 켤 때만 불러옴. 안개는 지수 안개(FogExp2 0.000105), 카메라 먼 거리 22km. 둘레 건물 높이 = 층수 태그 × 4m + 1, 없으면 house·detached 2층, 나머지 4층.
 - 조명: 오전 9시쯤 동남동 햇빛(방위 125°, 고도 약 35°, 따뜻한 색, 추정), 품질 높음에서만 부드러운 그림자(PCFSoft). 가벼운 앰비언트 오클루전은 미리 구움: 벽 아래 6m가 땅 쪽으로 어두워짐(정점 색), 바닥 그림에 건물 둘레 흐린 접지 그림자. 하늘은 위 진한 하늘색 → 지평선 옅은 색 + 해 둘레 빛. 무거운 후처리(SSAO 등)는 쓰지 않는다.
-- 성능: 내장 그래픽 노트북에서 60fps 목표. 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위). 기본값은 "높음" (정문 출발 화면 1366×768 품질 높음 60fps 측정, 50 미만이면 "낮음"으로 바꾼다).
+- 성능: 램 8GB·내장 그래픽 노트북 기준. 목표 게임 탭 메모리(그래픽 메모리 포함 추정) 낮음 약 1GB 이하·높음 1.5GB 이하, 첫 로딩 10초 이내, 60fps. 측정 방법·결과는 docs/성능-측정.md.
+  - 첫 실행은 무조건 품질 "낮음"(바닥 2048px, 그림자 없음, 화면 배율 1). "높음"은 바닥 3072px, 그림자 맵 1024, 화면 배율 상한 1.25.
+  - 바뀌지 않는 메시는 `freeAfterUpload`(map.js)로 GPU에 올린 뒤 정점 배열을 해제, 바닥 그림 원본 캔버스도 해제. 나중에 정점을 고치는 메시에는 쓰지 않는다.
+  - 반복 물체는 InstancedMesh·합치기. 차도 메시는 5m 간격(꺾이는 곳 2.5m).
+  - 둘레 건물·주차 차량·셔틀버스·학생은 기본 꺼짐, 왼쪽 위 "바깥 건물"·"사람·차" 버튼으로 켤 때 늦게 불러와 만든다. 교수님 캐릭터는 첫 화면 1.5초 뒤 만든다.
+  - 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위).
 - HUD 배치: 왼쪽 위 품질·소리 버튼, 오른쪽 위 미니맵, 그 아래 지각 모드 미션 목록. 건물 이름표는 서로·HUD와 겹치면 위아래로 비키거나 숨긴다.
 - CSS·JS를 고치면 HTML에서 불러오는 주소의 `?v=` 버전을 갱신 (배포 캐시 문제 방지).
 
@@ -159,7 +164,8 @@ data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, dat
 data/monuments.json            기념물 27곳 형태·크기·재료·근거 등급·출처 (scripts/build_monuments.py로 생성)
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
 scripts/build_road_marks.py   OSM 횡단보도·과속방지턱·차도 태그 → data/road-marks.json
-scripts/fetch_surroundings.py, build_surroundings.py   바깥 풍경: AWS 타일 z11 + Overpass 둘레 건물(data/raw/) → data/surroundings.json
+scripts/fetch_surroundings.py, build_surroundings.py   바깥 풍경: AWS 타일 z11 + Overpass 둘레 건물(data/raw/) → data/far-terrain.json, data/surroundings.json
+게임서버켜기.bat   로컬 테스트용(커밋 안 함, .gitignore): 이 폴더에서 서버를 켜고 Chrome으로 http://localhost:8000/?fps=1
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)
 scripts/build_terrain_ngii.py, terrain_steps_check.py, smooth_road_terrain.py   수치지도 지형 + 검증 + 차도 단차 정리
