@@ -876,7 +876,7 @@ function solarPanels(plain, o, y, share, color, holes = []) {
       const [x, z] = rectPoint(r, u, v);
       if (!pointInPolygon(x, z, o) || holes.some((h) => pointInPolygon(x, z, h)) || edge(x, z) < 2.4) continue;
       const q = (du, dv) => rectPoint(r, u + du, v + dv);
-      box(plain, [q(-1.5, -0.9), q(1.5, -0.9), q(1.5, 0.9), q(-1.5, 0.9)], y + 0.1, y + 0.45, color);
+      flatTop(plain, [q(-1.5, -0.9), q(1.5, -0.9), q(1.5, 0.9), q(-1.5, 0.9)], y + 0.35, color); // 윗면만 (옆면은 멀리서 안 보여 삼각형 절약)
     }
   }
 }
