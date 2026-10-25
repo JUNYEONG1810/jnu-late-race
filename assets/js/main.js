@@ -204,7 +204,7 @@ let lateMode = null;
 async function start() {
   const [campus, lawns, widths, styles] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadCampus('data/building-styles.json?v=4'),
+    loadCampus('data/building-styles.json?v=5'),
     loadTerrain('data/terrain.json?v=2'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
@@ -222,7 +222,8 @@ async function start() {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,
   });
-  collider = new Collider(campus);
+  // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
+  collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   world.landscape = buildLandscape(scene, campus);
   for (const o of world.gateObstacles) collider.addObstacle(o);
   for (const o of world.landscape.obstacles) collider.addObstacle(o);

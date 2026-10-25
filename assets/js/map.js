@@ -725,6 +725,14 @@ function buildBuildings(list, anisotropy) {
     const mainH = st.mainFloors ? st.mainFloors * FLOOR_M + 1 : b.height;
     let top = 0;
 
+    // 지붕만 있는 차양(도로를 덮는 지붕 등): 기둥 + 얇은 지붕판, 벽·입구 없음
+    if (st.canopy) {
+      const ch = st.canopyH || 5;
+      box(plain, o, base + ch - 0.4, base + ch, roof);
+      for (const [x, z] of o) box(plain, circleOutline([x, z], 0.25, 6), base - BURY_M, base + ch - 0.4, wall);
+      b.height = ch;
+      continue;
+    }
     if (!st.skipMain) {
       const longest = extrude(o, base, base + mainH, look, wall, roof, { wallsFor, plain, roof: st.roof, roofH: st.roofH, holes: b.holes });
       top = mainH + (st.roof === 'hip' ? st.roofH || 3 : 0);
