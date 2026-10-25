@@ -102,6 +102,7 @@ addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyC') hud.toast(`시점: ${rig.nextMode().label}`);
   if (e.code === 'KeyH') hud.showHelp();
+  if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
   lateMode?.onKey(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -255,6 +256,15 @@ function applyRoadWidths(campus, list) {
   }
 }
 
+// 운전사 학생 표정: 자유 주행 웃음, 지각 모드 긴장, 결과 A+ 만세, F 울먹 (그 밖의 등급은 웃음)
+function driverExpression() {
+  if (!lateMode.active) return 'smile';
+  if (lateMode.state === 'outro' || lateMode.state === 'result') {
+    return lateMode.grade === 'A+' ? 'hooray' : lateMode.grade === 'F' ? 'cry' : 'smile';
+  }
+  return 'nervous';
+}
+
 // ---------- 루프 ----------
 
 const clock = new THREE.Clock();
@@ -272,6 +282,8 @@ function loop() {
     for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
   }
   lateMode.update(dt);
+  car.driver.setExpression(driverExpression());
+  if (lateMode.frozen) car.driver.update(dt, 0); // 결과 화면 등 굴착기가 멈춘 동안에도 표정·만세 움직임
   world.landscape.update(dt, car.pos.x, car.pos.y); // 주차 차단기
 
   rig.update(dt, car);

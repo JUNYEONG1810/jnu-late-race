@@ -2,6 +2,8 @@
 // 차량의 앞은 로컬 +z. heading h일 때 앞 방향 = (sin h, cos h) (x 동쪽, z 남쪽).
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
+import { Driver } from './driver.js';
+import { DRIVER } from './driver-config.js';
 
 export const DRIVE = {
   maxSpeed: 60 / 3.6,    // 기본 최고 속도 (m/s)
@@ -95,7 +97,7 @@ export class Car {
     const dark = mat('#3a3d44');
     const steel = mat('#9aa0a8');
     const rubber = mat('#232529');
-    const glass = mat('#7fb0d6', { transparent: true, opacity: 0.75 });
+    const glass = mat('#a9cfe8', { transparent: true, opacity: 0.38, depthWrite: false }); // 운전사 학생 얼굴이 유리 너머로 잘 보이게 옅게
 
     // ---- 궤도 (몸체 기울기와 상관없이 땅에 붙어 있게 object에 바로) ----
     const cleatGeo = new THREE.BoxGeometry(0.5, 0.07, 0.2);
@@ -128,13 +130,32 @@ export class Car {
     box(1.56, 0.52, 0.42, this.paint, 0, 1.12, -1.08);       // 뒤 균형추
     box(0.62, 0.3, 0.8, this.paint, -0.42, 1.57, -0.5);      // 엔진 덮개
 
-    // 운전석 캐빈 (왼쪽 = 로컬 +x)
-    const cab = { x: 0.34, y: 1.9, z: 0.2, w: 0.8, h: 0.95, d: 0.95 };
-    this.cabin = [box(cab.w - 0.06, cab.h, cab.d - 0.06, glass, cab.x, cab.y, cab.z)];
+    // 운전석 캐빈 (왼쪽 = 로컬 +x). 운전사 학생의 뿔이 지붕에 닿지 않게 높이 0.95 → 1.05m
+    const cab = { x: 0.34, y: 1.95, z: 0.2, w: 0.8, h: 1.05, d: 0.95 };
+    this.cab = cab;
+    // 유리: 앞·뒤·오른쪽은 한 메시, 왼쪽(팔이 없는 쪽) 창은 고개 내밀 때 내려가도록 따로
+    const pane = (w, h, d, x, z) => new THREE.BoxGeometry(w, h, d).translate(x, 0, z).toNonIndexed();
+    const panes = [pane(cab.w - 0.06, cab.h, 0.03, cab.x, cab.z + cab.d / 2 - 0.03), pane(cab.w - 0.06, cab.h, 0.03, cab.x, cab.z - cab.d / 2 + 0.03),
+      pane(0.03, cab.h, cab.d - 0.06, cab.x - cab.w / 2 + 0.03, cab.z)];
+    const glassGeo = new THREE.BufferGeometry();
+    for (const a of ['position', 'normal']) {
+      glassGeo.setAttribute(a, new THREE.Float32BufferAttribute(panes.flatMap((g) => [...g.attributes[a].array]), 3));
+    }
+    const glassMesh = new THREE.Mesh(glassGeo, glass);
+    glassMesh.position.y = cab.y;
+    this.body.add(glassMesh);
+    this.leftWindow = box(0.03, cab.h, cab.d - 0.06, glass, cab.x + cab.w / 2 - 0.03, cab.y, cab.z);
+    this.cabin = [glassMesh, this.leftWindow];
     for (const [px, pz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       this.cabin.push(box(0.07, cab.h, 0.07, this.paint, cab.x + px * cab.w / 2, cab.y, cab.z + pz * cab.d / 2));
     }
     this.cabin.push(box(cab.w + 0.12, 0.09, cab.d + 0.14, this.paint, cab.x, cab.y + cab.h / 2 + 0.04, cab.z));
+
+    // 운전사: 황소 "학생" (driver.js). 운전석에 앉아 앞발굽을 조종 레버에
+    this.driver = new Driver();
+    this.driver.object.position.set(...DRIVER.seat);
+    this.body.add(this.driver.object);
+    this.cabin.push(this.driver.object); // 운전석 시점에서는 숨김
 
     // 배기구 (위로 솟음) + 불꽃
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.75, 10), steel);
@@ -328,6 +349,12 @@ export class Car {
     const pitch = this.braking ? 0.05 : (this.boosting ? -0.05 : 0);
     this.body.rotation.x += (pitch - this.body.rotation.x) * Math.min(1, dt * 6);
     this.brakeMat.emissiveIntensity = this.braking ? 2.5 : 0.15;
+
+    // 운전사 학생 (표정·고개 내밀기·귀 펄럭임), 고개를 내밀면 왼쪽 창이 내려감
+    this.driver.update(dt, this.forwardSpeed);
+    const open = 1 - this.driver.peek * 0.95; // 창을 아래 틀 쪽으로 접어 내림
+    this.leftWindow.scale.y = open;
+    this.leftWindow.position.y = this.cab.y - (this.cab.h / 2) * (1 - open);
 
   }
 

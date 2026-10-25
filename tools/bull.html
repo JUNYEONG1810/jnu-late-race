@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>운전사 학생 확인</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe9f3; font-family: "Malgun Gothic", sans-serif; }
+  #ui { position: fixed; left: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: 760px; }
+  #ui button { border: 0; border-radius: 9px; padding: 7px 12px; font: inherit; font-weight: 700; background: #fff; color: #44506a; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  #ui button.on { background: #ff8a7a; color: #fff; }
+  #ui .sep { width: 100%; height: 0; }
+  #tip { position: fixed; left: 12px; bottom: 10px; color: #55607a; font-size: 13px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="ui">
+  <button data-view="solo" class="on">학생 단독</button>
+  <button data-view="cab">굴착기 운전석</button>
+  <span class="sep"></span>
+  <button data-exp="smile" class="on">웃음 (자유 주행)</button>
+  <button data-exp="nervous">긴장 (지각 모드)</button>
+  <button data-exp="hooray">만세 (A+)</button>
+  <button data-exp="cry">울먹 (F)</button>
+  <button data-peek>고개 내밀기 (G)</button>
+  <span class="sep"></span>
+  <button data-cam="front">정면</button>
+  <button data-cam="side">측면</button>
+  <button data-cam="three">비스듬히</button>
+</div>
+<div id="tip">마우스 왼쪽 끌기: 돌리기 · 휠: 확대 · 오른쪽 끌기: 옮기기 · G: 고개 내밀기</div>
+<script type="module">
+// 운전사 학생(황소 캐릭터) 확인용 페이지. 게임과 같은 모델(assets/js/driver.js, driver-config.js)을 그대로 쓴다.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Driver } from '../assets/js/driver.js';
+import { Car } from '../assets/js/car.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#dfe9f3');
+scene.add(new THREE.HemisphereLight('#e8f2ff', '#b9b2a2', 1.7));
+const sun = new THREE.DirectionalLight('#fff3e0', 2.2);
+sun.position.set(3, 6, 4);
+sun.castShadow = true;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(6, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#cfd8c4' }));
+ground.receiveShadow = true;
+scene.add(ground);
+
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// 단독: 의자에 앉은 그대로 땅 위에 (scale 1로 크게)
+const solo = new Driver();
+solo.object.scale.setScalar(1 / 0.6);
+solo.object.position.y = 0.1;
+scene.add(solo.object);
+// 굴착기 운전석
+const car = new Car();
+car.place(0, 0, 0, 1);
+car.object.visible = false;
+scene.add(car.object);
+
+let view = 'solo', expression = 'smile';
+const target = () => (view === 'solo' ? solo : car.driver);
+const CAMS = {
+  solo: { front: [0, 0.85, 3.2], side: [3.2, 0.85, 0], three: [2.2, 1.3, 2.4], look: [0, 0.75, 0] },
+  cab: { front: [0.6, 2.2, 4.2], side: [4.5, 2.2, 0.2], three: [3.6, 3.0, 3.8], look: [0.34, 1.9, 0.2] },
+};
+function setCam(k) {
+  const c = CAMS[view];
+  camera.position.set(...c[k]);
+  controls.target.set(...c.look);
+  controls.update();
+}
+function setView(v) {
+  view = v;
+  solo.object.visible = v === 'solo';
+  car.object.visible = v === 'cab';
+  ground.scale.setScalar(v === 'cab' ? 1.2 : 0.6);
+  target().setExpression(expression);
+  setCam('three');
+  mark('view', v);
+}
+function mark(attr, value) {
+  for (const b of document.querySelectorAll(`[data-${attr}]`)) b.classList.toggle('on', b.dataset[attr] === value);
+}
+function togglePeek() {
+  solo.togglePeek(); car.driver.togglePeek();
+  document.querySelector('[data-peek]').classList.toggle('on', car.driver.peekGoal === 1);
+}
+for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => setView(b.dataset.view);
+for (const b of document.querySelectorAll('[data-exp]')) b.onclick = () => {
+  expression = b.dataset.exp; solo.setExpression(expression); car.driver.setExpression(expression); mark('exp', expression);
+};
+for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => setCam(b.dataset.cam);
+document.querySelector('[data-peek]').onclick = togglePeek;
+addEventListener('keydown', (e) => { if (e.code === 'KeyG') togglePeek(); });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  solo.update(dt, 0);
+  car.update(dt, {}, null);
+  car.place(0, 0, 0, 1);
+  controls.update();
+  renderer.render(scene, camera);
+}
+renderer.setAnimationLoop(frame);
+setView('solo');
+// 캡처·확인용
+window.viewer = { THREE, scene, camera, renderer, controls, solo, car, setView, setCam, frame,
+  setExpression: (e) => document.querySelector(`[data-exp="${e}"]`).click(), togglePeek };
+</script>
+</body>
+</html>
