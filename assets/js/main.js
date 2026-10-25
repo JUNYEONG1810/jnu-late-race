@@ -401,7 +401,7 @@ async function start() {
   loadingUi.set(0, '캠퍼스 지도 받는 중…');
   const [campus, lawns, widths, styles, monuments, , farTerrain, roadMarks] = await Promise.all([
     count(loadCampus('data/campus.json?v=9')), count(loadCampus('data/lawns.json?v=1')), count(loadCampus('data/road-widths.json?v=1')),
-    count(loadCampus('data/building-styles.json?v=8')), count(loadCampus('data/monuments.json?v=4')),
+    count(loadCampus('data/building-styles.json?v=9')), count(loadCampus('data/monuments.json?v=4')),
     count(loadTerrain('data/terrain.json?v=4')), count(loadCampus('data/far-terrain.json?v=1')), count(loadCampus('data/road-marks.json?v=1')),
   ]);
   loadingUi.set(0.5, '땅과 건물 만드는 중…');
