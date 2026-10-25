@@ -7,12 +7,14 @@ import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
 import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, playMoo, playBonk, speak, EngineSound, isMuted, setMuted } from './voice.js';
-import { LateMode } from './late-mode.js';
+import { LateMode, TIME_LIMIT } from './late-mode.js';
 import { Walker } from './walker.js';
 import { STUDENT_LINES } from './dialogue-data.js';
 import { buildFarTerrain } from './surroundings.js';
 import { buildRoadMarks } from './roadmarks.js';
 import { buildShuttles } from './life.js';
+import { Music } from './music.js';
+import { buildSurface } from './surface.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -204,7 +206,14 @@ const NO_INPUT = { up: false, down: false, left: false, right: false, drift: fal
 
 // ---------- 시작 ----------
 
-const hud = new Hud({ onQuality: (q) => setQuality(q, true), onSound: toggleSound });
+const hud = new Hud({ onQuality: (q) => setQuality(q, true), onSound: toggleSound, onBgm: toggleBgm });
+const music = new Music(); // 배경음악 (자유 주행 / 지각 모드 / 결과), 따로 끌 수 있음
+hud.setBgm(!music.off);
+function toggleBgm() {
+  music.setOff(!music.off);
+  hud.setBgm(!music.off);
+  hud.toast(music.off ? '배경음악 끔' : '배경음악 켬');
+}
 // 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬),
 // 가벼운 모드 (기본 꺼짐: 켜면 장식 요소를 한꺼번에 끔)
 const settings = { walkCamAuto: false, chatter: true, light: false };
@@ -262,6 +271,7 @@ function setupTitle() {
   }
   document.getElementById('btn-free').addEventListener('click', startFree);
   document.getElementById('btn-late').addEventListener('click', startLate);
+  document.getElementById('btn-daily').addEventListener('click', () => { leaveTitle(); lateMode.start({ daily: true }); });
   const credits = document.getElementById('credits');
   document.getElementById('btn-credits').addEventListener('click', () => credits.classList.remove('hidden'));
   credits.querySelector('[data-act=close]').addEventListener('click', () => credits.classList.add('hidden'));
@@ -349,6 +359,26 @@ function studentChatter() {
   hud.sayStudent(STUDENT_LINES[i], speak(STUDENT_LINES[i], { pitch: 1.9 }));
 }
 
+// 배경음악 고르기 + 용봉관 시계탑 바늘 (지각 모드는 게임 시각 8:57 → 9:00, 그 밖에는 실제 지금 시각)
+let clockT = 0;
+function updateMusicAndClock(dt) {
+  const L = lateMode;
+  if (onTitle || !L.active) music.play('free');
+  else if (['countdown', 'playing', 'mission', 'paused'].includes(L.state)) music.play('late');
+  else if (L.state === 'intro') music.play(null);
+  music.rush = L.active && L.state !== 'result' ? Math.max(0, Math.min(1, 1 - (TIME_LEFT() / 30))) : 0;
+  if ((clockT -= dt) > 0 || !world.clock) return;
+  clockT = 0.5;
+  if (L.active && L.state !== 'result') {
+    const t = L.clockSeconds;
+    world.clock.setTime(Math.floor(t / 3600), Math.floor((t % 3600) / 60), t % 60);
+  } else {
+    const d = new Date();
+    world.clock.setTime(d.getHours(), d.getMinutes(), d.getSeconds());
+  }
+}
+const TIME_LEFT = () => TIME_LIMIT - (lateMode.elapsed || 0);
+
 let walkingUi = false;
 function setWalkingUi(on) {
   if (on === walkingUi) return;
@@ -431,6 +461,7 @@ async function start() {
   world.shuttle = buildShuttles(scene, campus); // 순환로 셔틀버스 1~2대 (주차 차량·걷는 학생은 넣지 않음)
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
+  car.surface = buildSurface(campus); // 잔디·흙·운동장 위는 느리게 (부스터 중엔 그대로)
   loadingUi.set(0.72, '나무와 조형물 놓는 중…');
   await breathe();
   world.landscape = buildLandscape(scene, campus);
@@ -458,6 +489,7 @@ async function start() {
   walker.onChatter = studentChatter;
   scene.add(walker.object);
   lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
+  lateMode.onResult = (grade) => music.result(grade); // 등급별 짧은 결과 음악
   hud.initMinimap(campus);
   setupTitle();
 
@@ -512,10 +544,11 @@ function loop() {
 
   // 프레임이 길면 잘게 나눠서 벽을 뚫지 않게. 일시정지·결과 화면에서는 멈춤
   if (!lateMode.frozen) {
-    const steps = Math.ceil(dt / (1 / 60));
+    const pdt = dt * lateMode.timeScale; // 도착 순간 슬로모션
+    const steps = Math.ceil(pdt / (1 / 60));
     for (let i = 0; i < steps; i++) {
-      car.update(dt / steps, walking ? NO_INPUT : input, collider);
-      if (walking) walker.update(dt / steps, input, cameraGroundDir());
+      car.update(pdt / steps, walking ? NO_INPUT : input, collider);
+      if (walking) walker.update(pdt / steps, input, cameraGroundDir());
     }
   }
   if (!walking) walker.update(dt); // 타고 나서 문 닫기
@@ -542,11 +575,14 @@ function loop() {
   });
 
   setWalkingUi(walking);
+  updateMusicAndClock(dt);
+  hud.updatePhone();
   hud.setWalkHint(walking ? (walker.walking && walker.nearCar() ? 'near' : 'far') : null);
   hud.setSpeed(walking ? walker.speed * 3.6 : car.speedKmh);
   if (!onTitle) {
     const target = lateMode.active && lateMode.target ? lateMode.target : null;
-    hud.drawMinimap(focus, walking ? walker.heading : car.heading, target, walking ? car.pos : null);
+    hud.drawMinimap(focus, walking ? walker.heading : car.heading, target, walking ? car.pos : null,
+      lateMode.active && (lateMode.state === 'playing' || lateMode.state === 'mission') ? lateMode.route : null);
   }
   hud.setBoost(car.boost, car.boosting ? 'active' : car.boostReady ? 'ready' : '');
   hud.drawSpeedLines(car.boostFx);

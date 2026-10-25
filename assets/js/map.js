@@ -75,7 +75,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terra
 
   freeAfterUpload(group); // 정점 배열은 GPU에 올린 뒤 램에서 해제 (나무 위치 행렬은 그대로)
   scene.add(group);
-  return { group, trees, gateObstacles: gate.obstacles, ground };
+  return { group, trees, gateObstacles: gate.obstacles, ground, clock: clockTower };
 }
 
 // 메모리 절약: 바뀌지 않는 메시의 정점·색·uv·인덱스 배열을 GPU에 올린 직후 자바스크립트 쪽에서 버린다.
@@ -862,7 +862,7 @@ function buildBuildings(list, anisotropy) {
     return new THREE.Mesh(w.geometry(), mat);
   });
   meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
-  if (clocks.length) meshes.push(clockFaces(clocks));
+  if (clocks.length) meshes.push(...clockFaces(clocks));
   for (const m of meshes) {
     m.castShadow = true;
     m.receiveShadow = true;
@@ -872,8 +872,12 @@ function buildBuildings(list, anisotropy) {
 
 // 시계탑 네 면의 둥근 시계판: 흰 바탕 + 짙은 테두리 + 시곗바늘 2개 (시각은 임의: 8시 58분, 지각 직전)
 const CLOCK = { r: 0.32, ring: 0.06, below: 0.3, time: [8, 58] }; // r·ring은 면 폭 비율, below는 꼭대기에서 아래로(면 폭 비율)
+// 시계판(움직이지 않음)은 한 메시, 바늘은 시침·분침 InstancedMesh 둘(면마다 하나씩)이라 시각을 바꿀 수 있다.
+// 돌려줌: { meshes, setTime(시, 분, 초) } — 지각 모드는 게임 시각(8:57 → 9:00), 자유 주행은 실제 지금 시각 (main.js)
+let clockTower = null;
 function clockFaces(list) {
   const pos = [], nor = [], col = [];
+  const faces = []; // 바늘을 놓을 면: 가운데·오른쪽·바깥 방향·반지름
   const white = new THREE.Color('#f4f2ea'), dark = new THREE.Color('#2b2e33');
   for (const { outline: o, top } of list) {
     const sign = area(o) > 0 ? 1 : -1;
@@ -917,17 +921,40 @@ function clockFaces(list) {
         tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), P(sx * R * 0.95 - sy * w, sy * R * 0.95 + sx * w, 0.07), dark);
         tri(P(sx * r0 - sy * w, sy * r0 + sx * w, 0.07), P(sx * r0 + sy * w, sy * r0 - sx * w, 0.07), P(sx * R * 0.95 + sy * w, sy * R * 0.95 - sx * w, 0.07), dark);
       }
-      const [hh, mm] = CLOCK.time;
-      bar(((hh % 12) + mm / 60) / 12 * Math.PI * 2, R * 0.55, R * 0.09, 0.08, dark); // 시침
-      bar((mm / 60) * Math.PI * 2, R * 0.85, R * 0.06, 0.09, dark);                // 분침
       disc(0, R * 0.07, 0.1, dark, 12);
+      faces.push({ c: P(0, 0, 0.085), u: [ux, 0, uz], n: [nx, 0, nz], R });
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  // 바늘: 판 기준 +y(12시) 쪽으로 뻗은 얇은 판 (반지름 1 기준, 면마다 R배)
+  const handMat = new THREE.MeshBasicMaterial({ color: dark, side: THREE.DoubleSide });
+  const handGeo = (L, w) => new THREE.PlaneGeometry(w, L * 1.12).translate(0, L * 0.44, 0);
+  const hour = new THREE.InstancedMesh(handGeo(0.55, 0.09), handMat, faces.length);
+  const minute = new THREE.InstancedMesh(handGeo(0.85, 0.06), handMat, faces.length);
+  const m = new THREE.Matrix4(), basis = new THREE.Matrix4(), rot = new THREE.Matrix4(), sc = new THREE.Matrix4();
+  const X = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3();
+  const setHand = (inst, i, f, ang, lift) => {
+    X.set(...f.u); Z.set(...f.n);
+    basis.makeBasis(X, Y, Z).setPosition(f.c[0] + f.n[0] * lift, f.c[1], f.c[2] + f.n[2] * lift);
+    rot.makeRotationZ(-ang); // 밖에서 볼 때 시계 방향
+    sc.makeScale(f.R, f.R, 1);
+    inst.setMatrixAt(i, m.copy(basis).multiply(rot).multiply(sc));
+  };
+  const setTime = (h, mi, se = 0) => {
+    const mm = mi + se / 60;
+    faces.forEach((f, i) => {
+      setHand(hour, i, f, (((h % 12) + mm / 60) / 12) * Math.PI * 2, 0);
+      setHand(minute, i, f, (mm / 60) * Math.PI * 2, 0.01);
+    });
+    hour.instanceMatrix.needsUpdate = minute.instanceMatrix.needsUpdate = true;
+  };
+  setTime(...CLOCK.time);
+  clockTower = { setTime };
+  return [mesh, hour, minute];
 }
 
 // 외곽선을 y0~y1로 세움: 벽(외관 텍스처) + 지붕(평지붕 또는 우진각). 가장 긴 벽 정보를 돌려줌

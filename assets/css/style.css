@@ -585,3 +585,29 @@ body.title #student-bubble, body.title #student-z, body.cine #student-bubble, bo
 
 /* 첫 화면 부제 아래 한 줄 설명 */
 .title-desc { margin: -6px 0 14px; font-size: 14px; font-weight: 600; color: #6b7385; }
+
+/* ---------- 지각 모드 재미 (밤샘 7단계) ---------- */
+#timer { display: flex; align-items: center; gap: 10px; color: #2b3240; }
+#timer .clock-face { width: 30px; height: 30px; flex: none; }
+#timer.warn .clock-face circle { fill: #ffe4df; }
+#bgm-btn.off { opacity: 0.45; text-decoration: line-through; }
+#phone {
+  left: 16px;
+  top: 34%;
+  max-width: 300px;
+  padding: 10px 16px 12px;
+  border: 2.5px solid #5e3b22;
+  background: #fffaf0;
+  font-weight: 700;
+  transition: opacity 0.25s;
+}
+#phone .phone-name { font-size: 13px; color: #8a5a35; margin-bottom: 4px; }
+#phone .phone-text { font-size: 17px; min-height: 1.4em; }
+body.cine #phone { display: none; }
+.res-excuse { margin: 12px auto 8px; max-width: 320px; padding: 12px 16px; border-radius: 8px; background: #fffdf3; border: 1.5px dashed #b49a6a; text-align: left; transform: rotate(-1.2deg); }
+.res-excuse.hidden { display: none; }
+.res-excuse-title { font-weight: 900; font-size: 15px; color: #8a5a35; margin-bottom: 6px; letter-spacing: 0.15em; }
+.res-excuse-text { font-size: 16px; font-weight: 700; line-height: 1.45; }
+.res-excuse-sign { margin-top: 8px; font-size: 12px; color: #8b8270; text-align: right; }
+.res-daily { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #2f8cff; color: #fff; font-size: 13px; font-weight: 800; }
+#countdown.arrive { color: #ffd23f; }

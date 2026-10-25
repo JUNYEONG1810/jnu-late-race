@@ -25,6 +25,9 @@ export function unlockAudio() {
 
 export function isMuted() { return muted; }
 
+// 배경음악(music.js)도 같은 전체 음량(master)을 거치게: 오디오가 시작됐으면 { ctx, master }
+export function audioOut() { return ctx && master ? { ctx, master } : null; }
+
 export function setMuted(on) {
   muted = on;
   try { localStorage.setItem('muted', on ? '1' : '0'); } catch {}

@@ -10,7 +10,7 @@ const MINIMAP = { radius: 260, res: 0.7 };
 const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
 
 export class Hud {
-  constructor({ onQuality, onSound }) {
+  constructor({ onQuality, onSound, onBgm }) {
     this.speedEl = $('speed');
     this.buildingEl = $('building-name');
     this.toastEl = $('toast');
@@ -41,6 +41,8 @@ export class Hud {
     }
     this.soundBtn = $('sound-btn');
     this.soundBtn.addEventListener('click', () => { onSound(); this.soundBtn.blur(); });
+    this.bgmBtn = $('bgm-btn');
+    this.bgmBtn.addEventListener('click', () => { onBgm?.(); this.bgmBtn.blur(); });
   }
 
   // 왼쪽 위 ⚙ 설정: 체크박스(data-set=설정 이름)를 settings 값과 묶는다
@@ -106,6 +108,11 @@ export class Hud {
     this.helpEl.classList.add('hidden');
   }
 
+  setBgm(on) {
+    this.bgmBtn.classList.toggle('off', !on);
+    this.bgmBtn.title = on ? '배경음악 끄기' : '배경음악 켜기';
+  }
+
   setSound(on) {
     this.soundBtn.textContent = on ? '🔊' : '🔇';
     this.soundBtn.classList.toggle('off', !on);
@@ -158,7 +165,7 @@ export class Hud {
 
   // carPos: Vector2(x, z) (걷는 중이면 학생 위치), heading: rad, target: {x, z} 또는 null,
   // parked: 학생이 내려서 걷는 동안 세워 둔 굴착기 위치 Vector2 또는 null
-  drawMinimap(carPos, heading, target, parked = null) {
+  drawMinimap(carPos, heading, target, parked = null, route = null) {
     const c = this.mmCanvas, g = this.mmCtx;
     const css = c.clientWidth || 184;
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -174,6 +181,16 @@ export class Hud {
     g.fillRect(0, 0, W, W);
     const sx = (carPos.x - MINIMAP.radius - B.x0) * S, sz = (carPos.y - MINIMAP.radius - B.z0) * S;
     g.drawImage(this.mmOff, sx, sz, MINIMAP.radius * 2 * S, MINIMAP.radius * 2 * S, 0, 0, W, W);
+
+    // 길 안내: 다음 미션까지 도로를 따라가는 경로선
+    if (route && route.length > 1) {
+      g.save();
+      g.lineCap = g.lineJoin = 'round';
+      const line = () => { g.beginPath(); route.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](R + (x - carPos.x) * k, R + (z - carPos.y) * k)); };
+      line(); g.strokeStyle = 'rgba(255,255,255,0.95)'; g.lineWidth = 7 * dpr; g.stroke();
+      line(); g.strokeStyle = '#2f8cff'; g.lineWidth = 4 * dpr; g.stroke();
+      g.restore();
+    }
 
     // 다음 미션 장소 (범위 밖이면 가장자리에)
     if (target) {
@@ -431,6 +448,7 @@ export class Hud {
   setLateMode(on) {
     document.body.classList.toggle('late', on);
     if (!on) {
+      this.hidePhone();
       this.showPause(false);
       this.showResult(null);
       this.showProgress(null);
@@ -439,19 +457,57 @@ export class Hud {
     }
   }
 
-  // remaining: 남은 초 (0에서 멈춤: 시간이 끝나면 바로 실패)
-  setTimer(remaining) {
-    const s = Math.max(0, Math.ceil(remaining));
-    const text = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  // 시계 타이머: 남은 시간을 9시까지의 시각으로 (제한 시간 3분 = 8:57:00 → 9:00:00), 작은 시계 그림과 함께.
+  // remaining: 남은 초 (0에서 멈춤), limit: 제한 시간
+  setTimer(remaining, limit = 180) {
+    const left = Math.max(0, Math.ceil(remaining));
+    const t = 9 * 3600 - Math.ceil(left * (180 / limit)); // 자정부터 초
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+    const text = `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     if (text === this.lastTimer) return;
     this.lastTimer = text;
-    this.timerEl.textContent = text;
-    this.timerEl.classList.toggle('warn', s <= 30);
+    if (!this.clockHands) {
+      this.timerEl.innerHTML = `<svg class="clock-face" viewBox="-12 -12 24 24" aria-hidden="true"><circle r="10.5" fill="#fff" stroke="currentColor" stroke-width="2"/>`
+        + `<line class="hh" x1="0" y1="0" x2="0" y2="-5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>`
+        + `<line class="mh" x1="0" y1="0" x2="0" y2="-8.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`
+        + `<line class="sh" x1="0" y1="1.5" x2="0" y2="-8.6" stroke="#e8412c" stroke-width="0.9"/></svg><span class="clock-text"></span>`;
+      this.clockHands = ['.hh', '.mh', '.sh'].map((q) => this.timerEl.querySelector(q));
+      this.clockText = this.timerEl.querySelector('.clock-text');
+    }
+    const [hh, mh, sh] = this.clockHands;
+    hh.setAttribute('transform', `rotate(${((h % 12) + m / 60) * 30})`);
+    mh.setAttribute('transform', `rotate(${(m + sec / 60) * 6})`);
+    sh.setAttribute('transform', `rotate(${sec * 6})`);
+    this.clockText.textContent = text;
+    this.timerEl.classList.toggle('warn', left <= 30);
   }
 
-  // missions: [{emoji, label, title}], current: 지금 미션 번호 (이전 것은 완료)
-  setMissions(missions, current) {
-    this.listEl.innerHTML = '<h3>오늘의 할 일</h3>' + missions.map((m, i) => {
+  // 교수님 전화: 화면 왼쪽 2D 말풍선 (목소리 박자에 맞춰 글자가 나옴). voice = speak()의 반환값
+  phone(text, voice) {
+    this.phoneCall = { text, steps: voice.steps, start: performance.now(), end: voice.duration + 2.6 };
+    $('phone').classList.remove('hidden');
+  }
+
+  // 매 프레임: 전화 말풍선 글자
+  updatePhone() {
+    const P = this.phoneCall;
+    if (!P) return;
+    const t = (performance.now() - P.start) / 1000;
+    const el = $('phone');
+    if (t > P.end) { this.phoneCall = null; el.classList.add('hidden'); return; }
+    let n = 0;
+    for (const st of P.steps) if (st.at <= t) n = st.end;
+    const text = P.text.slice(0, n);
+    const box = el.querySelector('.phone-text');
+    if (box.textContent !== text) box.textContent = text;
+  }
+
+  hidePhone() { this.phoneCall = null; $('phone').classList.add('hidden'); }
+
+  // missions: [{emoji, label, title}], current: 지금 미션 번호 (이전 것은 완료), title: 목록 제목 (undefined면 그대로, null이면 기본)
+  setMissions(missions, current, title) {
+    if (title !== undefined) this.missionTitle = title || '오늘의 할 일';
+    this.listEl.innerHTML = `<h3>${this.missionTitle || '오늘의 할 일'}</h3>` + missions.map((m, i) => {
       const cls = i < current ? 'done' : i === current ? 'current' : '';
       const check = i < current ? '✅' : m.emoji;
       return `<div class="mission-item ${cls}"><span class="check">${check}</span>`
@@ -521,10 +577,15 @@ export class Hud {
     const g = el.querySelector('.res-grade');
     g.textContent = r.grade;
     g.className = `res-grade ${ok ? 'good' : 'bad'}`;
-    el.querySelector('.res-times').innerHTML = `완료한 미션 <b>${r.done}/${r.total}</b><br>걸린 시간 <b>${fmt(r.elapsed)}</b>`
+    el.querySelector('.res-times').innerHTML = (r.daily ? `<span class="res-daily">오늘의 도전 ${r.daily}</span><br>` : '')
+      + `완료한 미션 <b>${r.done}/${r.total}</b><br>걸린 시간 <b>${fmt(r.elapsed)}</b>`
       + (ok ? `<br>남은 시간 <b>${fmt(r.remaining)}</b>` : '')
-      + (r.isNew ? '<br><b class="res-best">최고 기록!</b>'
-        : r.best ? `<br>최고 기록: 남은 시간 <b>${fmt(r.best.remaining)}</b> (${r.best.grade})` : '');
+      + (r.isNew ? `<br><b class="res-best">${r.daily ? '오늘의 ' : ''}최고 기록!</b>`
+        : r.best ? `<br>${r.daily ? '오늘의 ' : ''}최고 기록: 남은 시간 <b>${fmt(r.best.remaining)}</b> (${r.best.grade})` : '');
+    // 지각 사유서 (F)
+    const ex = el.querySelector('.res-excuse');
+    ex.classList.toggle('hidden', !r.excuse);
+    if (r.excuse) ex.querySelector('.res-excuse-text').textContent = r.excuse;
   }
 
   setFps(fps) {

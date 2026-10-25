@@ -72,6 +72,8 @@ export class Car {
     this.braking = false;
     this.drifting = false;
     this.hitTimer = 0;
+    this.surface = null; // 지면 속도 (main.js에서 buildSurface)
+    this.surfK = 1;
 
     this.boost = 1;          // 게이지 0~1 (처음엔 가득)
     this.boosting = false;
@@ -248,7 +250,10 @@ export class Car {
     if (throttle && !this.throttle && Math.abs(fs) < 1) this.puffPending = true;
     this.throttle = throttle;
     const slopeK = THREE.MathUtils.clamp(1 - this.slope * SLOPE.topSpeed, 0.85, 1.15);
-    const top = (this.boosting ? D.boostSpeed : D.maxSpeed) * slopeK;
+    // 지면: 잔디·흙·운동장 위는 약 70% (surface.js), 부스터 중에는 어디서나 그대로. 경계에서 갑자기 바뀌지 않게 부드럽게
+    const surf = this.surface && !this.boosting ? this.surface.factorAt(this.pos.x, this.pos.y) : 1;
+    this.surfK += (surf - this.surfK) * Math.min(1, dt * 3);
+    const top = (this.boosting ? D.boostSpeed : D.maxSpeed) * slopeK * this.surfK;
     this.braking = false;
 
     if (throttle) {

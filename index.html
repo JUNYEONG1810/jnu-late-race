@@ -17,29 +17,32 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=81">
+  <link rel="stylesheet" href="assets/css/style.css?v=82">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=81",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=81",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=81",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=81",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=81",
-      "./assets/js/life.js": "./assets/js/life.js?v=81",
-      "./assets/js/car.js": "./assets/js/car.js?v=81",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=81",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=81",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=81",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=81",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=81",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=81",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=81",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=81",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=81",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=81",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=81"
+      "./assets/js/map.js": "./assets/js/map.js?v=82",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=82",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=82",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=82",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=82",
+      "./assets/js/life.js": "./assets/js/life.js?v=82",
+      "./assets/js/music.js": "./assets/js/music.js?v=82",
+      "./assets/js/route.js": "./assets/js/route.js?v=82",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=82",
+      "./assets/js/car.js": "./assets/js/car.js?v=82",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=82",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=82",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=82",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=82",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=82",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=82",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=82",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=82",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=82",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=82",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=82"
     }
   }
   </script>
@@ -72,6 +75,7 @@
       <button data-q="low">낮음</button>
       <button data-q="high">높음</button>
       <button id="sound-btn" title="소리 켜기/끄기 (M)">🔊</button>
+      <button id="bgm-btn" title="배경음악 끄기">🎵</button>
       <button id="settings-btn" title="설정">⚙</button>
     </div>
     <div id="settings" class="panel off">
@@ -101,6 +105,8 @@
       <kbd>H</kbd> 음메 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 감정 표현
     </div>
     <div id="student-bubble" class="hidden"></div>
+    <!-- 지각 모드 중 교수님 전화 -->
+    <div id="phone" class="panel hidden"><div class="phone-name">📞 교수님</div><div class="phone-text"></div></div>
     <div id="student-z" class="hidden"><span>Z</span><span>Z</span><span>Z</span></div>
 
     <button id="late-start" class="panel">🏃 지각 모드 시작 <kbd>L</kbd></button>
@@ -140,6 +146,7 @@
         <h2 class="res-title"></h2>
         <div class="res-grade"></div>
         <div class="res-times"></div>
+        <div class="res-excuse hidden"><div class="res-excuse-title">지각 사유서</div><div class="res-excuse-text"></div><div class="res-excuse-sign">위 사유로 늦었음을 알려 드립니다. — 학생 올림</div></div>
         <button data-act="retry">다시하기</button>
         <button data-act="exit">자유 주행으로</button>
       </div>
@@ -155,6 +162,7 @@
         <div class="title-buttons">
           <button id="btn-free">자유 주행</button>
           <button id="btn-late">지각 모드</button>
+          <button id="btn-daily" title="날짜로 정한 미션 순서, 같은 날엔 모두 같은 순서 (기록 따로)">오늘의 도전</button>
         </div>
         <div class="title-keys">
           <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
@@ -189,6 +197,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=81"></script>
+  <script type="module" src="assets/js/main.js?v=82"></script>
 </body>
 </html>

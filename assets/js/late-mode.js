@@ -5,11 +5,12 @@
 // 시간이 0이 되면 그 자리에서 "시간 초과!"(약 1초) → 바로 교수님 F 연출 → 결과.
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
-import { MISSIONS } from './missions-data.js';
-import { DIALOGUE, SPEAKER } from './dialogue-data.js';
+import { MISSIONS, EXCUSES } from './missions-data.js';
+import { DIALOGUE, SPEAKER, PHONE_LINES } from './dialogue-data.js';
+import { RoadGraph } from './route.js';
 import { Professor, SpeechBubble } from './professor.js';
 import { PROFESSOR } from './professor-config.js';
-import { playDing, playBeep, playMissionRise, playCharge, playWarn } from './voice.js';
+import { playDing, playBeep, playMissionRise, playCharge, playWarn, speak } from './voice.js';
 
 // 제한 시간(초). 참고: 차도 최단 경로는 3,861m라 부스터와 지름길이 필요하다
 export const TIME_LIMIT = 180;
@@ -23,6 +24,9 @@ const WARN_FROM = 10;       // 남은 시간이 이 초 이하이면 1초마다 
 // 시간 안에 도착했을 때 남은 시간(초)별 등급. 시간 초과는 F
 const GRADES = [[60, 'A+'], [45, 'A'], [30, 'B+'], [15, 'B'], [0, 'C']];
 const BEST_KEY = 'jnu-late-race-best'; // 최고 기록 (브라우저에만 저장)
+const DAILY_KEY = 'jnu-late-race-daily-'; // + 날짜(YYYYMMDD): 오늘의 도전 기록은 따로
+const ARRIVE_SLOWMO = { seconds: 0.5, scale: 0.3 }; // 공대 2호관 도착 순간 슬로모션 (실제 0.5초, 물리 0.3배)
+const ROUTE_EVERY = 0.5; // 미니맵 길 안내를 다시 찾는 간격 (초)
 
 // 연출 길이(초). 대사 3줄(약 7초)과 카운트다운 3초를 더해 전체 25초 안쪽.
 // 멀미 방지: 모든 이동은 ease-in-out, 카메라는 기울지 않고(수평선 유지) 시야각(FOV)도 그대로, 빠른 회전 없음
@@ -44,12 +48,19 @@ export class LateMode {
   constructor({ scene, car, hud, campus, camera, rig, trees }) {
     Object.assign(this, { car, hud, campus, camera, rig });
     this.state = 'off'; // off | intro | countdown | playing | mission | timeup | paused | outro | result
-    this.targets = MISSIONS.map((m) => {
+    this.baseTargets = MISSIONS.map((m) => {
       const b = campus.buildings.find((x) => x.name === m.building);
       if (!b) console.warn('미션 건물을 찾지 못함:', m.building);
       const [x, z] = nearestCarRoad(campus, b ? b.center : [0, 0]);
       return { ...m, x, z };
     });
+    this.targets = this.baseTargets;
+    this.daily = false;
+    this.graph = new RoadGraph(campus); // 길 안내 (차도 그래프)
+    this.route = null;
+    this.routeT = 0;
+    this.calls = [];
+    this.onResult = null; // 결과가 나올 때 (main: 결과 음악)
     this.marker = buildMarker();
     scene.add(this.marker.group);
 
@@ -67,7 +78,7 @@ export class LateMode {
     hud.bindLate({
       start: () => this.start(),
       resume: () => this.resume(),
-      retry: () => this.start(),
+      retry: () => this.start({ daily: this.daily }),
       exit: () => this.exit(),
     });
   }
@@ -103,11 +114,24 @@ export class LateMode {
   get active() { return this.state !== 'off'; }
   // 차 입력을 막는 상태
   get inputLocked() { return !['off', 'playing'].includes(this.state); }
+  // 물리 시간 배율 (도착 순간 슬로모션)
+  get timeScale() { return this.state === 'arrive' ? ARRIVE_SLOWMO.scale : 1; }
+  // 게임 시각 (초, 자정부터): 8:57:00 → 9:00:00 (제한 시간을 3분에 맞춰 늘이고 줄임)
+  get clockSeconds() { return 9 * 3600 - (TIME_LIMIT - Math.min(this.elapsed || 0, TIME_LIMIT)) * (180 / TIME_LIMIT); }
   // 차 물리까지 멈추는 상태
   get frozen() { return ['paused', 'outro', 'result'].includes(this.state); }
 
-  start() {
+  // daily: 오늘의 도전 (날짜로 정한 미션 순서, 같은 날엔 모두 같은 순서, 기록 따로)
+  start({ daily = false } = {}) {
     this.onBeforeStart?.(); // 학생이 내려서 걷는 중이면 먼저 운전석으로 (main.js)
+    this.daily = daily;
+    this.targets = daily ? dailyOrder(this.baseTargets) : this.baseTargets;
+    this.route = null;
+    this.routeT = 0;
+    // 교수님 전화 1~2번: 이른 때 한 번(25~45초), 남은 시간 약 1분에 한 번(반반 확률)
+    const pick = (l) => l[Math.floor(Math.random() * l.length)];
+    this.calls = [{ at: 25 + Math.random() * 20, line: pick(PHONE_LINES.early) }];
+    if (Math.random() < 0.5) this.calls.push({ at: TIME_LIMIT - 62 + Math.random() * 6, line: pick(PHONE_LINES.late) });
     const { position, dir } = this.campus.spawn;
     this.car.place(position[0], position[1], dir[0], dir[1]);
     this.index = 0;
@@ -122,8 +146,8 @@ export class LateMode {
     this.hud.showProgress(null);
     this.hud.showCountdown(null);
     this.hud.updateTarget(this.camera, null);
-    this.hud.setTimer(TIME_LIMIT);
-    this.hud.setMissions(this.targets, 0);
+    this.hud.setTimer(TIME_LIMIT, TIME_LIMIT);
+    this.hud.setMissions(this.targets, 0, this.daily ? `오늘의 도전 ${todayLabel()}` : null);
     this.showTarget();
 
     const S = this.stage;
@@ -241,10 +265,25 @@ export class LateMode {
     }
 
     if (this.state === 'timeup') return this.updateTimeUp(dt);
+    if (this.state === 'arrive') { // 도착 순간 슬로모션 뒤 판정
+      this.arriveT += dt;
+      if (this.arriveT >= ARRIVE_SLOWMO.seconds) this.finish();
+      return;
+    }
     if (this.state === 'playing' || this.state === 'mission') {
       this.elapsed += dt;
       const left = TIME_LIMIT - this.elapsed;
-      this.hud.setTimer(left);
+      this.hud.setTimer(left, TIME_LIMIT);
+      // 교수님 전화
+      while (this.calls.length && this.elapsed >= this.calls[0].at) {
+        const { line } = this.calls.shift();
+        this.hud.phone(line, speak(line));
+      }
+      // 길 안내: 다음 미션까지 도로를 따라가는 경로 (0.5초마다)
+      if ((this.routeT -= dt) <= 0) {
+        this.routeT = ROUTE_EVERY;
+        this.route = this.graph.path(this.car.pos.x, this.car.pos.y, this.target.x, this.target.z);
+      }
       if (left <= 0) return this.timeUp();
       const sec = Math.ceil(left);
       if (sec <= WARN_FROM && sec !== this.lastWarn) { this.lastWarn = sec; playWarn(); } // 마지막 10초: 1초마다 경고음
@@ -252,7 +291,7 @@ export class LateMode {
       const t = this.target;
       if (this.state === 'playing') {
         const inside = dist <= t.radius;
-        if (t.final && inside) return this.finish();
+        if (t.final && inside) return this.arrive();
         if (inside && !t.final) this.hud.setHint(this.car.speedKmh > STOP_KMH ? '멈추세요!' : 'E 키를 눌러 미션');
         else this.hud.setHint(null);
       } else {
@@ -403,6 +442,15 @@ export class LateMode {
     setTimeout(() => { if (this.state !== 'mission') this.hud.showProgress(null); }, 1200); // 대사를 잠깐 보여 주고 닫기
   }
 
+  // 공대 2호관 도착: 0.5초 슬로모션 (시계는 멈춤) → 판정
+  arrive() {
+    this.state = 'arrive';
+    this.arriveT = 0;
+    this.route = null;
+    this.hud.setHint(null);
+    this.hud.showCountdown('도착!', 'arrive');
+  }
+
   // ---------- 시간 초과 → 바로 실패 ----------
 
   timeUp() {
@@ -470,20 +518,31 @@ export class LateMode {
     this.state = 'result';
     this.professor.talking = false;
     if (this.success) playDing();
+    this.onResult?.(this.grade);
     const { best, isNew } = this.saveBest();
+    // 지각 사유서 (F): 멈춰 있던 미션과 엮은 사유(두 배로 자주) + 어디서나 쓰는 사유 중 하나
+    let excuse = null;
+    if (this.grade === 'F') {
+      const here = this.targets[Math.min(this.index, this.targets.length - 1)];
+      const pool = [...(EXCUSES[here.id] || []), ...(EXCUSES[here.id] || []), ...EXCUSES.any];
+      excuse = pool[Math.floor(Math.random() * pool.length)];
+    }
+    this.excuse = excuse;
     this.hud.showResult({ grade: this.grade, elapsed: this.elapsed, remaining: this.remaining,
-      done: this.done, total: this.targets.length, timedOut: this.timedOut, best, isNew });
+      done: this.done, total: this.targets.length, timedOut: this.timedOut, best, isNew, excuse,
+      daily: this.daily ? todayLabel() : null });
   }
 
   // 최고 기록: 시간 안에 도착한 것 중 남은 시간이 가장 긴 기록. 저장이 막힌 브라우저에서도 게임은 그대로
   saveBest() {
+    const key = this.daily ? DAILY_KEY + todayKey() : BEST_KEY;
     let best = null;
-    try { best = JSON.parse(localStorage.getItem(BEST_KEY) || 'null'); } catch { best = null; }
+    try { best = JSON.parse(localStorage.getItem(key) || 'null'); } catch { best = null; }
     let isNew = false;
     if (this.success && (!best || this.remaining > best.remaining)) {
       best = { remaining: this.remaining, grade: this.grade };
       isNew = true;
-      try { localStorage.setItem(BEST_KEY, JSON.stringify(best)); } catch { /* 저장 못 해도 계속 */ }
+      try { localStorage.setItem(key, JSON.stringify(best)); } catch { /* 저장 못 해도 계속 */ }
     }
     return { best, isNew };
   }
@@ -502,6 +561,30 @@ export class LateMode {
 
 const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
+
+// 오늘 날짜 (그 컴퓨터 시각 기준)
+function todayKey(d = new Date()) {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+}
+function todayLabel(d = new Date()) { return `${d.getMonth() + 1}/${d.getDate()}`; }
+
+// 오늘의 도전: 날짜를 씨앗으로 마지막(공대 2호관)을 뺀 미션 순서를 섞는다 (같은 날엔 누구나 같은 순서)
+function dailyOrder(targets) {
+  let seed = Number(todayKey()) >>> 0;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const list = targets.filter((t) => !t.final), fin = targets.filter((t) => t.final);
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return [...list, ...fin];
+}
 const tmpPose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 
 function ease(k) {
