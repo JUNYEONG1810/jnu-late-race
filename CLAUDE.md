@@ -15,7 +15,8 @@
    2. 카메라가 정문의 굴착기로 돌아옴 → **앞면 → 옆면 → 뒷면**으로 돌며 보여 줌 → 뒤에서 **3, 2, 1, GO!**
    3. 제한 시간 안에 미션 장소를 차례로 들르고, 마지막에 공과대 2호관 도착
    4. 결과: 카메라가 교수님에게 감. 시간 안에 도착 → 날개를 위로 번쩍 + "A+", 늦으면 → "F다." (같은 목소리)
-   - 대사는 클릭 또는 Space로 다음 대사. Esc로 연출 전체 건너뛰기. 연출 전체 20초 안쪽.
+   - 대사는 클릭 또는 Space로 다음 대사. Esc로 연출 전체 건너뛰기. 연출은 카운트다운까지 25초 안쪽.
+   - 연출 순서(polish): 교수님 대사 → 천천히 올라가 캠퍼스 전체 → 미션 장소 5곳 이모지·이름이 차례로(마지막 🏫) → 정문 굴착기로 내려옴 → 앞·옆·뒤 → 3,2,1,GO. 멀미 방지: ease-in-out, 롤 없음, FOV 고정, 시선은 각도(yaw·pitch)로 보간.
 
 ## 미션 틀 (모든 미션 공통)
 
@@ -101,6 +102,9 @@
 - `scripts/fetch_osm.py`(Python 표준 라이브러리만) → `data/raw/`(커밋 안 함) → `scripts/build_map.py` → `data/campus.json`(커밋함)
 - 좌표: 캠퍼스 중심 기준 미터(x 동쪽, z 남쪽).
 - 건물 높이 = 층수 × 4m + 옥상 난간 1m. 층수 우선순위: `data/building-floors.csv`에 직접 적은 값 > 브이월드 지상층수(`scripts/fetch_vworld.py`, 키는 `.env`의 `VWORLD_KEY`, 출력·커밋 금지) > OSM `building:levels` > 기본 4층. csv를 고치고 `scripts/building_floors.py`(또는 `build_map.py`)를 다시 돌리면 반영. "전남대학교" 일괄 4층(브이월드 대표값)을 쓴 건물은 csv 출처에 "브이월드(일괄값)"으로 표시. 크레딧에 "건물 층수: 국토교통부 브이월드".
+- 국토지리정보원 자료(data/raw/ngii, 커밋 안 함): 정사영상 2025 25cm, 수치지도 2025 1:5,000·2020 1:1,000. 좌표는 EPSG:5186(`scripts/ngii.py`). 게임에는 사진이 아니라 판단 결과만 쓴다: 잔디(`data/lawns.json`), 차도 폭(`data/road-widths.json`), 층수(일괄값·기본값 건물만, 출처 "수치지도"), 지붕색·외관 추정. 잘라낸 사진은 `ref/`(커밋 안 함). 정리는 `docs/참고-조사.md`. 크레딧 "정사영상·수치지도: 국토지리정보원".
+- csv 외관 칸(외관·외벽색·지붕색·외관출처): 외관은 커튼월/벽돌/콘크리트/타일, 비우면 기본. 사람이 고친 값("직접")은 다시 돌려도 유지(`data/building-looks-auto.json`의 지난 자동값과 비교).
+- 정문 진입로: 4차로 + 분리대, 주차 차단기(지붕·요금 부스·빨강·흰 막대, 15m 안이면 올라감), 키 큰 가로수(7m 간격, 약 16m). 차단기 지붕을 막던 OSM 건물(w1163961970)은 뺀다.
 - 조경(OSM 그대로): 연못(반짝이는 수면 + 가장자리 돌), 운동장 종류별 색·라인, 주차장(짙은 회색 + 주차선), 밝은 보행로, 계단 줄무늬, 벤치·자전거 보관소·버스정류장, 조형물·기념물(이름표 + 단정한 비석·받침대·탑, 인물 모양 금지). 가로등은 OSM에 없어 주요 차도 양옆 약 30m 간격으로 배치, 품질 "낮음"에서 숨김.
 - 도로: `highway` 선을 종류별 폭(주도로 8m, 일반 6m, 보행로 3m)의 띠로.
 - **화면 구석에 항상 표시:** "지도 데이터 © OpenStreetMap 기여자"
@@ -131,7 +135,7 @@ index.html
 assets/css/style.css
 assets/js/main.js              시작, 화면 전환, 루프
 assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
-assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등
+assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등, 주차 차단기, 진입로 가로수
 assets/js/terrain.js           지형 높이(heightAt), 지형 메시
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
@@ -142,9 +146,10 @@ assets/js/voice.js             꿍싯꿍싯 목소리 + 효과음 합성
 assets/js/missions-data.js     미션 데이터
 assets/js/dialogue-data.js     교수님 대사
 assets/js/professor-config.js  교수님 캐릭터 외형 값
-data/campus.json, data/terrain.json
+data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, data/building-looks-auto.json
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
+scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)
 scripts/fetch_terrain.py, terrain_report.py, survey_landscape.py   공공데이터 조사 (docs/공공데이터-조사.md)
 README.md, 제작로그.md, CLAUDE.md
 ```
