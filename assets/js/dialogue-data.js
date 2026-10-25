@@ -1,7 +1,7 @@
-// 부엉이 교수님 대사. CLAUDE.md "대사" 표와 같게 유지한다.
+// 교수님 대사. CLAUDE.md "대사" 표와 같게 유지한다.
 // emphasis: 말풍선에서 굵게·다른 색, 목소리는 낮고 길게
 // big: 말풍선에서 크게 + 화면 흔들림
-export const SPEAKER = '부엉이 교수님';
+export const SPEAKER = '교수님';
 
 export const DIALOGUE = {
   intro: [

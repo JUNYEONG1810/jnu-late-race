@@ -105,7 +105,7 @@ export function playBeep(go = false) {
 // 모음에 따라 음색(필터 중심 주파수)이 바뀌고, 띄어쓰기·문장부호에서 쉰다.
 
 export const VOICE = {
-  base: 150,        // 부엉이 교수님 기본 음높이 (Hz, 조금 낮게)
+  base: 150,        // 교수님 기본 음높이 (Hz, 조금 낮게)
   syllable: 0.065,  // 한 음절 길이 (s)
   latin: 0.075,     // 영문 묶음 하나 길이
   space: 0.06,

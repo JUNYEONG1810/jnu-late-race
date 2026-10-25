@@ -279,7 +279,7 @@ function buildBuildings(list, anisotropy) {
       const off = 0.06;
       const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
       plain.wall(q(0.5 - w), q(0.5 + w), 0, 3, n, entrance);
-      // 연출(부엉이 교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
+      // 연출(교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
       b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2] };
     }
   }

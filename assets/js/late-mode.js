@@ -1,6 +1,6 @@
 // 지각 모드 흐름:
-// 연출(공대 2호관 입구로 날아감 → 부엉이 교수님 등장·대사 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
-// → 미션들 → 공과대 2호관 도착 → 부엉이 교수님 판정(A+ / F) → 결과.
+// 연출(공대 2호관 입구로 날아감 → 교수님 등장·대사 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
+// → 미션들 → 공과대 2호관 도착 → 교수님 판정(A+ / F) → 결과.
 import * as THREE from 'three';
 import { MISSIONS } from './missions-data.js';
 import { DIALOGUE, SPEAKER } from './dialogue-data.js';
