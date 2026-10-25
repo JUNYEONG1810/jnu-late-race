@@ -22,6 +22,12 @@ export function hasTerrain() {
   return T !== null;
 }
 
+// 지형 격자가 덮는 사각형 (바깥 풍경이 그 안쪽을 비켜 가도록)
+export function terrainBounds() {
+  const { step, x0, z0, nx, nz } = T;
+  return { x0, z0, x1: x0 + (nx - 1) * step, z1: z0 + (nz - 1) * step };
+}
+
 // 격자 칸 (i, j)를 대각선 (i, j+1)–(i+1, j)로 나눈 두 삼각형 (메시와 같은 방식)
 export function heightAt(x, z) {
   if (!T) return 0;

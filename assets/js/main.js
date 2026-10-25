@@ -8,6 +8,7 @@ import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
 import { unlockAudio, playBoost, playBoostEnd, playHit, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
+import { buildSurroundings } from './surroundings.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -34,9 +35,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 부드러운 그림자 가�
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(SKY_HORIZON, 700, 3000);
+// 지수 안개: 캠퍼스(1km 안)는 거의 맑고, 먼 산(무등산 약 10km)은 옅게 보이다가 지평선에서 하늘색으로
+scene.fog = new THREE.FogExp2(SKY_HORIZON, 0.000105);
 
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 5000);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 22000);
 
 scene.add(new THREE.HemisphereLight('#d9ebff', '#b3ab98', 1.55)); // 하늘빛(위) · 땅에서 튀는 빛(아래)
 const sun = new THREE.DirectionalLight(SUN_COLOR, 2.35);
@@ -212,10 +214,10 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus, lawns, widths, styles, monuments] = await Promise.all([
+  const [campus, lawns, widths, styles, monuments, , surroundings] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
     loadCampus('data/building-styles.json?v=7'), loadCampus('data/monuments.json?v=4'),
-    loadTerrain('data/terrain.json?v=4'),
+    loadTerrain('data/terrain.json?v=4'), loadCampus('data/surroundings.json?v=1'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
@@ -232,7 +234,9 @@ async function start() {
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,
+    terrainFar: 1, // 지형 격자 바깥은 먼 지형(바깥 풍경)이 채운다
   });
+  world.surroundings = buildSurroundings(scene, surroundings); // 먼 산·둘레 건물 (충돌 없음, scripts/build_surroundings.py)
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   world.landscape = buildLandscape(scene, campus);

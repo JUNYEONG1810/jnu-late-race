@@ -51,10 +51,10 @@ export async function loadCampus(url) {
   return res.json();
 }
 
-export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}) {
+export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096, terrainFar = 3000 } = {}) {
   const group = new THREE.Group();
 
-  const ground = buildGround(campus, groundPx, anisotropy);
+  const ground = buildGround(campus, groundPx, anisotropy, terrainFar);
   group.add(ground.mesh);
   group.add(buildWater(campus.greens.filter((g) => g.kind === 'water')));
   group.add(...buildRoadMeshes(campus));
@@ -74,7 +74,7 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}
 
 // ---------- 지형 + 바닥 그림 ----------
 
-function buildGround(campus, px, anisotropy) {
+function buildGround(campus, px, anisotropy, far) {
   const xs = campus.boundary.map((p) => p[0]), zs = campus.boundary.map((p) => p[1]);
   const bounds = {
     x0: Math.min(...xs) - GROUND_MARGIN, x1: Math.max(...xs) + GROUND_MARGIN,
@@ -94,7 +94,7 @@ function buildGround(campus, px, anisotropy) {
     material.needsUpdate = true;
   };
   paint(px);
-  const mesh = new THREE.Mesh(buildTerrainGeometry(bounds), material);
+  const mesh = new THREE.Mesh(buildTerrainGeometry(bounds, far), material);
   mesh.receiveShadow = true;
   return {
     mesh, bounds,

@@ -93,6 +93,7 @@
 - 조작: 방향키/WASD 운전, Space 브레이크(드리프트), Shift 부스터(게이지 사용), E 미션, C 카메라 시점 전환, L 지각 모드, Esc 일시정지.
 - 로컬 확인: 이 폴더에서 `python -m http.server 8000` → `http://localhost:8000` (fetch로 JSON을 읽기 때문에 더블클릭으로는 안 열림).
 - 주소 뒤 `?fps=1`이면 왼쪽 위 구석에 fps 표시(기본 숨김).
+- 바깥 풍경: 지형 격자(terrain.json) 바깥은 먼 지형 메시가 채운다(가까운 지형의 3km 바깥 띠는 쓰지 않음, buildMap terrainFar: 1). 안개는 지수 안개(FogExp2 0.000105), 카메라 먼 거리 22km. 둘레 건물 높이 = 층수 태그 × 4m + 1, 없으면 house·detached 2층, 나머지 4층.
 - 조명: 오전 9시쯤 동남동 햇빛(방위 125°, 고도 약 35°, 따뜻한 색, 추정), 품질 높음에서만 부드러운 그림자(PCFSoft). 가벼운 앰비언트 오클루전은 미리 구움: 벽 아래 6m가 땅 쪽으로 어두워짐(정점 색), 바닥 그림에 건물 둘레 흐린 접지 그림자. 하늘은 위 진한 하늘색 → 지평선 옅은 색 + 해 둘레 빛. 무거운 후처리(SSAO 등)는 쓰지 않는다.
 - 성능: 내장 그래픽 노트북에서 60fps 목표. 건물은 재질별로 합쳐서(merge) 그리기, 그래픽 품질 낮음/높음 버튼(왼쪽 위). 기본값은 "높음" (정문 출발 화면 1366×768 품질 높음 60fps 측정, 50 미만이면 "낮음"으로 바꾼다).
 - HUD 배치: 왼쪽 위 품질·소리 버튼, 오른쪽 위 미니맵, 그 아래 지각 모드 미션 목록. 건물 이름표는 서로·HUD와 겹치면 위아래로 비키거나 숨긴다.
@@ -142,6 +143,7 @@ assets/js/main.js              시작, 화면 전환, 루프
 assets/js/map.js               campus.json → 건물·도로·녹지·물·주차장·운동장 3D
 assets/js/landscape.js         벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등, 주차 차단기, 진입로 가로수
 assets/js/terrain.js           지형 높이(heightAt), 지형 메시
+assets/js/surroundings.js      캠퍼스 바깥 풍경: 먼 지형(무등산 쪽 ±15km, 150m 격자) + 둘레 OSM 건물 덩어리 (data/surroundings.json, 충돌 없음)
 assets/js/car.js               미니 굴착기 모델, 아케이드 주행, 부스터 게이지, 충돌
 assets/js/camera.js            따라가기 카메라, 시점 전환, 연출 카메라
 assets/js/hud.js               속도계, 타이머, 미션 목록, 미니맵, 건물 이름
@@ -154,6 +156,7 @@ assets/js/professor-config.js  교수님 캐릭터 외형 값
 data/campus.json, data/terrain.json, data/lawns.json, data/road-widths.json, data/building-looks-auto.json
 data/monuments.json            기념물 27곳 형태·크기·재료·근거 등급·출처 (scripts/build_monuments.py로 생성)
 scripts/fetch_osm.py, scripts/build_map.py, scripts/build_terrain.py
+scripts/fetch_surroundings.py, build_surroundings.py   바깥 풍경: AWS 타일 z11 + Overpass 둘레 건물(data/raw/) → data/surroundings.json
 scripts/fetch_vworld.py, building_floors.py   브이월드 층수 → building-floors.csv → campus.json
 scripts/ngii.py, ngii_reference.py, ngii_lawn.py, ngii_roads.py, ngii_buildings.py   국토지리정보원 자료 (잔디·도로 폭·층수·지붕색)
 scripts/build_terrain_ngii.py, terrain_steps_check.py, smooth_road_terrain.py   수치지도 지형 + 검증 + 차도 단차 정리
