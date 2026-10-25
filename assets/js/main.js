@@ -204,12 +204,18 @@ let lateMode = null;
 async function start() {
   const [campus, lawns, widths, styles] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadCampus('data/building-styles.json?v=3'),
+    loadCampus('data/building-styles.json?v=4'),
     loadTerrain('data/terrain.json?v=2'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   placeSpawnAtGate(campus); // 실제 정문 자리(OSM 정문 점보다 약 60m 북쪽)로 정문·출발 위치를 옮김
-  for (const b of campus.buildings) if (styles[b.id]) b.style = styles[b.id]; // 건물 외관 지정 (data/building-styles.json, 가장 우선)
+  // 건물 외관 지정 (data/building-styles.json, 가장 우선). 층수도 근거가 있으면 여기서 바꾼다 (높이 = 층수 × 4m + 난간 1m)
+  for (const b of campus.buildings) {
+    const st = styles[b.id];
+    if (!st) continue;
+    b.style = st;
+    if (st.floors) { b.floors = st.floors; b.height = st.floors * 4 + 1; }
+  }
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
