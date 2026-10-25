@@ -582,3 +582,6 @@ body.title #settings, body.cine #settings { display: none; }
   100% { transform: translate(28px, -64px) scale(1.1); opacity: 0; }
 }
 body.title #student-bubble, body.title #student-z, body.cine #student-bubble, body.cine #student-z { display: none; }
+
+/* 첫 화면 부제 아래 한 줄 설명 */
+.title-desc { margin: -6px 0 14px; font-size: 14px; font-weight: 600; color: #6b7385; }

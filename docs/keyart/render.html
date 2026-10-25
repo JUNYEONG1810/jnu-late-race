@@ -46,8 +46,8 @@ const THREE = win.__THREE;
 const g = win.game, R = g.renderer, L = g.lateMode, car = g.car;
 R.setAnimationLoop(null); // 게임 루프를 멈추고 이 페이지가 한 장만 그린다
 // 한글 글꼴은 글자 묶음별로 나눠 받으므로 쓸 글자를 함께 넘겨야 다 받는다
-await document.fonts.load('120px "Black Han Sans"', '전남대 지각 레이스');
-await document.fonts.load('900 40px "Noto Sans KR"', '9시까지 공대 2호관으로!');
+await document.fonts.load('120px "Black Han Sans"', '포크레이트');
+await document.fonts.load('900 40px "Noto Sans KR"', '9시까지 공대 2호관으로!전남대 캠퍼스 지각 레이스');
 await document.fonts.load('700 22px "Noto Sans KR"', '지도 데이터 © OpenStreetMap 기여자');
 log('장면 준비 중…');
 
@@ -66,6 +66,7 @@ const VARIANTS = {
   1: { back: 13, off: 4, h: 1.8, car: 7, right: 1.7, slant: 0.9, fov: 48, profLeft: 2.6, lookUp: 1.2 },     // 낮은 앵글, 굴착기 크게, 교수님 바로 뒤
   2: { back: 24, off: 9, h: 8.5, car: 12, right: 2.2, slant: 1.0, fov: 40, profLeft: 3.0, lookUp: 0.6 },   // 높은 앵글, 불꽃 꼬리 길게
   3: { back: 15, off: 3, h: 2.6, car: 10.5, right: 3.2, slant: 0.7, fov: 46, profLeft: 4.2, lookUp: 1.6 }, // 교수님 크게, 굴착기는 오른쪽 위
+  4: { back: 15, off: 2, h: 3.4, car: 9.5, right: 3.6, slant: 1.05, fov: 46, profLeft: 4.6, lookUp: 1.1 }, // 포크레이트: 굴착기가 오른쪽 위에서 왼쪽 아래로 비스듬히, 교수님은 왼쪽
   9: { back: 4, off: 0.5, h: 1.6, car: 30, right: 30, slant: 0.7, fov: 40, profLeft: 0, lookUp: 1.0 },     // 확인용: 교수님 가까이
 };
 const C = VARIANTS[variant] || VARIANTS[1];
@@ -91,6 +92,11 @@ for (let i = 0; i < 90; i++) { // 불꽃·연기가 충분히 뿜어지도록 �
 }
 car.update(1 / 60, { up: true, boost: true }, null);
 car.place(P.x, P.z, fx, fz);
+// 운전석의 황소 학생: 긴장한 얼굴(땀방울), 고개는 운전석 안에
+g.walker?.boardNow();
+car.driver.setExpression('nervous');
+car.driver.setPeek(false);
+car.driver.update(1 / 60, 30);
 
 // 흙먼지: 궤도 뒤로 퍼지는 흙빛 연기 (이 페이지에서만 더함)
 const dust = new THREE.Group();
@@ -115,6 +121,7 @@ for (let i = 0; i < 70; i++) {
 scene.add(dust);
 
 // 교수님: 입구 앞에서 카메라 쪽을 보고, 한쪽 날개를 앞으로 든 "손목"을 다른 날개 깃털 끝으로 가리킴(지각!)
+L.ensureProfessor?.(); // 교수님은 첫 화면 1.5초 뒤에 만들어지므로 여기서 바로 만들게 함
 const prof = L.professor;
 prof.object.visible = true;
 prof.place(PP.x, PP.z, camPos.x - PP.x, camPos.z - PP.z);
@@ -176,28 +183,48 @@ x.restore();
 const vg = x.createRadialGradient(W * 0.5, H * 0.55, H * 0.35, W * 0.5, H * 0.55, H * 0.95);
 vg.addColorStop(0, 'rgba(10,14,30,0)'); vg.addColorStop(1, 'rgba(10,14,30,0.45)');
 x.fillStyle = vg; x.fillRect(0, 0, W, H);
-// 제목: 굵은 한글 + 남색 두꺼운 테두리 + 노랑 밑줄 띠 (우리만의 단순한 글자 디자인)
-const titleX = 88, titleY = 210;
+// 제목 "포크레이트"(포크레인 + late): 굴착기 노랑 글자 + 남색 두꺼운 테두리 + 아래 공사장 줄무늬 띠 (우리만의 단순한 글자 디자인)
+const titleX = 92, titleY = 250;
+// 위 작은 띠: "전남대 캠퍼스 지각 레이스"
+x.font = '900 34px "Noto Sans KR"';
+const tag = '전남대 캠퍼스 지각 레이스';
+const tagW = x.measureText(tag).width;
+x.fillStyle = '#1d2a4d';
+x.beginPath(); x.roundRect(titleX, titleY - 228, tagW + 44, 56, 14); x.fill();
+x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.fillText(tag, titleX + 22, titleY - 199);
 x.save();
 x.translate(titleX, titleY);
 x.transform(1, 0, -0.12, 1, 0, 0); // 앞으로 기운 글자 (달리는 느낌)
-x.font = '150px "Black Han Sans"';
+x.font = '190px "Black Han Sans"';
 x.textBaseline = 'alphabetic';
 x.lineJoin = 'round';
-const title = '전남대 지각 레이스';
+const title = '포크레이트';
 const tw = x.measureText(title).width;
-x.fillStyle = '#ffcc33';
-x.fillRect(-14, 22, tw + 40, 26);         // 노랑 띠
-x.lineWidth = 22; x.strokeStyle = '#1d2a4d'; x.strokeText(title, 0, 0);
-x.fillStyle = '#ffffff'; x.fillText(title, 0, 0);
+// 공사장 줄무늬 띠 (노랑·남색 빗금)
+x.save();
+x.beginPath(); x.rect(-10, 22, tw + 40, 30); x.clip();
+x.fillStyle = '#ffc93c'; x.fillRect(-10, 22, tw + 40, 30);
+x.fillStyle = '#1d2a4d';
+for (let sx = -40; sx < tw + 60; sx += 44) { x.beginPath(); x.moveTo(sx, 52); x.lineTo(sx + 22, 52); x.lineTo(sx + 52, 22); x.lineTo(sx + 30, 22); x.fill(); }
 x.restore();
-// 부제: 노랑 알약
+x.fillStyle = 'rgba(10,14,30,0.45)'; x.fillText(title, 10, 12); // 그림자
+x.lineWidth = 26; x.strokeStyle = '#1d2a4d'; x.strokeText(title, 0, 0);
+x.fillStyle = '#ffc93c'; x.fillText(title, 0, 0);
+x.restore();
+// 부제: 흰 알약 + 작은 시계(8시 58분)
 x.font = '900 52px "Noto Sans KR"';
 const sub = '9시까지 공대 2호관으로!';
 const sw = x.measureText(sub).width;
-x.fillStyle = '#ffcc33';
-x.beginPath(); x.roundRect(titleX + 6, titleY + 74, sw + 56, 84, 42); x.fill();
-x.fillStyle = '#1d2a4d'; x.textBaseline = 'middle'; x.fillText(sub, titleX + 34, titleY + 118);
+const py = titleY + 84;
+x.fillStyle = '#ffffff';
+x.beginPath(); x.roundRect(titleX + 6, py, sw + 120, 84, 42); x.fill();
+const cx0 = titleX + 52, cy0 = py + 42;
+x.fillStyle = '#ffc93c'; x.beginPath(); x.arc(cx0, cy0, 27, 0, Math.PI * 2); x.fill();
+x.lineWidth = 5; x.strokeStyle = '#1d2a4d'; x.stroke();
+x.lineCap = 'round';
+const hand = (a, l, w) => { x.lineWidth = w; x.beginPath(); x.moveTo(cx0, cy0); x.lineTo(cx0 + Math.sin(a) * l, cy0 - Math.cos(a) * l); x.stroke(); };
+hand((8 + 58 / 60) / 12 * Math.PI * 2, 13, 5); hand(58 / 60 * Math.PI * 2, 19, 4);
+x.fillStyle = '#1d2a4d'; x.textBaseline = 'middle'; x.fillText(sub, titleX + 92, py + 44);
 // 지도 출처 (작게, 오른쪽 아래)
 x.font = '700 22px "Noto Sans KR"';
 x.textAlign = 'right'; x.textBaseline = 'alphabetic';
