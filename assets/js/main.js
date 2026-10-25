@@ -220,6 +220,7 @@ async function start() {
   for (const l of world.landscape.labels) hud.addLabel(l.text, l.x, l.y, l.z, { maxDist: l.maxDist, small: true });
   for (const m of campus.monuments || []) world.trees.clearAround(m.p[0], m.p[1], m.shape === 'tower' ? 6 : 3);
   world.trees.clearAround(...world.landscape.barrier.center, 12); // 차단기 지붕·부스 자리
+  for (const [x, z] of world.landscape.avenue.spots) world.trees.clearAround(x, z, 4); // 진입로 가로수 자리의 작은 나무
   for (const [osmName, label] of LANDMARKS) {
     const b = campus.buildings.find((x) => x.name === osmName);
     if (b) hud.addLabel(label || osmName, b.center[0], b.base + b.height + 5, b.center[1]);

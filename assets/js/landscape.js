@@ -14,6 +14,16 @@ const LAMP = {
 const STONE = '#c9c3b6', GRANITE = '#55585c', DARK_STONE = '#77746f', BRONZE = '#8a6c48';
 const MONUMENT_LABEL_DIST = 70; // 이만큼 가까이 와야 이름표가 보인다
 
+// 정문 진입로 가로수 (참고 조사: 정사영상. 수관 지름 6~7m가 거의 이어짐 → 간격 7m, 높이 약 16m)
+const AVENUE = {
+  road: 'w256927670',          // 정문 진입로
+  spacing: 7,                  // 나무 간격 (m)
+  stripOffset: 3.5,            // 차도 가장자리에서 가로수 띠 가운데까지
+  west: [228, 445],            // 서쪽 줄: 정문(z≈445) → 용봉탑 로터리 앞(z≈228)
+  east: [300, 445],            // 동쪽 줄: 정문 → 주차 차단기 부근(z≈300)
+  trunkH: 9, crownR: 3.3, crownH: 4.3, // 줄기 높이, 수관 반지름·세로 반지름 → 전체 약 16m
+};
+
 // 정문 진입로 주차 차단기 (참고 조사: 정사영상·수치지도, docs/참고-조사.md)
 // 진입로를 덮는 지붕(16.7×11.6m) 아래, 상·하행 차도마다 빨강·흰 줄무늬 막대 + 길가 요금 부스
 const BARRIER = {
@@ -77,12 +87,59 @@ export function buildLandscape(scene, campus) {
   const lamps = buildLamps(campus, roads);
   group.add(lamps);
 
+  const avenue = buildAvenue(campus, barrier.center);
+  group.add(avenue.group);
+
   scene.add(group);
   return {
-    group, lamps, obstacles, labels, barrier, removed,
+    group, lamps, obstacles, labels, barrier, removed, avenue,
     // 매 프레임: 차단기 막대 올리고 내리기
     update(dt, carX, carZ) { barrier.update(dt, carX, carZ); },
   };
+}
+
+// ---------- 정문 진입로 가로수 ----------
+
+// 줄기가 곧고 키 큰 가로수. 품질 낮음에서도 보이도록 일반 나무(밀도 조절)와 따로 둔다
+function buildAvenue(campus, barrierAt) {
+  const r = campus.roads.find((x) => x.id === AVENUE.road);
+  const spots = [];
+  if (r) {
+    const off = r.width / 2 + AVENUE.stripOffset;
+    const rand = mulberry32(445);
+    let next = 0, s = 0;
+    for (let i = 0; i < r.points.length - 1; i++) {
+      const [x1, z1] = r.points[i], [x2, z2] = r.points[i + 1];
+      const L = Math.hypot(x2 - x1, z2 - z1);
+      if (L < 1e-6) continue;
+      const ux = (x2 - x1) / L, uz = (z2 - z1) / L;
+      for (; next < s + L; next += AVENUE.spacing) {
+        const t = next - s, x = x1 + ux * t, z = z1 + uz * t;
+        for (const side of [1, -1]) { // +1 = 진행 방향(북쪽)의 오른쪽 = 동쪽
+          const tx = x - uz * off * side, tz = z + ux * off * side;
+          const [z0, zEnd] = side > 0 ? AVENUE.east : AVENUE.west;
+          if (tz < z0 || tz > zEnd || Math.hypot(tx - barrierAt[0], tz - barrierAt[1]) < 11) continue;
+          spots.push([tx, tz, 0.92 + rand() * 0.16]);
+        }
+      }
+      s += L;
+    }
+  }
+  const trunk = new THREE.CylinderGeometry(0.24, 0.36, AVENUE.trunkH, 7).translate(0, AVENUE.trunkH / 2, 0);
+  const crown = new THREE.IcosahedronGeometry(1, 1).scale(AVENUE.crownR, AVENUE.crownH, AVENUE.crownR)
+    .translate(0, AVENUE.trunkH + AVENUE.crownH * 0.55, 0);
+  const trunks = new THREE.InstancedMesh(trunk, new THREE.MeshLambertMaterial({ color: '#7a5c44' }), spots.length);
+  const crowns = new THREE.InstancedMesh(crown, new THREE.MeshLambertMaterial({ color: '#4f8a42', flatShading: true }), spots.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3();
+  spots.forEach(([x, z, k], i) => {
+    m.compose(new THREE.Vector3(x, heightAt(x, z) - 0.2, z), q.setFromAxisAngle(up, (i * 2.399) % (Math.PI * 2)), sc.set(k, k, k));
+    trunks.setMatrixAt(i, m);
+    crowns.setMatrixAt(i, m);
+  });
+  trunks.castShadow = crowns.castShadow = true;
+  const group = new THREE.Group();
+  group.add(trunks, crowns);
+  return { group, spots };
 }
 
 // ---------- 주차 차단기 ----------
