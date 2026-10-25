@@ -14,10 +14,29 @@ const LAMP = {
 const STONE = '#c9c3b6', GRANITE = '#55585c', DARK_STONE = '#77746f', BRONZE = '#8a6c48';
 const MONUMENT_LABEL_DIST = 70; // 이만큼 가까이 와야 이름표가 보인다
 
+// 정문 진입로 주차 차단기 (참고 조사: 정사영상·수치지도, docs/참고-조사.md)
+// 진입로를 덮는 지붕(16.7×11.6m) 아래, 상·하행 차도마다 빨강·흰 줄무늬 막대 + 길가 요금 부스
+const BARRIER = {
+  at: [73.8, 312.6],  // 지붕 가운데 (게임 좌표)
+  replaces: 'w1163961970', // OSM이 이 지붕을 건물(층수 없음 → 기본 4층)로 그려 진입로를 막던 것 → 부스·차단기로 바꿈
+  lane: 7,            // 한쪽 차도 폭 (m)
+  median: 1.5,        // 가운데 분리대 폭 (m)
+  roof: [16.7, 11.6], // 지붕: 도로를 가로지르는 폭, 도로 방향 길이
+  roofH: 5.2,
+  armH: 1.0,          // 막대 높이
+  openDist: 15,       // 굴착기가 이만큼 가까우면 막대가 올라감 (m)
+  lift: 80,           // 올라가는 각도 (°)
+};
+
+// 차단기로 바꾼 건물은 지도·충돌·미니맵에서 뺀다 (buildMap 전에 부른다)
+export function removeReplacedBuildings(campus) {
+  campus.buildings = campus.buildings.filter((b) => b.id !== BARRIER.replaces);
+}
+
 export function buildLandscape(scene, campus) {
   const group = new THREE.Group();
   const roads = makeRoadIndex(campus.roads);
-  const parts = new PartBuilder();
+  let parts = new PartBuilder();
   const obstacles = [];
   const labels = [];
 
@@ -43,12 +62,94 @@ export function buildLandscape(scene, campus) {
   const propMesh = parts.mesh();
   propMesh.castShadow = propMesh.receiveShadow = true;
   group.add(propMesh);
+  parts = new PartBuilder(); // 차단기 지붕·부스
+
+  const barrier = buildBarrier(roads, parts, obstacles);
+  group.add(barrier.group);
+
+  const propMesh2 = parts.mesh();
+  propMesh2.castShadow = propMesh2.receiveShadow = true;
+  group.add(propMesh2);
 
   const lamps = buildLamps(campus, roads);
   group.add(lamps);
 
   scene.add(group);
-  return { group, lamps, obstacles, labels };
+  return {
+    group, lamps, obstacles, labels, barrier,
+    // 매 프레임: 차단기 막대 올리고 내리기
+    update(dt, carX, carZ) { barrier.update(dt, carX, carZ); },
+  };
+}
+
+// ---------- 주차 차단기 ----------
+
+function buildBarrier(roads, parts, obstacles) {
+  const [cx, cz] = BARRIER.at;
+  const near = roads.nearest(cx, cz, 30, true);
+  const ux = near ? near.ux : 0, uz = near ? near.uz : -1; // 도로 방향
+  const ex = -uz, ez = ux;                                  // 도로를 가로지르는 방향
+  const at = (s, t) => [cx + ex * s + ux * t, cz + ez * s + uz * t];
+  const yaw = Math.atan2(ux, uz);
+  const half = BARRIER.median / 2 + BARRIER.lane; // 가운데에서 차도 바깥 끝까지
+
+  // 지붕 + 기둥 4개 (차도 밖)
+  const [rw, rl] = BARRIER.roof;
+  const gy = heightAt(cx, cz);
+  const roofT = new THREE.Matrix4().makeRotationY(yaw).setPosition(cx, gy, cz);
+  parts.box(roofT, 0, BARRIER.roofH, 0, rw, 0.35, rl, '#eef0f2');
+  for (const sx of [-1, 1]) {
+    for (const st of [-1, 1]) {
+      const [px, pz] = at(sx * (rw / 2 - 0.3), st * (rl / 2 - 0.5));
+      const T = parts.frame(px, pz, yaw);
+      const h = BARRIER.roofH + gy - heightAt(px, pz) + 0.2;
+      parts.box(T, 0, h / 2, 0, 0.35, h, 0.35, '#c9ccd1');
+      obstacles.push(square(px, pz, 0.3, yaw));
+    }
+  }
+
+  // 요금 부스(1층, 작은 창) 양쪽 길가 + 막대
+  const group = new THREE.Group();
+  const arms = [];
+  for (const side of [1, -1]) {
+    const [bx, bz] = at(side * (half + 2.0), 1.6 * side);
+    const T = parts.frame(bx, bz, yaw);
+    parts.box(T, 0, 1.3, 0, 2.2, 2.6, 3.0, '#ece9e2');
+    parts.box(T, 0, 2.7, 0, 2.7, 0.2, 3.5, '#4a5160');
+    for (const t of [-0.75, 0.75]) parts.box(T, -side * 1.11, 1.55, t, 0.04, 0.75, 0.9, '#3e5a74'); // 차도 쪽 작은 창
+    parts.box(T, side * 1.11, 1.55, 0, 0.04, 0.75, 0.9, '#3e5a74');
+    parts.box(T, 0, 1.55, 1.51, 0.9, 0.75, 0.04, '#3e5a74');
+    obstacles.push(square(bx, bz, 1.6, yaw));
+
+    // 막대: 차도 바깥 기둥에서 분리대 쪽으로. 로컬 +x가 분리대 쪽
+    const [px, pz] = at(side * (half + 0.45), 0);
+    parts.box(parts.frame(px, pz, yaw), 0, 0.55, 0, 0.45, 1.1, 0.45, '#d8dbe0');
+    const L = BARRIER.lane - 0.3;
+    const arm = new PartBuilder();
+    const I = new THREE.Matrix4();
+    const n = Math.round(L / 0.6);
+    for (let i = 0; i < n; i++) arm.box(I, (i + 0.5) * (L / n), 0, 0, L / n, 0.12, 0.1, i % 2 ? '#ffffff' : '#e23b3b');
+    const mesh = arm.mesh();
+    mesh.castShadow = true;
+    const pivot = new THREE.Group();
+    pivot.add(mesh);
+    const holder = new THREE.Group();
+    holder.position.set(px, heightAt(px, pz) + BARRIER.armH, pz);
+    holder.rotation.y = side > 0 ? yaw : yaw + Math.PI; // 로컬 +x = 분리대 쪽
+    holder.add(pivot);
+    group.add(holder);
+    arms.push(pivot);
+  }
+
+  let open = 0;
+  return {
+    group, center: [cx, cz],
+    update(dt, x, z) {
+      const goal = Math.hypot(x - cx, z - cz) < BARRIER.openDist ? 1 : 0;
+      open += (goal - open) * Math.min(1, dt * 3.5);
+      for (const p of arms) p.rotation.z = open * THREE.MathUtils.degToRad(BARRIER.lift);
+    },
+  };
 }
 
 // ---------- 소품 ----------
@@ -225,7 +326,8 @@ function makeRoadIndex(list) {
         if (d < bestD) {
           const [x1, z1, x2, z2] = s, dx = x2 - x1, dz = z2 - z1, L = dx * dx + dz * dz;
           const t = L ? Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L)) : 0;
-          best = { x: x1 + dx * t, z: z1 + dz * t };
+          const len = Math.sqrt(L) || 1;
+          best = { x: x1 + dx * t, z: z1 + dz * t, ux: dx / len, uz: dz / len };
           bestD = d;
         }
       }

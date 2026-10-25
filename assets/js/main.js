@@ -1,7 +1,7 @@
 // 시작(첫 화면), 화면 구성, 입력, 소리, 게임 루프.
 import * as THREE from 'three';
 import { loadCampus, buildMap } from './map.js';
-import { buildLandscape } from './landscape.js';
+import { buildLandscape, removeReplacedBuildings } from './landscape.js';
 import { loadTerrain } from './terrain.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
@@ -206,6 +206,7 @@ async function start() {
     loadCampus('data/campus.json?v=4'), loadCampus('data/lawns.json?v=1'), loadTerrain('data/terrain.json?v=1'),
   ]);
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
+  removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,
@@ -216,6 +217,7 @@ async function start() {
   for (const o of world.landscape.obstacles) collider.addObstacle(o);
   for (const l of world.landscape.labels) hud.addLabel(l.text, l.x, l.y, l.z, { maxDist: l.maxDist, small: true });
   for (const m of campus.monuments || []) world.trees.clearAround(m.p[0], m.p[1], m.shape === 'tower' ? 6 : 3);
+  world.trees.clearAround(...world.landscape.barrier.center, 12); // 차단기 지붕·부스 자리
   for (const [osmName, label] of LANDMARKS) {
     const b = campus.buildings.find((x) => x.name === osmName);
     if (b) hud.addLabel(label || osmName, b.center[0], b.base + b.height + 5, b.center[1]);
@@ -253,6 +255,7 @@ function loop() {
     for (let i = 0; i < steps; i++) car.update(dt / steps, input, collider);
   }
   lateMode.update(dt);
+  world.landscape.update(dt, car.pos.x, car.pos.y); // 주차 차단기
 
   rig.update(dt, car);
   sky.position.copy(camera.position);
