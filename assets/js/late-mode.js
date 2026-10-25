@@ -1,5 +1,6 @@
 // 지각 모드 흐름:
-// 연출(공대 2호관 입구로 날아감 → 교수님 등장·대사 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
+// 연출(공대 2호관 입구로 날아감 → 교수님 등장·대사 → 천천히 위로 올라가 캠퍼스 전체 → 미션 장소 5곳이 차례로 떠오름
+//      → 정문 굴착기로 천천히 내려옴 → 굴착기 앞·옆·뒤) → 3, 2, 1, GO
 // → 미션들 → 공과대 2호관 도착 → 교수님 판정(A+ / F) → 결과.
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
@@ -17,12 +18,17 @@ const STOP_KMH = 3;         // 이보다 느리면 멈춘 것으로 본다
 const BOOST_REWARD = 0.5;   // 미션 완료 시 부스터 게이지 보충량
 const GO_SHOW = 0.8;        // "GO!" 글자가 떠 있는 시간
 
-// 연출 길이(초). 대사 3줄(약 6초)과 카운트다운 3초를 더해 전체 20초 안쪽
+// 연출 길이(초). 대사 3줄(약 7초)과 카운트다운 3초를 더해 전체 25초 안쪽.
+// 멀미 방지: 모든 이동은 ease-in-out, 카메라는 기울지 않고(수평선 유지) 시야각(FOV)도 그대로, 빠른 회전 없음
 const CINE = {
-  fly: 2.0,        // 공대 2호관 입구로 날아감
-  walk: 2.0,       // 교수님이 걸어 나옴
-  lineHold: 0.9,   // 대사 한 줄이 다 나온 뒤 기다림 (클릭·Space로 바로 넘김)
-  toCar: 1.6,      // 굴착기 앞으로 날아감
+  fly: 1.6,        // 공대 2호관 입구로 날아감
+  walk: 1.8,       // 교수님이 걸어 나옴
+  lineHold: 0.7,   // 대사 한 줄이 다 나온 뒤 기다림 (클릭·Space로 바로 넘김)
+  rise: 3.6,       // 위로 올라가며 캠퍼스 전체를 내려다봄
+  pinLead: 1.0,    // 올라가기가 끝나기 이만큼 전부터 미션 장소를 띄움
+  pinGap: 0.45,    // 미션 장소 하나씩 떠오르는 간격
+  pinHold: 0.9,    // 마지막 장소가 뜬 뒤 기다림
+  descend: 3.0,    // 정문 굴착기로 천천히 내려옴
   orbit: 3.0,      // 앞 → 옆 → 뒤
   outroFly: 1.4,   // 도착 후 교수님에게 날아감
   outroHold: 1.6,  // 판정 대사 뒤 결과 창까지
@@ -120,6 +126,7 @@ export class LateMode {
   }
 
   exit() {
+    this.hud.clearPins();
     this.state = 'off';
     this.marker.group.visible = false;
     this.professor.object.visible = false;
@@ -169,6 +176,7 @@ export class LateMode {
   }
 
   go() {
+    this.hud.clearPins();
     this.state = 'playing';
     this.rig.setCinematic(null);
     this.rig.snap = true;
@@ -206,6 +214,7 @@ export class LateMode {
       this.bubble.place((tmp.x + 1) / 2 * innerWidth, (1 - tmp.y) / 2 * innerHeight);
     }
 
+    this.hud.updatePins(this.camera);
     if (this.state === 'intro') this.updateIntro(dt);
     else if (this.state === 'countdown') this.updateCountdown(dt);
     else if (this.state === 'outro') this.updateOutro(dt);
@@ -265,13 +274,41 @@ export class LateMode {
           this.bubble.hide();
           P.talking = false;
           this.flyFrom = { pos: cam.pos.clone(), look: cam.look.clone() };
-          this.next('toCar');
+          this.hud.setPins(this.targets.map((t) => ({
+            emoji: t.emoji, label: t.label, pos: new THREE.Vector3(t.x, heightAt(t.x, t.z) + 4, t.z),
+          })));
+          this.pinShown = 0;
+          this.next('rise');
         }
       }
-    } else if (this.phase === 'toCar') {
-      const k = ease(this.phaseT / CINE.toCar);
-      flyBetween(cam, this.flyFrom, this.orbitPose(0, tmpPose), k, 25);
-      if (this.phaseT >= CINE.toCar) this.next('orbit');
+    } else if (this.phase === 'rise' || this.phase === 'overview') {
+      // 높이를 먼저 올리고(수평 이동은 천천히 따라옴) → 근처 건물을 뚫고 지나가지 않게
+      const k = Math.min(1, this.phaseT / CINE.rise);
+      const over = this.overviewPose(tmpPose);
+      cam.pos.x = THREE.MathUtils.lerp(this.flyFrom.pos.x, over.pos.x, ease(k * k));
+      cam.pos.z = THREE.MathUtils.lerp(this.flyFrom.pos.z, over.pos.z, ease(k * k));
+      cam.pos.y = THREE.MathUtils.lerp(this.flyFrom.pos.y, over.pos.y, ease(k));
+      aimBetween(cam, this.flyFrom, over, ease(k));
+      // 미션 장소가 하나씩 떠오름 (마지막은 공과대 2호관 🏫)
+      const t = this.phaseT - (CINE.rise - CINE.pinLead);
+      while (t >= this.pinShown * CINE.pinGap && this.pinShown < this.targets.length) this.hud.showPin(this.pinShown++);
+      if (k >= 1) this.phase = 'overview';
+      const done = CINE.rise - CINE.pinLead + (this.targets.length - 1) * CINE.pinGap + CINE.pinHold;
+      if (this.phaseT >= Math.max(CINE.rise, done)) {
+        this.flyFrom = { pos: cam.pos.clone(), look: cam.look.clone() };
+        this.hud.clearPins();
+        this.next('descend');
+      }
+    } else if (this.phase === 'descend') {
+      // 수평 이동을 먼저 끝내고 마지막엔 위에서 내려앉듯 (낮은 높이로 비스듬히 지나가지 않게)
+      const k = Math.min(1, this.phaseT / CINE.descend);
+      const to = this.orbitPose(0, tmpPose);
+      const kxz = ease(Math.min(1, k * 1.25));
+      cam.pos.x = THREE.MathUtils.lerp(this.flyFrom.pos.x, to.pos.x, kxz);
+      cam.pos.z = THREE.MathUtils.lerp(this.flyFrom.pos.z, to.pos.z, kxz);
+      cam.pos.y = THREE.MathUtils.lerp(this.flyFrom.pos.y, to.pos.y, ease(k));
+      aimBetween(cam, this.flyFrom, to, ease(k));
+      if (k >= 1) this.next('orbit');
     } else if (this.phase === 'orbit') {
       const k = Math.min(1, this.phaseT / CINE.orbit);
       const pose = this.orbitPose(ease(k), tmpPose);
@@ -292,6 +329,16 @@ export class LateMode {
 
   sayIntroLine() {
     this.bubble.say(DIALOGUE.intro[this.line]);
+  }
+
+  // 캠퍼스 전체를 내려다보는 자리: 미션 장소들의 가운데 남쪽 높은 곳에서 비스듬히 아래로
+  overviewPose(out) {
+    const xs = this.targets.map((t) => t.x), zs = this.targets.map((t) => t.z);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    out.pos.set(cx, heightAt(cx, cz) + span * 1.0, cz + span * 0.42);
+    out.look.set(cx, heightAt(cx, cz), cz - span * 0.02);
+    return out;
   }
 
   // 굴착기 주위를 도는 카메라: k=0 앞면, 0.5 옆면, 1 뒷면(= 뒤 따라가기 시점과 같은 자리)
@@ -406,7 +453,25 @@ function ease(k) {
 function flyBetween(cam, a, b, k, arc) {
   cam.pos.lerpVectors(a.pos, b.pos, k);
   cam.pos.y += Math.sin(k * Math.PI) * arc;
-  cam.look.lerpVectors(a.look, b.look, k);
+  aimBetween(cam, a, b, k);
+}
+
+// 바라보는 방향을 각도(좌우 yaw, 위아래 pitch)로 a → b 사이를 잇는다.
+// 바라보는 점을 직접 옮기면 가까운 점 ↔ 먼 점 사이에서 순간적으로 빨리 돌아가 멀미가 나서.
+function aimBetween(cam, a, b, k) {
+  const A = aimAngles(a), B = aimAngles(b);
+  const dyaw = Math.atan2(Math.sin(B.yaw - A.yaw), Math.cos(B.yaw - A.yaw)); // 짧은 쪽으로
+  const yaw = A.yaw + dyaw * k, pitch = A.pitch + (B.pitch - A.pitch) * k;
+  cam.look.set(
+    cam.pos.x + Math.sin(yaw) * Math.cos(pitch) * 10,
+    cam.pos.y + Math.sin(pitch) * 10,
+    cam.pos.z + Math.cos(yaw) * Math.cos(pitch) * 10,
+  );
+}
+
+function aimAngles({ pos, look }) {
+  const dx = look.x - pos.x, dy = look.y - pos.y, dz = look.z - pos.z;
+  return { yaw: Math.atan2(dx, dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)) };
 }
 
 // 바닥의 빛나는 원 + 빛 기둥 + 위아래로 떠다니는 이모지

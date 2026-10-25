@@ -300,6 +300,48 @@ export class Hud {
     document.body.classList.toggle('cine', on);
   }
 
+  // 지각 모드 시작 연출: 내려다본 캠퍼스 위에 미션 장소(이모지 + 이름)를 하나씩 띄운다
+  setPins(list) {
+    this.clearPins();
+    const box = $('pins');
+    this.pins = list.map((p, i) => {
+      const el = document.createElement('div');
+      el.className = 'pin';
+      const num = document.createElement('span');
+      num.className = 'pin-num';
+      num.textContent = i === list.length - 1 ? '도착' : String(i + 1);
+      const emoji = document.createElement('span');
+      emoji.className = 'pin-emoji';
+      emoji.textContent = p.emoji;
+      const name = document.createElement('span');
+      name.className = 'pin-name';
+      name.textContent = p.label;
+      el.append(num, emoji, name);
+      box.appendChild(el);
+      return { el, pos: p.pos };
+    });
+  }
+
+  showPin(i) {
+    this.pins?.[i]?.el.classList.add('on');
+  }
+
+  updatePins(camera) {
+    if (!this.pins?.length) return;
+    for (const p of this.pins) {
+      tmp.copy(p.pos).project(camera);
+      const x = (tmp.x + 1) / 2 * innerWidth, y = (1 - tmp.y) / 2 * innerHeight;
+      p.el.style.left = `${x}px`;
+      p.el.style.top = `${y}px`;
+    }
+  }
+
+  clearPins() {
+    const box = $('pins');
+    if (box) box.textContent = '';
+    this.pins = [];
+  }
+
   // "F다." 같은 순간에 화면 흔들림
   shake() {
     document.body.classList.remove('shake');

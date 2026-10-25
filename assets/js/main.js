@@ -202,7 +202,7 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus] = await Promise.all([loadCampus('data/campus.json?v=3'), loadTerrain('data/terrain.json?v=1')]);
+  const [campus] = await Promise.all([loadCampus('data/campus.json?v=4'), loadTerrain('data/terrain.json?v=1')]);
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: quality === 'high' ? 4096 : 2048,

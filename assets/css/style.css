@@ -463,3 +463,31 @@ body.title #building-name, body.title #minimap, body.title #speedlines { display
 /* 화면이 낮으면 첫 화면 카드를 줄여서 다 보이게 */
 @media (max-height: 560px) { .title-card { transform: scale(0.72); } }
 .credit-en { font-size: 12px; opacity: 0.8; }
+
+/* 지각 모드 시작 연출: 미션 장소 표시 (위에서 내려다본 캠퍼스 위) */
+#pins { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+.pin {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2a40;
+  font-weight: 800;
+  font-size: 18px;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(20, 30, 50, 0.3);
+  transform: translate(-50%, -100%) scale(0.6);
+  opacity: 0;
+  transition: opacity 0.35s ease-out, transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pin.on { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+.pin-num {
+  min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px;
+  background: #ff6b4a; color: #fff; font-size: 13px; display: grid; place-items: center;
+}
+.pin:last-child .pin-num { background: #2f9be0; }
+.pin-emoji { font-size: 24px; line-height: 1; }
+
