@@ -582,8 +582,9 @@ export class Collider {
   // 건물이 아닌 장애물(정문 기둥 등)도 같은 방식으로 넣는다
   // quiet: 부딪혀도 튕김·충돌음·웃긴 반응 없이 조용히 멈추는 장애물 (기념물)
   // 돌려준 번호로 setEnabled(번호들, false)하면 그 장애물을 잠시 뺀다
-  addObstacle(outline, name = '', { quiet = false } = {}) {
-    const bi = this.buildings.push({ name, quiet, off: false }) - 1;
+  // minRadius: 이보다 작은 원(걷는 황소 등)은 통과 (용지 물가: 굴착기만 막고, 황소는 물에 빠질 수 있게)
+  addObstacle(outline, name = '', { quiet = false, minRadius = 0 } = {}) {
+    const bi = this.buildings.push({ name, quiet, off: false, minR: minRadius }) - 1;
     for (let i = 0; i < outline.length; i++) {
       const [x1, z1] = outline[i];
       const [x2, z2] = outline[(i + 1) % outline.length];
@@ -635,7 +636,8 @@ export class Collider {
     for (let iter = 0; iter < 3; iter++) {
       let moved = false;
       this.forEachEdge(pos.x, pos.y, radius, (e) => {
-        if (this.buildings[e[4]].off) return;
+        const b = this.buildings[e[4]];
+        if (b.off || radius < b.minR) return;
         const [qx, qz] = closestOnSegment(pos.x, pos.y, e);
         let dx = pos.x - qx, dz = pos.y - qz;
         const d = Math.hypot(dx, dz);

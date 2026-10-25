@@ -315,6 +315,45 @@ export function playBonk() {
   burst(ac, t, 0.06, 0.12, 'lowpass', 700);
 }
 
+// 고양이 "냐옹": 올라갔다 내려오는 짧은 삼각파 + 모음 필터
+export function playMeow() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime, len = 0.42;
+  const o = ac.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(620, t);
+  o.frequency.linearRampToValueAtTime(880, t + 0.12);
+  o.frequency.exponentialRampToValueAtTime(520, t + len);
+  o.connect(filter(ac, 'bandpass', 1400, 1.2)).connect(env(ac, t, 0.22, 0.03, len));
+  o.start(t);
+  o.stop(t + len + 0.05);
+}
+
+// 풍덩: 낮은 "퐁" + 쏴아 물 잡음
+export function playSplash() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator();
+  o.frequency.setValueAtTime(260, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.25);
+  o.connect(env(ac, t, 0.35, 0.005, 0.3));
+  o.start(t);
+  o.stop(t + 0.32);
+  burst(ac, t + 0.02, 0.5, 0.22, 'bandpass', 1800);
+  burst(ac, t + 0.15, 0.6, 0.1, 'highpass', 3000);
+}
+
+// 도장 쾅: 둔탁한 "쿵" + 짧은 딩
+export function playStamp() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  burst(ac, t, 0.08, 0.3, 'lowpass', 500);
+  tone(ac, 988, t + 0.1, 0.25, 0.12, 'triangle');
+}
+
 // 카운트다운 삐 (go면 높고 길게)
 export function playBeep(go = false) {
   const ac = unlockAudio();

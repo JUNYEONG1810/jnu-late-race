@@ -99,6 +99,32 @@ export function buildTerrainGeometry(bounds, far = 3000) {
   return geo;
 }
 
+// 연못(용지): 지형 자료(등고선)에는 물이 따로 없어 물 안쪽 땅이 5m 넘게 기울어 있다. 물 안쪽 격자점을
+// 물가 높이의 아래쪽 1/4값 하나로 평평하게 해서 수면이 구겨져 보이지 않게 한다 (지형 메시·heightAt 모두).
+export function flattenWater(outlines, { quantile = 0.25 } = {}) {
+  if (!T) return [];
+  const { step, x0, z0, nx, nz, h } = T;
+  const levels = [];
+  for (const o of outlines) {
+    const edge = [];
+    for (let i = 0; i < o.length; i++) {
+      const [x1, z1] = o[i], [x2, z2] = o[(i + 1) % o.length];
+      const n = Math.max(1, Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 2));
+      for (let s = 0; s < n; s++) edge.push(heightAt(x1 + ((x2 - x1) * s) / n, z1 + ((z2 - z1) * s) / n));
+    }
+    edge.sort((a, b) => a - b);
+    const level = edge[Math.floor(edge.length * quantile)];
+    const xs = o.map((p) => p[0]), zs = o.map((p) => p[1]);
+    for (let j = Math.max(0, Math.floor((Math.min(...zs) - z0) / step)); j <= Math.min(nz - 1, Math.ceil((Math.max(...zs) - z0) / step)); j++) {
+      for (let i = Math.max(0, Math.floor((Math.min(...xs) - x0) / step)); i <= Math.min(nx - 1, Math.ceil((Math.max(...xs) - x0) / step)); i++) {
+        if (inside(x0 + i * step, z0 + j * step, o)) h[j * nx + i] = level;
+      }
+    }
+    levels.push(level);
+  }
+  return levels;
+}
+
 function inside(x, z, poly) {
   let r = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {

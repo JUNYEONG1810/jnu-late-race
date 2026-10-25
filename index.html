@@ -17,33 +17,34 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=83">
+  <link rel="stylesheet" href="assets/css/style.css?v=88">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=83",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=83",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=83",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=83",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=83",
-      "./assets/js/life.js": "./assets/js/life.js?v=83",
-      "./assets/js/music.js": "./assets/js/music.js?v=83",
-      "./assets/js/route.js": "./assets/js/route.js?v=83",
-      "./assets/js/surface.js": "./assets/js/surface.js?v=83",
-      "./assets/js/play.js": "./assets/js/play.js?v=83",
-      "./assets/js/car.js": "./assets/js/car.js?v=83",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=83",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=83",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=83",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=83",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=83",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=83",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=83",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=83",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=83",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=83",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=83"
+      "./assets/js/map.js": "./assets/js/map.js?v=88",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=88",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=88",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=88",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=88",
+      "./assets/js/life.js": "./assets/js/life.js?v=88",
+      "./assets/js/music.js": "./assets/js/music.js?v=88",
+      "./assets/js/route.js": "./assets/js/route.js?v=88",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=88",
+      "./assets/js/play.js": "./assets/js/play.js?v=88",
+      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=88",
+      "./assets/js/car.js": "./assets/js/car.js?v=88",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=88",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=88",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=88",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=88",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=88",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=88",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=88",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=88",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=88",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=88",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=88"
     }
   }
   </script>
@@ -78,6 +79,7 @@
       <button id="sound-btn" title="소리 켜기/끄기 (M)">🔊</button>
       <button id="bgm-btn" title="배경음악 끄기">🎵</button>
       <button id="settings-btn" title="설정">⚙</button>
+      <button id="stamp-btn" title="캠퍼스 도장판">🏅</button>
     </div>
     <div id="settings" class="panel off">
       <label><input type="checkbox" data-set="walkCamAuto"> 걸을 때 카메라 자동으로 뒤로</label>
@@ -114,6 +116,9 @@
       <kbd>H</kbd> 음메 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 감정 표현
     </div>
     <div id="student-bubble" class="hidden"></div>
+    <div id="npc-bubble" class="hidden"><div class="npc-name"></div><div class="npc-text"></div></div>
+    <!-- 명소 도장판 (걷는 중 왼쪽 위 🏅 버튼) -->
+    <div id="stamp-board" class="panel hidden"><h3>🏅 캠퍼스 도장판</h3><div class="stamps"></div><p class="stamp-tip">걸어서 명소에 가면 도장이 찍혀요</p></div>
     <!-- 지각 모드 중 교수님 전화 -->
     <div id="phone" class="panel hidden"><div class="phone-name">📞 교수님</div><div class="phone-text"></div></div>
     <div id="student-z" class="hidden"><span>Z</span><span>Z</span><span>Z</span></div>
@@ -207,6 +212,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=83"></script>
+  <script type="module" src="assets/js/main.js?v=88"></script>
 </body>
 </html>

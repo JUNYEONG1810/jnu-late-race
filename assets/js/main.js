@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { loadCampus, buildMap, placeSpawnAtGate } from './map.js';
 import { buildLandscape, removeReplacedBuildings } from './landscape.js';
-import { loadTerrain, heightAt } from './terrain.js';
+import { loadTerrain, heightAt, flattenWater } from './terrain.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
-import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, playMoo, playBonk, speak, EngineSound, isMuted, setMuted } from './voice.js';
+import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, playMoo, playBonk, playMeow, playSplash, playStamp, speak, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode, TIME_LIMIT } from './late-mode.js';
 import { Walker } from './walker.js';
 import { STUDENT_LINES } from './dialogue-data.js';
@@ -16,6 +16,7 @@ import { buildShuttles } from './life.js';
 import { Music } from './music.js';
 import { buildSurface } from './surface.js';
 import { buildPlay } from './play.js';
+import { buildCampusLife } from './campus-life.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -251,6 +252,7 @@ function applyLight() {
   world.trees.setVariety(on);
   for (const m of world.roadMarks.meshes) m.visible = on;
   world.shuttle.group.visible = on;
+  life?.setEnabled(on); // 오리·고양이·동물 학생·산책하는 교수님
 }
 const rig = new CameraRig(camera);
 const car = new Car();
@@ -329,6 +331,7 @@ let world = null;
 let lateMode = null;
 let walker = null;
 let play = null; // 놀거리 (play.js)
+let life = null; // 캠퍼스 산책 (campus-life.js)
 
 // ---------- 내려서 걷기 (자유 모드) ----------
 
@@ -346,9 +349,10 @@ function onWalkKey(code) {
   if (!walker.walking) return code === 'KeyE' || code === 'KeyL'; // 타고 내리는 중
   if (code === 'KeyE') {
     if (walker.nearCar()) walker.board();
-    else hud.toast('굴착기 가까이 가면 탈 수 있어요');
+    else if (!life.interact()) hud.toast('굴착기 가까이 가면 탈 수 있어요 (고양이·벤치 가까이에서는 E)');
     return true;
   }
+  if (code === 'KeyG') { life.greet(); return true; } // 동물 학생과 서로 손 흔들기 (없으면 혼자 흔듦)
   if (code === 'KeyR') {
     const r = walker.summon();
     hud.toast(r === 'ok' ? '굴착기를 불렀어요' : r === 'near' ? '굴착기가 가까이 있어요' : '여기는 굴착기를 세울 자리가 없어요');
@@ -585,6 +589,8 @@ async function start() {
   }
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
+  const waterGreens = campus.greens.filter((g) => g.kind === 'water');
+  flattenWater(waterGreens.map((g) => g.outline)).forEach((lv, i) => { waterGreens[i].level = lv; }); // 용지 수면을 평평하게
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: GROUND_PX[quality],
@@ -600,6 +606,15 @@ async function start() {
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   car.surface = buildSurface(campus); // 잔디·흙·운동장 위는 느리게 (부스터 중엔 그대로)
   play = buildPlay(scene, campus, collider, hud); // 축구·타임어택·드리프트 (자유 모드)
+  // 용지 물가: 굴착기만 막음 (걷는 황소는 빠질 수 있음)
+  const waterSeen = new Set();
+  for (const g of campus.greens) {
+    if (g.kind !== 'water') continue;
+    const k = g.outline.slice(0, 3).join();
+    if (waterSeen.has(k)) continue;
+    waterSeen.add(k);
+    collider.addObstacle(g.outline, null, { minRadius: 1 });
+  }
   loadingUi.set(0.72, '나무와 조형물 놓는 중…');
   await breathe();
   world.landscape = buildLandscape(scene, campus);
@@ -628,6 +643,9 @@ async function start() {
   scene.add(walker.object);
   lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
   lateMode.onResult = (grade) => music.result(grade); // 등급별 짧은 결과 음악
+  life = buildCampusLife(scene, { campus, collider, hud, lateMode, walker, car, speak,
+    sounds: { meow: playMeow, splash: playSplash, stamp: playStamp } });
+  walker.onSplash = (x, z) => life.splashAt(x, z); // 풍덩: 물보라·소리, 오리가 흩어짐
   hud.initMinimap(campus);
   setupTitle();
 
@@ -637,7 +655,7 @@ async function start() {
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
   loadingUi.done();
-  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
   setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
@@ -705,6 +723,8 @@ function loop() {
   else if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
   else rig.update(dt, car);
   play.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null, !onTitle && !lateMode.active && !photo.on);
+  life.update(lateMode.frozen ? 0 : dt, camera, focus, !lateMode.active);
+  hud.updateNpc(camera);
   sky.position.copy(camera.position);
   sun.target.position.set(focus.x, focusY, focus.y);
   sun.position.copy(sun.target.position).add(SUN_OFFSET);

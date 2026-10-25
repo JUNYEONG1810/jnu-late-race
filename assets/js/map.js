@@ -427,6 +427,7 @@ function groundColor(g) {
 // 연못: 바닥 그림의 물 위에, 지형을 따라 얹은 살짝 반짝이는 수면(잔물결 텍스처가 천천히 흐름)
 function buildWater(list) {
   const pos = [];
+  let level = null; // 평평하게 고른 수면 높이 (terrain.flattenWater). 없으면 땅을 따라감
   const add = (a, b, c) => {
     const L = Math.max(Math.hypot(a[0] - b[0], a[1] - b[1]), Math.hypot(b[0] - c[0], b[1] - c[1]), Math.hypot(c[0] - a[0], c[1] - a[1]));
     if (L > 4) { // 지형을 따라가도록 잘게 나눈다
@@ -435,9 +436,10 @@ function buildWater(list) {
       return;
     }
     const cross = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
-    for (const p of cross < 0 ? [a, c, b] : [a, b, c]) pos.push(p[0], heightAt(p[0], p[1]) + 0.08, p[1]);
+    for (const p of cross < 0 ? [a, c, b] : [a, b, c]) pos.push(p[0], (level ?? heightAt(p[0], p[1])) + 0.08, p[1]);
   };
   for (const w of list) {
+    level = w.level ?? null; // 물가 둑이 더 높은 곳은 땅이 수면을 덮는다
     const contour = w.outline.map(([x, z]) => new THREE.Vector2(x, z));
     for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) add(w.outline[i], w.outline[j], w.outline[k]);
   }

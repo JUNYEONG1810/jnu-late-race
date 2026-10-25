@@ -42,6 +42,9 @@ export const CUTE = {
   crouch: 0.09,      // 점프 직전 웅크림
   fallHit: 3.2,      // 달리다 벽에 이 속도(m/s) 넘게 부딪히면 꽈당
   fall: 2.6,         // 넘어짐 → 별 → 일어나 머리 털기까지
+  waterPush: 1.0,    // 물가에서 이만큼 계속 밀면 (달리거나 뛰어들면 바로) 풍덩
+  splash: [0.35, 1.7, 2.15, 2.95], // 풍덩: 뛰어듦 → 잠김 → 튀어나옴 → 몸 털기 끝 (초)
+  sink: 0.45,        // 물에 잠기는 깊이 (머리와 허우적대는 두 팔이 보이게)
 };
 
 export class Walker {
@@ -68,7 +71,7 @@ export class Walker {
     this.look = { cur: 0, goal: 0, timer: 3 }; // 서 있으면 가끔 두리번
     this.hop = null;
     this.onStep = null; // 발소리 (main에서 voice.playStep)
-    this.water = (campus.greens || []).filter((g) => g.kind === 'water').map((g) => ({ outline: g.outline, box: bbox(g.outline) }));
+    this.water = (campus.greens || []).filter((g) => g.kind === 'water').map((g) => ({ outline: g.outline, box: bbox(g.outline), level: g.level }));
 
     // 귀여운 동작 상태
     this.emote = null;   // null | 'wave' | 'dance' | 'sit'
@@ -78,6 +81,10 @@ export class Walker {
     this.doze = 0;       // 가만히 있던 시간 (CUTE.doze 넘으면 하품 → 꾸벅 → 낮잠)
     this.wakeT = 0;      // 화들짝
     this.fallT = -1;     // 꽈당 경과 (아니면 -1)
+    this.splashT = -1;   // 풍덩 경과 (아니면 -1)
+    this.seat = 0;       // 벤치에 앉아 있으면 엉덩이를 띄우는 높이
+    this.waterPush = 0;
+    this.onSplash = null; // 풍덩 (main: 물보라·소리·오리)
     this.crouchT = -1;   // 점프 웅크림 경과
     this.sq = 0;         // 찌그러짐 (음수 납작, 양수 길쭉) — 크기 변형만
     this.sqV = 0;
@@ -90,7 +97,7 @@ export class Walker {
     this.object.add(this.stars);
   }
 
-  get busy() { return this.fallT >= 0; }
+  get busy() { return this.fallT >= 0 || this.splashT >= 0; }
   get napping() { return this.doze - CUTE.doze > CUTE.nap; }
 
   // 아무 키나 누르면: 졸던 중이면 화들짝 깨고, 졸음 시간은 처음부터
@@ -124,6 +131,7 @@ export class Walker {
   // 표정: 꽈당 어질 > 화들짝 > 하품·졸기 > 기쁨(음메·손 흔들기·춤) > 웃음
   face() {
     if (this.state !== 'walk') return 'smile';
+    if (this.splashT >= 0) return this.splashT < CUTE.splash[2] ? 'surprised' : 'dizzy';
     if (this.busy) return this.fallT < 2 ? 'dizzy' : 'smile';
     if (this.wakeT > 0) return 'surprised';
     const z = this.doze - CUTE.doze;
@@ -188,7 +196,7 @@ export class Walker {
   }
 
   resetCute() {
-    Object.assign(this, { emote: null, mooT: 0, perkT: 0, doze: 0, wakeT: 0, fallT: -1, crouchT: -1, sq: 0, sqV: 0 });
+    Object.assign(this, { emote: null, mooT: 0, perkT: 0, doze: 0, wakeT: 0, fallT: -1, splashT: -1, seat: 0, crouchT: -1, sq: 0, sqV: 0 });
     this.stars.visible = false;
     this.driver.root.scale.setScalar(D.scale);
   }
@@ -264,6 +272,7 @@ export class Walker {
       return;
     }
     if (this.hop) { this.updateHop(dt); return; }
+    if (this.splashT >= 0) { this.updateSplash(dt); return; }
 
     // 화면 기준 방향: W는 카메라가 보는 쪽, A·D는 화면 왼쪽·오른쪽 (꽈당 중에는 조작 없음)
     const f = camDir, rx = -f.y, rz = f.x;
@@ -271,7 +280,7 @@ export class Walker {
     const ix = ok ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0, iz = ok ? (input.up ? 1 : 0) - (input.down ? 1 : 0) : 0;
     const want = new THREE.Vector2(f.x * iz + rx * ix, f.y * iz + rz * ix);
     const has = want.lengthSq() > 0;
-    if (has) { want.normalize(); this.emote = null; } // 움직이면 감정 표현은 바로 풀림
+    if (has) { want.normalize(); this.emote = null; this.seat = 0; } // 움직이면 감정 표현·벤치는 바로 풀림
     this.running = !!input.boost && has;
     want.multiplyScalar(this.running ? WALK.run : WALK.speed);
     this.vel.lerp(want, 1 - Math.exp(-dt * (this.grounded ? WALK.accel : 3)));
@@ -303,7 +312,7 @@ export class Walker {
     this.wakeT = Math.max(0, this.wakeT - dt);
     this.emoteT += dt;
     if (this.emote === 'wave' && this.emoteT > CUTE.wave) this.emote = null;
-    if (this.busy && (this.fallT += dt) > CUTE.fall) this.fallT = -1;
+    if (this.fallT >= 0 && (this.fallT += dt) > CUTE.fall) this.fallT = -1;
     const still = !this.moving && this.grounded && !this.busy && this.mooT === 0 && this.emote !== 'dance' && this.emote !== 'wave';
     this.doze = still ? this.doze + dt : 0;
     if (!this.busy && this.doze < CUTE.doze && (this.chatT -= dt) <= 0) {
@@ -320,14 +329,88 @@ export class Walker {
     this.onBonk?.();
   }
 
+  // 벤치에 앉기: 그 자리로 옮겨 길 쪽을 보고 털썩 (움직이면 일어남)
+  sitOn(x, z, yaw, h) {
+    if (this.state !== 'walk' || this.busy || !this.grounded) return;
+    this.pos.set(x, z);
+    this.vel.set(0, 0);
+    this.heading = yaw;
+    this.seat = h;
+    this.emote = 'sit';
+    this.emoteT = 0;
+    this.sq = -0.2;
+    this.sqV = 0;
+    this.onStep?.(false);
+  }
+
+  // 풍덩: 물가 shore에서 물속 (x, z)로 뛰어들었다가 잠기고 → 물가로 튀어나와 몸을 턴다
+  startSplash(x, z) {
+    this.splashT = 0;
+    this.shore = { x: this.pos.x, z: this.pos.y, y: this.y };
+    const dx = x - this.pos.x, dz = z - this.pos.y, L = Math.hypot(dx, dz) || 1;
+    let wx = x, wz = z;
+    const pond = this.water.find((w) => pointInPolygon(x, z, w.outline));
+    for (let d = 1.5; d <= 9; d += 0.5) { // 물가 둑(땅이 수면보다 높은 곳)을 지나 실제 물이 있는 곳까지
+      const qx = this.pos.x + (dx / L) * d, qz = this.pos.y + (dz / L) * d;
+      if (!this.inWater(qx, qz)) break;
+      wx = qx; wz = qz;
+      if (heightAt(qx, qz) <= (pond?.level ?? Infinity) + 0.03) break;
+    }
+    this.dip = { x: wx, z: wz, y: (pond?.level ?? heightAt(wx, wz)) + 0.08 };
+    this.vel.set(0, 0);
+    this.emote = null;
+    this.seat = 0;
+    this.crouchT = -1;
+    this.waterPush = 0;
+    this.heading = Math.atan2(dx, dz);
+    this.onSplash?.(wx, wz);
+  }
+
+  updateSplash(dt) {
+    const [jump, sunk, out, end] = CUTE.splash, t = (this.splashT += dt);
+    const A = this.shore, B = this.dip;
+    let rz = 0;
+    if (t < jump) { // 뛰어듦
+      const k = t / jump;
+      this.pos.set(A.x + (B.x - A.x) * k, A.z + (B.z - A.z) * k);
+      this.y = A.y + (B.y - CUTE.sink - A.y) * k + Math.sin(Math.PI * k) * 0.45;
+    } else if (t < sunk) { // 잠겨서 둥둥
+      this.pos.set(B.x, B.z);
+      this.y = B.y - CUTE.sink + Math.sin(t * 6) * 0.04;
+    } else if (t < out) { // 물가로 튀어나옴
+      const k = (t - sunk) / (out - sunk);
+      this.pos.set(B.x + (A.x - B.x) * k, B.z + (A.z - B.z) * k);
+      this.y = B.y - CUTE.sink + (A.y - (B.y - CUTE.sink)) * k + Math.sin(Math.PI * k) * 0.8;
+      this.heading = Math.atan2(A.x - B.x, A.z - B.z);
+    } else { // 몸 털기 (부르르)
+      this.pos.set(A.x, A.z);
+      this.y = heightAt(A.x, A.z);
+      rz = Math.sin(t * 42) * 0.22 * (1 - (t - out) / (end - out));
+    }
+    if (t >= end) { this.splashT = -1; this.grounded = true; this.vy = 0; }
+    this.speed = 0;
+    this.moving = false;
+    this.updateCute(dt);
+    this.animate(dt);
+    this.object.position.set(this.pos.x, this.y, this.pos.y);
+    this.object.rotation.set(0, this.heading, rz);
+    this.updateStars();
+  }
+
   move(dt) {
     const sx = this.vel.x * dt, sz = this.vel.y * dt;
+    this.wantWater = null;
     // 물·가파른 오르막이면 막고, 한 축씩 다시 해 봐서 벽을 따라 미끄러지게
     if (!this.tryStep(sx, sz)) {
       if (this.tryStep(sx, 0)) this.vel.y = 0;
       else if (this.tryStep(0, sz)) this.vel.x = 0;
       else this.vel.set(0, 0);
     }
+    // 물가: 달리거나 뛰어들면 바로, 걸어서 계속 밀면 잠시 뒤 풍덩
+    if (this.wantWater && this.vel.lengthSq() + sx * sx > 0) {
+      this.waterPush += dt;
+      if (this.running || !this.grounded || this.waterPush > CUTE.waterPush) { this.startSplash(...this.wantWater); return; }
+    } else if (!this.wantWater) this.waterPush = 0;
     // 건물·기념물 (굴착기와 같은 외곽선 충돌), 굴착기, 캠퍼스 경계
     this.hit = 0;
     const n = this.collider.resolve(this.pos, WALK.radius);
@@ -340,7 +423,7 @@ export class Walker {
     if (w) this.pushBack(w);
 
     // 땅 높이: 걸을 땐 땅에 붙고, 점프·낭떠러지에서는 떨어진다
-    const g = heightAt(this.pos.x, this.pos.y);
+    const g = heightAt(this.pos.x, this.pos.y) + this.seat; // 벤치에 앉아 있으면 그만큼 위
     if (this.grounded) {
       if (g < this.y - WALK.dropFall) { this.grounded = false; this.vy = 0; }
       else this.y = g;
@@ -372,7 +455,7 @@ export class Walker {
   tryStep(dx, dz) {
     if (!dx && !dz) return true;
     const x = this.pos.x + dx, z = this.pos.y + dz;
-    if (this.inWater(x, z)) return false;
+    if (this.inWater(x, z)) { this.wantWater = [x, z]; return false; }
     const rise = heightAt(x, z) - this.y; // 땅에 붙어 있으면 경사, 공중이면 발보다 높은 땅만 막음
     if (this.grounded ? rise > WALK.maxGrade * Math.hypot(dx, dz) + 0.002 : rise > 0.02) return false;
     this.pos.set(x, z);
@@ -536,7 +619,7 @@ export class Walker {
     }
 
     // ---- 꽈당: 뒤로 넘어짐 → 별 → 일어나 머리 털기 ----
-    if (this.busy) {
+    if (this.fallT >= 0) {
       const ft = this.fallT;
       const down = ft < 0.25 ? smooth(ft / 0.25) : ft < 1.6 ? 1 : ft < 2 ? 1 - smooth((ft - 1.6) / 0.4) : 0;
       Object.assign(P, { x: 0, rx: -1.4 * down, ry: 0, rz: 0, y: (0.17 - FOOT_LIFT) * down, hx: -0.2 * down, hz: 0 });
@@ -544,6 +627,11 @@ export class Walker {
       P.arms = [[-1.6 * down, -(0.14 + 0.9 * down)], [-1.6 * down, 0.14 + 0.9 * down]];
       const kick = Math.sin(t * 9) * 0.2 * down;
       P.legs = [[-1.3 * down + kick, -0.1], [-1.3 * down - kick, 0.1]];
+    }
+    // ---- 풍덩: 물속에서 두 팔을 들고 허우적 ----
+    if (this.splashT >= 0 && this.splashT < CUTE.splash[2]) {
+      const w = Math.sin(t * 14) * 0.35;
+      P.arms = [[-2.6 + w, -0.45], [-2.6 - w, 0.45]];
     }
 
     // 기쁠 때(음메·손 흔들기·춤) 꼬리를 빠르게
@@ -580,7 +668,7 @@ export class Walker {
 
   // 꽈당 별: 머리 위를 빙글
   updateStars() {
-    const on = this.busy && this.fallT > 0.2 && this.fallT < 1.9;
+    const on = this.fallT > 0.2 && this.fallT < 1.9;
     this.stars.visible = on;
     if (!on) return;
     this.object.updateMatrixWorld();

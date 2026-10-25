@@ -7,7 +7,7 @@ const tmp = new THREE.Vector3();
 // 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
 const MINIMAP = { radius: 260, res: 0.7 };
 // 이름표가 가리면 안 되는 HUD 요소들
-const LABEL_BLOCKERS = ['play-info', 'photo-bar', 'quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
+const LABEL_BLOCKERS = ['play-info', 'photo-bar', 'stamp-board', 'npc-bubble', 'quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
 
 export class Hud {
   constructor({ onQuality, onSound, onBgm }) {
@@ -102,6 +102,42 @@ export class Hud {
     if (showZ) zz.style.transform = `translate(${x + 10}px, ${y}px)`;
     zz.classList.toggle('hidden', !showZ);
   }
+
+  // 교수님·동물 학생 말풍선 (머리 위, 목소리 박자에 맞춰 글자). where: 머리 위 월드 좌표를 돌려주는 함수
+  sayNpc(text, voice, where, name = '') {
+    this.npc = { text, steps: voice.steps, start: performance.now(), end: voice.duration + 2.4, where, name };
+    const el = $('npc-bubble');
+    el.querySelector('.npc-name').textContent = name;
+  }
+
+  updateNpc(camera) {
+    const el = $('npc-bubble'), N = this.npc;
+    if (!N) { el.classList.add('hidden'); return; }
+    const t = (performance.now() - N.start) / 1000;
+    if (t > N.end) { this.npc = null; el.classList.add('hidden'); return; }
+    tmp.copy(N.where()).project(camera);
+    const on = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+    let n = 0;
+    for (const st of N.steps) if (st.at <= t) n = st.end;
+    const text = N.text.slice(0, n), box = el.querySelector('.npc-text');
+    if (box.textContent !== text) box.textContent = text;
+    el.style.transform = `translate(${(tmp.x + 1) / 2 * innerWidth}px, ${(1 - tmp.y) / 2 * innerHeight - 8}px) translate(-50%, -100%)`;
+    el.classList.toggle('hidden', !on || !text);
+  }
+
+  // 명소 도장판: stamps [{name, emoji}], got {이름: 찍은 시각}
+  setStamps(stamps, got) {
+    const board = $('stamp-board');
+    if (!this.stampBound) {
+      this.stampBound = true;
+      const btn = $('stamp-btn');
+      btn.addEventListener('click', () => { board.classList.toggle('hidden'); btn.blur(); });
+    }
+    const n = stamps.filter((s) => got[s.name]).length;
+    board.querySelector('h3').textContent = `🏅 캠퍼스 도장판 ${n}/${stamps.length}`;
+    board.querySelector('.stamps').innerHTML = stamps.map((s) => `<div class="stamp${got[s.name] ? ' got' : ''}"><b>${s.emoji}</b>${s.name}</div>`).join('');
+  }
+
 
   hideHelp() {
     clearTimeout(this.helpTimer);

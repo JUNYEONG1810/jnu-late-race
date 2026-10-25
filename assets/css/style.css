@@ -622,3 +622,20 @@ body.late #play-info, body.cine #play-info { display: none; }
 body.photo #photo-bar { display: flex; }
 body.photo #hud > :not(#photo-bar):not(#toast) { display: none !important; }
 #res-save { background: #ffd23f; color: #2b3240; }
+
+/* ---------- 캠퍼스 산책 (밤샘 9단계) ---------- */
+#npc-bubble { position: absolute; left: 0; top: 0; padding: 5px 14px 7px; border-radius: 16px; background: #fffdf6; border: 2.5px solid #3f5f8a; box-shadow: 0 4px 12px rgba(20, 30, 50, 0.25); font-size: 16px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+#npc-bubble::after { content: ""; position: absolute; left: 50%; bottom: -11px; margin-left: -9px; border: 9px solid transparent; border-top-color: #3f5f8a; border-bottom: 0; }
+#npc-bubble .npc-name { font-size: 12px; color: #3f5f8a; }
+#npc-bubble .npc-name:empty { display: none; }
+#stamp-board { left: 16px; top: 64px; width: 300px; padding: 12px 14px; }
+#stamp-board h3 { margin: 0 0 8px; font-size: 16px; }
+#stamp-board .stamps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+#stamp-board .stamp { display: grid; place-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; border: 2px dashed #c9cdd6; font-size: 11px; font-weight: 700; color: #8b919c; text-align: center; }
+#stamp-board .stamp b { font-size: 22px; filter: grayscale(1); opacity: 0.4; }
+#stamp-board .stamp.got { border: 2px solid #e8412c; color: #c0392b; background: #fff3f0; transform: rotate(-4deg); }
+#stamp-board .stamp.got b { filter: none; opacity: 1; }
+#stamp-board .stamp-tip { margin: 8px 0 0; font-size: 12px; color: #6b7385; }
+#stamp-btn { display: none; }
+body.walking #stamp-btn { display: inline-block; }
+body.title #npc-bubble, body.cine #npc-bubble, body.title #stamp-board, body.cine #stamp-board, body.late #stamp-board { display: none; }

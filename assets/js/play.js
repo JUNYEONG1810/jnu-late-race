@@ -45,7 +45,7 @@ export function buildPlay(scene, campus, collider, hud) {
         hud.toast(`⚽ 골! (${soccer.score[0]} : ${soccer.score[1]})`, 2500);
         if (!records.firstGoal) { records.firstGoal = true; saveRecords(records); }
       }
-      if (s.near) msgs.push(`⚽ ${soccer.score[0]} : ${soccer.score[1]}`);
+      if (s.close) msgs.push(`⚽ ${soccer.score[0]} : ${soccer.score[1]}`);
       // 타임어택
       const a = attack.update(dt, walker ? null : car);
       if (a.started) hud.toast(`🏁 타임어택 ${a.started} 시작! 미니맵 파란 길을 따라 도착 게이트까지`, 2600);
@@ -174,7 +174,7 @@ function buildSoccer(group, campus, collider) {
         ball.quaternion.premultiply(q.setFromAxisAngle(axis, (sp * dt) / B.r));
       }
       place();
-      return { near: true, goal };
+      return { near: true, close: Math.hypot(who.pos.x - R.cx, who.pos.y - R.cz) < R.L / 2 + 30, goal }; // 점수 안내는 경기장 가까이에서만
     },
   };
 }
