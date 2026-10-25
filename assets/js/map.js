@@ -29,6 +29,7 @@ const FOOT_COLOR = '#dcd2c2';    // 밝은 보도블록
 const STEP_COLOR = '#b5a993';    // 계단 줄무늬
 const ASPHALT_COLOR = '#5b5f66';
 const LANE_COLOR = '#f2f2ec';
+const MEDIAN_COLOR = '#6f8f5c';  // 가운데 분리대 (나무 띠)
 const PARKING_COLOR = '#6b6e73'; // 주차장 바닥 (짙은 회색)
 const MARK_COLOR = '#f6f6f0';    // 주차선·코트 라인
 const WATER_COLOR = '#6cb8dc';
@@ -215,7 +216,7 @@ const DRAPE_STEP = 2.5;                     // 지형을 따라가도록 나누�
 const JOINT_ANGLE = 0.14;                   // 이보다 많이 꺾이는 곳(약 8°)에만 둥근 이음
 
 function buildRoadMeshes(campus) {
-  const road = new DrapeBuilder(ROAD_LIFT), lane = new DrapeBuilder(LANE_LIFT);
+  const road = new DrapeBuilder(ROAD_LIFT), lane = new DrapeBuilder(LANE_LIFT), median = new DrapeBuilder(LANE_LIFT);
   for (const r of campus.roads) {
     if (!r.car) continue;
     const pts = r.points, h = r.width / 2;
@@ -224,15 +225,20 @@ function buildRoadMeshes(campus) {
       const end = i === 0 || i === pts.length - 1;
       if (end || turnAngle(pts[i - 1], p, pts[i + 1]) > JOINT_ANGLE) road.disc(p, h);
     });
-    forEachDash(pts, 3, 4, (a, b) => lane.strip(a, b, 0.15));
+    // 차선: 분리대가 있으면 분리대(나무 띠) + 각 방향 차로 사이 점선, 4차로면 가운데 + 양쪽 점선, 아니면 가운데 점선
+    const m = r.median || 0;
+    const offsets = m ? [-(m / 2 + (r.width - m) / 4), m / 2 + (r.width - m) / 4] : r.lanes >= 4 ? [-r.width / 4, 0, r.width / 4] : [0];
+    for (const off of offsets) forEachDash(offsetLine(pts, off), 3, 4, (a, b) => lane.strip(a, b, 0.15));
+    if (m) for (let i = 0; i < pts.length - 1; i++) median.strip(pts[i], pts[i + 1], m / 2);
   }
   const mat = (color, units) => new THREE.MeshLambertMaterial({
     color, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: units,
   });
   const roads = road.mesh(mat(ASPHALT_COLOR, -2));
   const lanes = lane.mesh(mat(LANE_COLOR, -4));
-  roads.receiveShadow = lanes.receiveShadow = true;
-  return [roads, lanes];
+  const medians = median.mesh(mat(MEDIAN_COLOR, -4));
+  roads.receiveShadow = lanes.receiveShadow = medians.receiveShadow = true;
+  return [roads, lanes, medians];
 }
 
 class DrapeBuilder {
@@ -306,6 +312,16 @@ class DrapeBuilder {
     geo.computeBoundingSphere();
     return new THREE.Mesh(geo, material);
   }
+}
+
+// 선을 옆으로 off m 옮긴 선 (+ = 진행 방향 왼쪽). 꺾이는 곳은 앞뒤 방향의 평균으로
+function offsetLine(points, off) {
+  if (!off) return points;
+  return points.map((p, i) => {
+    const a = points[Math.max(0, i - 1)], b = points[Math.min(points.length - 1, i + 1)];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1;
+    return [p[0] - (dz / L) * off, p[1] + (dx / L) * off];
+  });
 }
 
 function turnAngle(a, b, c) {

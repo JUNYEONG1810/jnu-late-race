@@ -40,8 +40,10 @@ export function buildLandscape(scene, campus) {
   const obstacles = [];
   const labels = [];
 
+  let removed = 0;
   for (const p of campus.props || []) {
     const [x, z] = p.p;
+    if (roads.onRoad(x, z)) { removed++; continue; } // 넓힌 차도 위에 올라간 소품은 뺀다
     const near = roads.nearest(x, z, p.type === 'bus' ? 25 : 15, p.type === 'bus');
     // 앞(+z)이 가까운 도로를 보도록
     const yaw = near ? Math.atan2(near.x - x, near.z - z) : hashAngle(x, z);
@@ -52,6 +54,7 @@ export function buildLandscape(scene, campus) {
 
   for (const m of campus.monuments || []) {
     const [x, z] = m.p;
+    if (roads.onRoad(x, z)) { removed++; continue; }
     const near = roads.nearest(x, z, 30, false);
     const yaw = near ? Math.atan2(near.x - x, near.z - z) : 0;
     const { top, half } = monument(parts, m.shape, x, z, yaw);
@@ -76,7 +79,7 @@ export function buildLandscape(scene, campus) {
 
   scene.add(group);
   return {
-    group, lamps, obstacles, labels, barrier,
+    group, lamps, obstacles, labels, barrier, removed,
     // 매 프레임: 차단기 막대 올리고 내리기
     update(dt, carX, carZ) { barrier.update(dt, carX, carZ); },
   };

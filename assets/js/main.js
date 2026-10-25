@@ -202,9 +202,11 @@ let world = null;
 let lateMode = null;
 
 async function start() {
-  const [campus, lawns] = await Promise.all([
-    loadCampus('data/campus.json?v=4'), loadCampus('data/lawns.json?v=1'), loadTerrain('data/terrain.json?v=1'),
+  const [campus, lawns, widths] = await Promise.all([
+    loadCampus('data/campus.json?v=4'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
+    loadTerrain('data/terrain.json?v=1'),
   ]);
+  applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
@@ -236,6 +238,19 @@ async function start() {
   document.getElementById('loading').remove();
   window.game = { car, rig, collider, campus, renderer, world, lateMode }; // 콘솔에서 확인용
   renderer.setAnimationLoop(loop);
+}
+
+// 잰 차도 폭·차로 수·분리대를 OSM 도로에 덮어쓴다. 정문을 지나는 도로가 넓어지면 정문 기둥 사이도 넓힌다
+function applyRoadWidths(campus, list) {
+  const [gx, gz] = campus.spawn.gate;
+  for (const r of campus.roads) {
+    const w = list[r.id];
+    if (!w) continue;
+    Object.assign(r, { width: w.width, lanes: w.lanes, median: w.median || 0 });
+    if (r.points.some(([x, z]) => Math.hypot(x - gx, z - gz) < 1)) {
+      campus.spawn.gateRoadWidth = Math.max(campus.spawn.gateRoadWidth || 0, w.width);
+    }
+  }
 }
 
 // ---------- 루프 ----------
