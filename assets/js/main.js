@@ -203,7 +203,7 @@ let lateMode = null;
 
 async function start() {
   const [campus, lawns, widths] = await Promise.all([
-    loadCampus('data/campus.json?v=5'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
+    loadCampus('data/campus.json?v=8'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
     loadTerrain('data/terrain.json?v=1'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
@@ -238,6 +238,7 @@ async function start() {
   rig.update(0, car);
   document.getElementById('loading').remove();
   window.game = { car, rig, collider, campus, renderer, world, lateMode }; // 콘솔에서 확인용
+  window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
 }
 

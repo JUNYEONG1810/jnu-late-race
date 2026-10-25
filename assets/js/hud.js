@@ -361,16 +361,14 @@ export class Hud {
     }
   }
 
-  // remaining: 남은 초 (음수면 지각)
+  // remaining: 남은 초 (0에서 멈춤: 시간이 끝나면 바로 실패)
   setTimer(remaining) {
-    // 남은 시간은 올림, 지각(올라가는 시간)은 내림 → 결과 화면과 같은 숫자
-    const s = remaining >= 0 ? Math.ceil(remaining) : Math.floor(-remaining);
-    const text = `${remaining < 0 ? '+' : ''}${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    const s = Math.max(0, Math.ceil(remaining));
+    const text = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
     if (text === this.lastTimer) return;
     this.lastTimer = text;
-    this.timerEl.textContent = remaining < 0 ? `지각 ${text}` : text;
-    this.timerEl.classList.toggle('warn', remaining >= 0 && remaining <= 30);
-    this.timerEl.classList.toggle('over', remaining < 0);
+    this.timerEl.textContent = text;
+    this.timerEl.classList.toggle('warn', s <= 30);
   }
 
   // missions: [{emoji, label, title}], current: 지금 미션 번호 (이전 것은 완료)
@@ -425,27 +423,30 @@ export class Hud {
     this.progressEl.querySelector('.mp-fill').style.width = `${Math.min(1, t) * 100}%`;
   }
 
-  showCountdown(text) {
+  showCountdown(text, kind = '') {
     this.countdownEl.textContent = text || '';
+    this.countdownEl.className = text ? kind : '';
   }
 
   showPause(on) {
     $('pause-menu').classList.toggle('hidden', !on);
   }
 
-  // r: { grade, elapsed, remaining } 또는 null
+  // r: { grade, elapsed, remaining, done, total, timedOut } 또는 null
   showResult(r) {
     const el = $('result');
     el.classList.toggle('hidden', !r);
     if (!r) return;
     const fmt = (s) => `${Math.floor(Math.abs(s) / 60)}분 ${String(Math.floor(Math.abs(s) % 60)).padStart(2, '0')}초`;
-    const ok = r.remaining >= 0;
-    el.querySelector('.res-title').textContent = ok ? '늦지 않았다!' : '지각…';
+    const ok = r.grade !== 'F';
+    el.querySelector('.res-title').textContent = ok ? '늦지 않았다!' : r.timedOut ? '시간 초과…' : '지각…';
     const g = el.querySelector('.res-grade');
     g.textContent = r.grade;
     g.className = `res-grade ${ok ? 'good' : 'bad'}`;
-    el.querySelector('.res-times').innerHTML = `걸린 시간 <b>${fmt(r.elapsed)}</b><br>`
-      + (ok ? `남은 시간 <b>${fmt(r.remaining)}</b>` : `<b>${fmt(r.remaining)}</b> 늦음`);
+    el.querySelector('.res-times').innerHTML = `완료한 미션 <b>${r.done}/${r.total}</b><br>걸린 시간 <b>${fmt(r.elapsed)}</b>`
+      + (ok ? `<br>남은 시간 <b>${fmt(r.remaining)}</b>` : '')
+      + (r.isNew ? '<br><b class="res-best">최고 기록!</b>'
+        : r.best ? `<br>최고 기록: 남은 시간 <b>${fmt(r.best.remaining)}</b> (${r.best.grade})` : '');
   }
 
   setFps(fps) {

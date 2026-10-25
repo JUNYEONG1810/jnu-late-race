@@ -244,6 +244,13 @@ export function playDing() {
   tone(ac, 1046.5, t + 0.16, 0.7, 0.28); // 동 (C6)
 }
 
+// 남은 시간 경고음: 짧고 높은 "삑" (마지막 10초, 1초마다)
+export function playWarn() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  tone(ac, 1046.5, ac.currentTime, 0.09, 0.16, 'square');
+}
+
 // 카운트다운 삐 (go면 높고 길게)
 export function playBeep(go = false) {
   const ac = unlockAudio();
