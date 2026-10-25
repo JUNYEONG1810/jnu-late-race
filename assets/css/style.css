@@ -526,3 +526,49 @@ body.walking #boost-gauge, body.walking #help { display: none; }
 #settings label { display: block; line-height: 1.9; cursor: pointer; }
 #settings input { vertical-align: -2px; margin-right: 6px; }
 body.title #settings, body.cine #settings { display: none; }
+#walk-hint { line-height: 1.9; text-align: center; }
+
+/* 학생 머리 위: 혼잣말 말풍선, 낮잠 Z */
+#student-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 6px 14px 7px;
+  border-radius: 16px;
+  background: #fffdf6;
+  border: 2.5px solid #8a5a35;
+  box-shadow: 0 4px 12px rgba(40, 30, 20, 0.25);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#student-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  margin-left: -9px;
+  border: 9px solid transparent;
+  border-top-color: #8a5a35;
+  border-bottom: 0;
+}
+#student-z { position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity 0.3s; }
+#student-z span {
+  position: absolute;
+  font-weight: 900;
+  color: #5b78d0;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff;
+  opacity: 0;
+  animation: z-float 2.4s linear infinite;
+}
+#student-z span:nth-child(1) { font-size: 16px; }
+#student-z span:nth-child(2) { font-size: 21px; animation-delay: 0.8s; }
+#student-z span:nth-child(3) { font-size: 26px; animation-delay: 1.6s; }
+@keyframes z-float {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(28px, -64px) scale(1.1); opacity: 0; }
+}
+body.title #student-bubble, body.title #student-z, body.cine #student-bubble, body.cine #student-z { display: none; }

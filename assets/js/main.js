@@ -6,9 +6,10 @@ import { loadTerrain } from './terrain.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
-import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, EngineSound, isMuted, setMuted } from './voice.js';
+import { unlockAudio, playBoost, playBoostEnd, playHit, playStep, playMoo, playBonk, speak, EngineSound, isMuted, setMuted } from './voice.js';
 import { LateMode } from './late-mode.js';
 import { Walker } from './walker.js';
+import { STUDENT_LINES } from './dialogue-data.js';
 
 const SKY_TOP = new THREE.Color('#6fb4f0');
 const SKY_HORIZON = new THREE.Color('#e4f3ff');
@@ -102,10 +103,11 @@ addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'KeyC') hud.toast(`시점: ${walker?.active ? rig.nextWalkMode().label : rig.nextMode().label}`);
-  if (e.code === 'KeyH') hud.showHelp();
   if (walker?.active) {
+    walker.poke(); // 졸던 학생은 아무 키에나 화들짝 깸
     if (onWalkKey(e.code)) return;
   } else {
+    if (e.code === 'KeyH') hud.showHelp();
     if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
     if (e.code === 'KeyE' && !lateMode?.active) getOff();
   }
@@ -150,8 +152,8 @@ const NO_INPUT = { up: false, down: false, left: false, right: false, drift: fal
 // ---------- 시작 ----------
 
 const hud = new Hud({ onQuality: setQuality, onSound: toggleSound });
-// 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐)
-const settings = { walkCamAuto: false };
+// 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬)
+const settings = { walkCamAuto: false, chatter: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
 hud.bindSettings(settings, () => { try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {} });
 const rig = new CameraRig(camera);
@@ -255,6 +257,9 @@ function onWalkKey(code) {
     return true;
   }
   if (code === 'KeyV') { rig.resetOrbit(); return true; }
+  if (code === 'KeyH') { if (walker.moo()) playMoo(); return true; } // 걷는 중의 H는 음메
+  const emote = { Digit1: 1, Digit2: 2, Digit3: 3, Numpad1: 1, Numpad2: 2, Numpad3: 3 }[code];
+  if (emote) { walker.setEmote(emote); return true; }
   if (code === 'KeyL') { walker.board(() => lateMode.start()); return true; } // 먼저 굴착기에 타고 지각 모드
   return false;
 }
@@ -265,6 +270,16 @@ function cameraGroundDir() {
   camera.getWorldDirection(camDirTmp);
   const v = new THREE.Vector2(camDirTmp.x, camDirTmp.z);
   return v.lengthSq() > 1e-6 ? v.normalize() : new THREE.Vector2(0, -1);
+}
+
+// 걷는 중 가끔 혼잣말: 머리 위 말풍선 + 교수님보다 높고 귀여운 꿍싯꿍싯 목소리 (설정에서 끔)
+let lastLine = -1;
+function studentChatter() {
+  if (!settings.chatter) return;
+  let i = Math.floor(Math.random() * STUDENT_LINES.length);
+  if (i === lastLine) i = (i + 1) % STUDENT_LINES.length;
+  lastLine = i;
+  hud.sayStudent(STUDENT_LINES[i], speak(STUDENT_LINES[i], { pitch: 1.9 }));
 }
 
 let walkingUi = false;
@@ -305,6 +320,8 @@ async function start() {
   lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
   walker = new Walker(car, { campus, collider });
   walker.onStep = playStep;
+  walker.onBonk = playBonk;
+  walker.onChatter = studentChatter;
   scene.add(walker.object);
   lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
   hud.initMinimap(campus);
@@ -344,6 +361,7 @@ function driverExpression() {
 // ---------- 루프 ----------
 
 const clock = new THREE.Clock();
+const headTmp = new THREE.Vector3();
 let nameTimer = 0;
 let fpsFrames = 0, fpsTime = 0;
 
@@ -364,7 +382,7 @@ function loop() {
   }
   if (!walking) walker.update(dt); // 타고 나서 문 닫기
   lateMode.update(dt);
-  car.driver.setExpression(driverExpression());
+  car.driver.setExpression(walking ? walker.face() : driverExpression());
   if (lateMode.frozen) car.driver.update(dt, 0); // 결과 화면 등 굴착기가 멈춘 동안에도 표정·만세 움직임
   const focus = walking ? walker.pos : car.pos; // 화면·소리·미니맵의 중심
   const focusY = walking ? walker.y : car.object.position.y;
@@ -391,6 +409,7 @@ function loop() {
   hud.setBoost(car.boost, car.boosting ? 'active' : car.boostReady ? 'ready' : '');
   hud.drawSpeedLines(car.boostFx);
   hud.updateLabels(camera);
+  hud.updateStudent(camera, walking ? walker.headTop(headTmp) : null, walking && walker.napping);
   nameTimer -= dt;
   if (nameTimer <= 0) {
     nameTimer = 0.2;

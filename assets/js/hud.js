@@ -7,7 +7,7 @@ const tmp = new THREE.Vector3();
 // 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
 const MINIMAP = { radius: 260, res: 0.7 };
 // 이름표가 가리면 안 되는 HUD 요소들
-const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings'];
+const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
 
 export class Hud {
   constructor({ onQuality, onSound }) {
@@ -62,6 +62,43 @@ export class Hud {
     if (state === this.walkHintState) return;
     this.walkHintState = state;
     $('walk-hint').classList.toggle('near', state === 'near');
+  }
+
+  // 학생 혼잣말 말풍선: voice = speak()의 반환값 (글자를 목소리 박자에 맞춰 타자 치듯)
+  sayStudent(text, voice) {
+    this.student = { text, steps: voice.steps, start: performance.now(), end: voice.duration + 2.2 };
+  }
+
+  // 학생 머리 위 2D: 혼잣말 말풍선, 낮잠 "Z". pos: 머리 위 월드 좌표 (내리지 않았으면 null)
+  updateStudent(camera, pos, napping) {
+    const bubble = $('student-bubble'), zz = $('student-z');
+    let x = 0, y = 0, onScreen = false;
+    if (pos) {
+      tmp.copy(pos).project(camera);
+      onScreen = tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+      x = (tmp.x + 1) / 2 * innerWidth;
+      y = (1 - tmp.y) / 2 * innerHeight;
+    }
+    const S = this.student;
+    let text = '';
+    if (S) {
+      const t = (performance.now() - S.start) / 1000;
+      if (!pos || t > S.end) this.student = null;
+      else {
+        let n = 0;
+        for (const st of S.steps) if (st.at <= t) n = st.end;
+        text = S.text.slice(0, n);
+      }
+    }
+    const showBubble = onScreen && !!text;
+    if (showBubble) {
+      if (bubble.textContent !== text) bubble.textContent = text;
+      bubble.style.transform = `translate(${x}px, ${y - 8}px) translate(-50%, -100%)`;
+    }
+    bubble.classList.toggle('hidden', !showBubble);
+    const showZ = onScreen && napping;
+    if (showZ) zz.style.transform = `translate(${x + 10}px, ${y}px)`;
+    zz.classList.toggle('hidden', !showZ);
   }
 
   hideHelp() {

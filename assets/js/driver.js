@@ -6,7 +6,18 @@ import { DRIVER as D } from './driver-config.js';
 
 const SKIN = new THREE.MeshLambertMaterial({ vertexColors: true });
 const GOLD = new THREE.MeshPhongMaterial({ color: D.colors.gold, specular: '#fff4c2', shininess: 90, emissive: '#3a2a00' });
-const EXPRESSIONS = ['smile', 'nervous', 'hooray', 'cry'];
+// 운전 중 4종 + 걸을 때(walker.js): happy(음메·감정 표현), yawn(하품), sleep(꾸벅·낮잠), surprised(화들짝), dizzy(꽈당)
+const FACES = {
+  smile: ['eyesOpen', 'smile'],
+  nervous: ['eyesOpen', 'nervousMouth', 'brows', 'sweat'],
+  hooray: ['eyesHappy', 'open'],
+  cry: ['eyesOpen', 'frown', 'brows', 'tears'],
+  happy: ['eyesHappy', 'open'],
+  yawn: ['eyesClosed', 'open'],
+  sleep: ['eyesClosed'],
+  surprised: ['eyesOpen', 'open', 'brows'],
+  dizzy: ['eyesDizzy', 'nervousMouth'],
+};
 
 // 여러 도형을 정점 색으로 칠해 한 메시로 합친다
 class Parts {
@@ -46,7 +57,7 @@ export class Driver {
     this.root = new THREE.Group();          // 고개 내밀기로 움직이는 몸 전체
     this.root.scale.setScalar(D.scale);
     this.object.add(this.root);
-    this.expression = 'smile';
+    this.expression = null;
     this.peek = 0;
     this.peekGoal = 0;
     this.time = 0;
@@ -152,6 +163,15 @@ export class Driver {
       const x = s * Y.x;
       eyesHappy.add(new THREE.TorusGeometry(Y.r * 0.7, 0.014, 4, 10, Math.PI), C.eye, { p: [x, Y.dy - 0.02, eyeZ(x) + 0.01], r: [-0.25, s * 0.35, 0] });
     }
+    const eyesClosed = new Parts(); // ∪ ∪ 감은 눈 (졸 때)
+    const eyesDizzy = new Parts();  // × × (꽈당)
+    for (const s of [-1, 1]) {
+      const x = s * Y.x;
+      eyesClosed.add(new THREE.TorusGeometry(Y.r * 0.6, 0.013, 4, 10, Math.PI), C.eye, { p: [x, Y.dy + 0.01, eyeZ(x) + 0.01], r: [-0.25, s * 0.35, Math.PI] });
+      for (const a of [0.8, -0.8]) {
+        eyesDizzy.add(new THREE.BoxGeometry(Y.r * 1.5, 0.022, 0.012), C.eye, { p: [x, Y.dy, eyeZ(x) + 0.012], r: [-0.25, s * 0.35, a] });
+      }
+    }
     const arc = (r, down, y) => new Parts().add(new THREE.TorusGeometry(r, 0.012, 4, 10, Math.PI), C.mouth,
       { p: [0, Mo.dy + y, Mo.z], r: [-0.4, 0, down ? Math.PI : 0] });
     const brows = new Parts(); // 걱정 눈썹: 안쪽 끝이 올라감
@@ -165,6 +185,8 @@ export class Driver {
     this.faces = {
       eyesOpen: eyesOpen.mesh(),
       eyesHappy: eyesHappy.mesh(),
+      eyesClosed: eyesClosed.mesh(),
+      eyesDizzy: eyesDizzy.mesh(),
       smile: arc(0.05, true, 0.02).mesh(),                     // ∪ 웃는 입
       nervousMouth: new Parts().add(new THREE.TorusGeometry(0.035, 0.011, 4, 8, Math.PI), C.mouth,
         { p: [0.01, Mo.dy - 0.005, Mo.z], r: [-0.4, 0, Math.PI + 0.25] })
@@ -181,16 +203,11 @@ export class Driver {
     this.update(0, 0);
   }
 
-  // smile(자유 주행) | nervous(지각 모드) | hooray(A+ 만세) | cry(F 울먹)
+  // smile(자유 주행) | nervous(지각 모드) | hooray(A+ 만세) | cry(F 울먹) | 걸을 때 표정 (FACES)
   setExpression(name) {
-    if (!EXPRESSIONS.includes(name)) return;
+    const show = FACES[name];
+    if (!show || name === this.expression) return;
     this.expression = name;
-    const show = {
-      smile: ['eyesOpen', 'smile'],
-      nervous: ['eyesOpen', 'nervousMouth', 'brows', 'sweat'],
-      hooray: ['eyesHappy', 'open'],
-      cry: ['eyesOpen', 'frown', 'brows', 'tears'],
-    }[name];
     for (const [k, m] of Object.entries(this.faces)) m.visible = show.includes(k);
   }
 

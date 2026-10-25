@@ -31,6 +31,19 @@ const FOOT_LIFT = -(D.leg.y - D.leg.len - D.leg.r * 1.5) * D.scale;
 const SIT = D.pose.sit;
 const STAND = { arm: [0.05, 0.14], leg: [0, 0.04] };
 
+// 걷는 중 귀여운 동작 (시간은 초)
+export const CUTE = {
+  moo: 1.0,          // H 음메: 고개를 쳐드는 시간
+  wave: 3,           // 1 손 흔들기 (2 춤, 3 털썩 앉기는 움직일 때까지)
+  chatter: [20, 40], // 혼잣말 간격
+  doze: 20,          // 가만히 두면 졸기 시작
+  yawn: 1.6,         // 하품 → 꾸벅꾸벅
+  nap: 6,            // 졸기 시작부터 이만큼 지나면 엎드려 낮잠
+  crouch: 0.09,      // 점프 직전 웅크림
+  fallHit: 3.2,      // 달리다 벽에 이 속도(m/s) 넘게 부딪히면 꽈당
+  fall: 2.6,         // 넘어짐 → 별 → 일어나 머리 털기까지
+};
+
 export class Walker {
   constructor(car, { campus, collider }) {
     this.car = car;
@@ -56,6 +69,74 @@ export class Walker {
     this.hop = null;
     this.onStep = null; // 발소리 (main에서 voice.playStep)
     this.water = (campus.greens || []).filter((g) => g.kind === 'water').map((g) => ({ outline: g.outline, box: bbox(g.outline) }));
+
+    // 귀여운 동작 상태
+    this.emote = null;   // null | 'wave' | 'dance' | 'sit'
+    this.emoteT = 0;
+    this.mooT = 0;       // 음메 남은 시간
+    this.perkT = 0;      // 귀 쫑긋 남은 시간
+    this.doze = 0;       // 가만히 있던 시간 (CUTE.doze 넘으면 하품 → 꾸벅 → 낮잠)
+    this.wakeT = 0;      // 화들짝
+    this.fallT = -1;     // 꽈당 경과 (아니면 -1)
+    this.crouchT = -1;   // 점프 웅크림 경과
+    this.sq = 0;         // 찌그러짐 (음수 납작, 양수 길쭉) — 크기 변형만
+    this.sqV = 0;
+    this.chatT = rand(...CUTE.chatter);
+    this.onChatter = null; // 혼잣말 (main: 말풍선 + 목소리)
+    this.onBonk = null;    // 꽈당 소리
+    // 꽈당 때 머리 위를 도는 작은 별 3개 (한 메시)
+    this.stars = makeStars();
+    this.stars.visible = false;
+    this.object.add(this.stars);
+  }
+
+  get busy() { return this.fallT >= 0; }
+  get napping() { return this.doze - CUTE.doze > CUTE.nap; }
+
+  // 아무 키나 누르면: 졸던 중이면 화들짝 깨고, 졸음 시간은 처음부터
+  poke() {
+    if (this.state !== 'walk') return;
+    if (this.doze > CUTE.doze && !this.busy) {
+      this.wakeT = 0.8;
+      this.perkT = 0.6;
+      if (this.grounded) { this.vy = 2.6; this.grounded = false; }
+      this.emote = null;
+    }
+    this.doze = 0;
+  }
+
+  // H: 음메 (고개를 쳐들고 귀 쫑긋, 꼬리 빠르게). 했으면 true
+  moo() {
+    if (this.state !== 'walk' || this.busy) return false;
+    this.mooT = CUTE.moo;
+    this.perkT = 0.8;
+    return true;
+  }
+
+  // 1 손 흔들기, 2 엉덩이 씰룩 춤, 3 털썩 앉기 (움직이면 바로 풀림)
+  setEmote(n) {
+    if (this.state !== 'walk' || this.busy || !this.grounded) return;
+    this.emote = ['wave', 'dance', 'sit'][n - 1];
+    this.emoteT = 0;
+    if (this.emote === 'sit') { this.sq = -0.25; this.sqV = 0; this.onStep?.(false); } // 털썩
+  }
+
+  // 표정: 꽈당 어질 > 화들짝 > 하품·졸기 > 기쁨(음메·손 흔들기·춤) > 웃음
+  face() {
+    if (this.state !== 'walk') return 'smile';
+    if (this.busy) return this.fallT < 2 ? 'dizzy' : 'smile';
+    if (this.wakeT > 0) return 'surprised';
+    const z = this.doze - CUTE.doze;
+    if (z > 0) return z < CUTE.yawn ? 'yawn' : 'sleep';
+    if (this.mooT > 0 || this.emote === 'wave' || this.emote === 'dance') return 'happy';
+    return 'smile';
+  }
+
+  // 말풍선·Z를 띄울 머리 위 자리 (월드)
+  headTop(v) {
+    this.driver.head.getWorldPosition(v);
+    v.y += 0.38;
+    return v;
   }
 
   get active() { return this.state !== 'off'; }
@@ -77,6 +158,8 @@ export class Walker {
     this.vel.set(0, 0);
     this.vy = 0;
     this.grounded = true;
+    this.resetCute();
+    this.chatT = rand(...CUTE.chatter);
     this.attach(true);
     this.startHop('exit', from, new THREE.Vector3(to.x, heightAt(to.x, to.y), to.y), h, h + Math.PI / 2);
   }
@@ -84,6 +167,7 @@ export class Walker {
   // 굴착기로 폴짝 뛰어 운전석에 앉는다. then: 앉은 뒤 할 일 (걷다가 L → 지각 모드)
   board(then = null) {
     if (this.state !== 'walk') return;
+    this.resetCute();
     const d = this.pos.distanceTo(this.car.pos);
     if (d > WALK.boardHopMax) { this.boardNow(); then?.(); return; }
     this.car.object.updateMatrixWorld(true);
@@ -96,10 +180,17 @@ export class Walker {
   // 연출 없이 바로 운전석으로 (지각 모드 시작 버튼 등)
   boardNow() {
     if (this.state === 'off') return;
+    this.resetCute();
     this.hop = null;
     this.attach(false);
     this.state = 'off';
     this.car.door = 0;
+  }
+
+  resetCute() {
+    Object.assign(this, { emote: null, mooT: 0, perkT: 0, doze: 0, wakeT: 0, fallT: -1, crouchT: -1, sq: 0, sqV: 0 });
+    this.stars.visible = false;
+    this.driver.root.scale.setScalar(D.scale);
   }
 
   // 학생 몸(root)을 월드(걷기) 또는 운전석으로 옮긴다
@@ -174,25 +265,59 @@ export class Walker {
     }
     if (this.hop) { this.updateHop(dt); return; }
 
-    // 화면 기준 방향: W는 카메라가 보는 쪽, A·D는 화면 왼쪽·오른쪽
+    // 화면 기준 방향: W는 카메라가 보는 쪽, A·D는 화면 왼쪽·오른쪽 (꽈당 중에는 조작 없음)
     const f = camDir, rx = -f.y, rz = f.x;
-    const ix = (input.right ? 1 : 0) - (input.left ? 1 : 0), iz = (input.up ? 1 : 0) - (input.down ? 1 : 0);
+    const ok = !this.busy;
+    const ix = ok ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0, iz = ok ? (input.up ? 1 : 0) - (input.down ? 1 : 0) : 0;
     const want = new THREE.Vector2(f.x * iz + rx * ix, f.y * iz + rz * ix);
     const has = want.lengthSq() > 0;
-    if (has) want.normalize();
+    if (has) { want.normalize(); this.emote = null; } // 움직이면 감정 표현은 바로 풀림
     this.running = !!input.boost && has;
     want.multiplyScalar(this.running ? WALK.run : WALK.speed);
     this.vel.lerp(want, 1 - Math.exp(-dt * (this.grounded ? WALK.accel : 3)));
     if (has) this.heading += angleDiff(Math.atan2(want.x, want.y), this.heading) * Math.min(1, dt * WALK.turn);
-    if (input.drift && !this.jumpHeld && this.grounded) { this.vy = WALK.jump; this.grounded = false; }
+    // 점프: 살짝 웅크렸다가 뛰어오름
+    if (ok && input.drift && !this.jumpHeld && this.grounded && this.crouchT < 0) { this.crouchT = 0; this.emote = null; }
     this.jumpHeld = !!input.drift;
+    if (this.crouchT >= 0 && (this.crouchT += dt) >= CUTE.crouch) {
+      this.crouchT = -1;
+      this.vy = WALK.jump;
+      this.grounded = false;
+      this.sq = 0.1;
+    }
 
     this.move(dt);
     this.speed = this.vel.length();
     this.moving = this.speed > 0.2;
+    this.updateCute(dt);
     this.animate(dt);
     this.object.position.set(this.pos.x, this.y, this.pos.y);
     this.object.rotation.set(0, this.heading, 0);
+    this.updateStars();
+  }
+
+  // 시간 따라 흐르는 것들: 음메·귀·감정 표현·졸기·혼잣말·꽈당
+  updateCute(dt) {
+    this.mooT = Math.max(0, this.mooT - dt);
+    this.perkT = Math.max(0, this.perkT - dt);
+    this.wakeT = Math.max(0, this.wakeT - dt);
+    this.emoteT += dt;
+    if (this.emote === 'wave' && this.emoteT > CUTE.wave) this.emote = null;
+    if (this.busy && (this.fallT += dt) > CUTE.fall) this.fallT = -1;
+    const still = !this.moving && this.grounded && !this.busy && this.mooT === 0 && this.emote !== 'dance' && this.emote !== 'wave';
+    this.doze = still ? this.doze + dt : 0;
+    if (!this.busy && this.doze < CUTE.doze && (this.chatT -= dt) <= 0) {
+      this.chatT = rand(...CUTE.chatter);
+      this.onChatter?.();
+    }
+  }
+
+  startFall() {
+    this.fallT = 0;
+    this.vel.set(0, 0);
+    this.emote = null;
+    this.crouchT = -1;
+    this.onBonk?.();
   }
 
   move(dt) {
@@ -209,6 +334,7 @@ export class Walker {
     if (n) this.pushBack(n);
     const m = this.pushOutOfCar();
     if (m) this.pushBack(m);
+    if (this.running && this.hit > CUTE.fallHit && !this.busy) this.startFall(); // 달리다 세게 부딪히면 꽈당
     const w = this.collider.boundaryWall(this.pos, 40);
     if (w) this.pushBack(w);
 
@@ -226,6 +352,8 @@ export class Walker {
         this.y = g;
         this.vy = 0;
         this.grounded = true;
+        this.sq = -Math.min(0.3, 0.04 + this.landSpeed * 0.055); // 착지: 납작했다가 통 튀어 오름
+        this.sqV = 0;
         this.onStep?.(false);
       }
     }
@@ -323,7 +451,8 @@ export class Walker {
     });
   }
 
-  // 2등신 뒤뚱 걷기: 몸을 좌우로 흔들고 팔다리를 엇갈려 흔든다. 달리면 더 빠르고 크게, 앞으로 기울임
+  // 2등신 뒤뚱 걷기: 몸을 좌우로 흔들고 팔다리를 엇갈려 흔든다. 달리면 더 빠르고 크게, 앞으로 기울임.
+  // 그 위에 감정 표현·졸기·음메·꽈당 자세를 덮어쓰고, 점프·착지 찌그러짐은 크기만 바꾼다.
   animate(dt) {
     const d = this.driver, r = d.root, t = this.time;
     const walkK = Math.min(1, this.speed / WALK.speed);
@@ -332,47 +461,153 @@ export class Walker {
     this.phase += dt * 6.8 * Math.sqrt(this.speed);
     if (Math.floor(this.phase / Math.PI) !== before && this.grounded && this.speed > 0.3) this.onStep?.(this.running);
     const s = Math.sin(this.phase), bob = Math.abs(s);
-    const k = 1 - Math.exp(-dt * 25);
-
-    const breathe = Math.sin(t * 2.4) * 0.008 * (1 - walkK);
-    r.position.set(0, FOOT_LIFT + bob * 0.035 * walkK * (1 + runK) + breathe, 0);
-    r.rotation.set(0.2 * runK, 0, s * (0.13 - 0.04 * runK) * walkK);
-
-    if (!this.grounded) { // 공중: 앞발 벌리고 뒷발 살짝 웅크림
-      this.setLimbs(-0.6, 0.9, -0.6, 0.12, k);
-    } else {
-      const sw = (0.5 + 0.4 * runK) * walkK;
-      const d0 = d.arms[0], d1 = d.arms[1];
-      d0.rotation.x += (s * sw - 0.25 * runK - d0.rotation.x) * k;
-      d1.rotation.x += (-s * sw - 0.25 * runK - d1.rotation.x) * k;
-      for (const [i, g] of d.arms.entries()) g.rotation.z += ((i ? 1 : -1) * (STAND.arm[1] + 0.25 * runK) - g.rotation.z) * k;
-      const lw = (0.65 + 0.25 * runK) * walkK;
-      d.legs[0].rotation.x += (-s * lw - d.legs[0].rotation.x) * k;
-      d.legs[1].rotation.x += (s * lw - d.legs[1].rotation.x) * k;
-      for (const [i, g] of d.legs.entries()) g.rotation.z += ((i ? 1 : -1) * STAND.leg[1] - g.rotation.z) * k;
-    }
 
     // 서 있으면 가끔 두리번
     this.idle = this.moving || !this.grounded ? 0 : this.idle + dt;
     const L = this.look;
     L.timer -= dt;
-    if (this.moving) L.goal = 0;
+    if (this.moving || this.emote || this.doze > CUTE.doze) L.goal = 0;
     else if (L.timer <= 0) {
       if (L.goal === 0 && this.idle > 1.5) { L.goal = (Math.random() < 0.5 ? -1 : 1) * (0.45 + Math.random() * 0.35); L.timer = 1.1 + Math.random(); }
       else { L.goal = 0; L.timer = 2.5 + Math.random() * 3.5; }
     }
     L.cur += (L.goal - L.cur) * Math.min(1, dt * 4);
-    d.head.rotation.set(bob * 0.04 * walkK, L.cur, -s * 0.05 * walkK);
 
-    // 꼬리 살랑, 귀는 걸음에 맞춰 살짝 (위치·회전만)
-    d.tail.rotation.set(0.5, Math.sin(t * (4 + this.speed * 2)) * (0.25 + 0.2 * walkK), 0);
-    const amp = 0.05 + 0.12 * walkK + 0.1 * runK;
+    // ---- 기본: 뒤뚱 걷기 ----
+    const sw = (0.5 + 0.4 * runK) * walkK, lw = (0.65 + 0.25 * runK) * walkK, az = STAND.arm[1] + 0.25 * runK;
+    const P = {
+      x: 0, y: bob * 0.035 * walkK * (1 + runK) + Math.sin(t * 2.4) * 0.008 * (1 - walkK), // 엉덩이 들썩 (FOOT_LIFT 위로)
+      rx: 0.2 * runK, ry: 0, rz: s * (0.13 - 0.04 * runK) * walkK,
+      arms: [[s * sw - 0.25 * runK, -az], [-s * sw - 0.25 * runK, az]],
+      legs: [[-s * lw, -STAND.leg[1]], [s * lw, STAND.leg[1]]],
+      hx: bob * 0.04 * walkK, hy: L.cur, hz: -s * 0.05 * walkK,
+      tail: Math.sin(t * (4 + this.speed * 2)) * (0.25 + 0.2 * walkK),
+      ear: 0.05 + 0.12 * walkK + 0.1 * runK, earRate: 8 + 8 * walkK,
+    };
+    if (!this.grounded) { // 공중: 앞발 벌리고 뒷발 살짝 웅크림
+      P.arms = [[-0.6, -0.9], [-0.6, 0.9]];
+      P.legs = [[-0.6, -0.12], [-0.6, 0.12]];
+    }
+
+    // ---- 감정 표현 (1·2·3) ----
+    if (this.grounded && this.emote === 'wave') { // 오른 앞발을 들어 흔들기
+      P.arms[0] = [-2.7, -(0.35 + Math.sin(t * 11) * 0.4)];
+      P.rz = Math.sin(t * 5.5) * 0.05;
+      P.hz = 0.15;
+    } else if (this.grounded && this.emote === 'dance') { // 엉덩이 씰룩 춤
+      const w = t * 8, sn = Math.sin(w);
+      Object.assign(P, { x: sn * 0.035, y: Math.abs(sn) * 0.03, rz: -sn * 0.16, ry: Math.sin(w * 0.5) * 0.3, hz: sn * 0.15, hy: 0 });
+      P.arms = [[-2.3 + sn * 0.4, -0.5], [-2.3 - sn * 0.4, 0.5]];
+      P.legs = [[-Math.max(0, sn) * 0.5, -0.06], [-Math.max(0, -sn) * 0.5, 0.06]];
+    } else if (this.grounded && this.emote === 'sit') { // 털썩 앉기: 엉덩이를 땅에, 뒷다리는 앞으로
+      Object.assign(P, { y: -FOOT_LIFT, rx: -0.08, rz: Math.sin(t * 1.5) * 0.03 });
+      P.arms = [[-0.55, -0.3], [-0.55, 0.3]];
+      P.legs = [[-1.45, -0.12], [-1.45, 0.12]];
+    }
+
+    // ---- 졸기: 하품 → 꾸벅꾸벅 → 엎드려 낮잠 ----
+    const z = this.doze - CUTE.doze;
+    if (z > 0 && !this.busy) {
+      if (z < CUTE.yawn) { // 하품: 고개 젖히고 앞발 쭉
+        const u = Math.sin(Math.PI * z / CUTE.yawn);
+        P.hx = -0.4 * u;
+        P.rx = -0.12 * u;
+        P.arms = [[-2.6 * u, -0.3 * u - 0.14], [-2.6 * u, 0.3 * u + 0.14]];
+      } else if (z < CUTE.nap) { // 꾸벅꾸벅
+        P.hx = 0.3 + Math.max(0, Math.sin((z - CUTE.yawn) * 2.4)) * 0.3;
+        P.rx = 0.1;
+      } else { // 엎드려 낮잠 (숨 쉬듯 오르내림)
+        const e = smooth(Math.min(1, (z - CUTE.nap) / 0.8));
+        Object.assign(P, { rx: 1.2 * e, y: (0.11 - FOOT_LIFT) * e + Math.sin(t * 1.6) * 0.006, hx: -0.85 * e, hz: 0.3 * e, hy: 0, ear: 0.02, earRate: 2 });
+        P.arms = [[-2.9 * e, -0.35], [-2.9 * e, 0.35]];
+        P.legs = [[0.5 * e, -0.1], [0.5 * e, 0.1]];
+      }
+    }
+
+    // ---- 화들짝 (깨어날 때): 두 앞발 번쩍 ----
+    if (this.wakeT > 0.25) P.arms = [[-2.2, -0.9], [-2.2, 0.9]];
+
+    // ---- 음메: 고개를 쳐듦 ----
+    if (this.mooT > 0) {
+      const u = 1 - this.mooT / CUTE.moo, env = Math.min(1, u * 6) * Math.min(1, (1 - u) * 3);
+      P.hx = -0.6 * env;
+      P.rx -= 0.08 * env;
+    }
+
+    // ---- 꽈당: 뒤로 넘어짐 → 별 → 일어나 머리 털기 ----
+    if (this.busy) {
+      const ft = this.fallT;
+      const down = ft < 0.25 ? smooth(ft / 0.25) : ft < 1.6 ? 1 : ft < 2 ? 1 - smooth((ft - 1.6) / 0.4) : 0;
+      Object.assign(P, { x: 0, rx: -1.4 * down, ry: 0, rz: 0, y: (0.17 - FOOT_LIFT) * down, hx: -0.2 * down, hz: 0 });
+      P.hy = ft > 2 ? Math.sin(ft * 30) * 0.45 * (1 - (ft - 2) / (CUTE.fall - 2)) : 0;
+      P.arms = [[-1.6 * down, -(0.14 + 0.9 * down)], [-1.6 * down, 0.14 + 0.9 * down]];
+      const kick = Math.sin(t * 9) * 0.2 * down;
+      P.legs = [[-1.3 * down + kick, -0.1], [-1.3 * down - kick, 0.1]];
+    }
+
+    // 기쁠 때(음메·손 흔들기·춤) 꼬리를 빠르게
+    if (this.mooT > 0 || this.emote === 'wave' || this.emote === 'dance') P.tail = Math.sin(t * 22) * 0.55;
+
+    // ---- 점프·착지 찌그러짐: 웅크림 → 길쭉 → 납작 → 통 (스프링, 크기 변형만) ----
+    if (this.crouchT >= 0) { this.sq += (-0.2 - this.sq) * Math.min(1, dt * 30); this.sqV = 0; }
+    else {
+      this.sqV += (-260 * this.sq - 13 * this.sqV) * dt;
+      this.sq += this.sqV * dt;
+    }
+    const S = D.scale, sq = this.sq;
+    r.scale.set(S * (1 - sq * 0.6), S * (1 + sq), S * (1 - sq * 0.6));
+
+    // ---- 적용 ----
+    const k = 1 - Math.exp(-dt * 25);
+    r.position.set(P.x, FOOT_LIFT * (1 + sq) + P.y, 0);
+    r.rotation.x += (P.rx - r.rotation.x) * k;
+    r.rotation.y += (P.ry - r.rotation.y) * k;
+    r.rotation.z += (P.rz - r.rotation.z) * k;
+    d.arms.forEach((g, i) => { g.rotation.x += (P.arms[i][0] - g.rotation.x) * k; g.rotation.z += (P.arms[i][1] - g.rotation.z) * k; });
+    d.legs.forEach((g, i) => { g.rotation.x += (P.legs[i][0] - g.rotation.x) * k; g.rotation.z += (P.legs[i][1] - g.rotation.z) * k; });
+    const h = d.head.rotation;
+    h.set(h.x + (P.hx - h.x) * k, h.y + (P.hy - h.y) * k, h.z + (P.hz - h.z) * k);
+    d.tail.rotation.set(0.5, P.tail, 0);
+    // 귀: 걸음에 맞춰 살짝 펄럭, 음메·화들짝 때는 쫑긋 세움 (위치·회전만)
+    const perk = Math.min(1, this.perkT * 4);
     d.ears.forEach((g, i) => {
       const e = i ? 1 : -1;
-      g.rotation.z = -e * D.ear.droop + e * Math.sin(t * (8 + 8 * walkK) + i * 1.3) * amp;
+      g.rotation.z = -e * D.ear.droop * (1 - perk) + e * 0.75 * perk + e * Math.sin(t * P.earRate + i * 1.3) * P.ear * (1 - perk * 0.7);
       g.rotation.y = 0;
     });
   }
+
+  // 꽈당 별: 머리 위를 빙글
+  updateStars() {
+    const on = this.busy && this.fallT > 0.2 && this.fallT < 1.9;
+    this.stars.visible = on;
+    if (!on) return;
+    this.object.updateMatrixWorld();
+    this.object.worldToLocal(this.headTop(this.stars.position));
+    this.stars.rotation.y = this.time * 5;
+  }
+}
+
+function smooth(k) { return k * k * (3 - 2 * k); }
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+// 노란 별 3개를 고리 모양으로 한 메시에 (빛 계산 없는 단색, 양면)
+function makeStars() {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = (i * Math.PI) / 5, rr = i % 2 ? 0.032 : 0.075;
+    shape[i ? 'lineTo' : 'moveTo'](Math.sin(a) * rr, Math.cos(a) * rr);
+  }
+  const one = new THREE.ShapeGeometry(shape).toNonIndexed();
+  const pos = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i * Math.PI * 2) / 3;
+    const g = one.clone().rotateY(a).translate(Math.sin(a) * 0.2, 0, Math.cos(a) * 0.2);
+    pos.push(...g.attributes.position.array);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffd23a', side: THREE.DoubleSide }));
 }
 
 function lerp(a, b, k) { return a + (b - a) * k; }

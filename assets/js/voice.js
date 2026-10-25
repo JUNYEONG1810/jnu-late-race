@@ -266,6 +266,52 @@ export function playStep(run = false) {
   burst(ac, t, 0.03, run ? 0.03 : 0.02, 'lowpass', 1200);
 }
 
+// 학생 "음메~": 코로 내는 짧은 "음"(낮은 허밍) → 떨리며 올라갔다 내려오는 "메~"(톱니파 + 모음 'ㅔ' 필터 두 개)
+export function playMoo() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const hum = ac.createOscillator(); // 음
+  hum.type = 'triangle';
+  hum.frequency.setValueAtTime(300, t);
+  hum.frequency.linearRampToValueAtTime(340, t + 0.15);
+  hum.connect(filter(ac, 'lowpass', 900)).connect(env(ac, t, 0.22, 0.02, 0.2));
+  hum.start(t);
+  hum.stop(t + 0.22);
+  const m = t + 0.16, len = 0.55; // 메~
+  const o = ac.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(390, m);
+  o.frequency.linearRampToValueAtTime(450, m + 0.18);
+  o.frequency.linearRampToValueAtTime(360, m + len);
+  const vib = ac.createOscillator(); // 떨림
+  vib.frequency.value = 7.5;
+  const vibDepth = ac.createGain();
+  vibDepth.gain.value = 14;
+  vib.connect(vibDepth).connect(o.frequency);
+  const out = env(ac, m, 0.2, 0.04, len);
+  for (const [f, q, v] of [[560, 4, 1], [1900, 6, 0.6]]) {
+    const g = ac.createGain();
+    g.gain.value = v;
+    o.connect(filter(ac, 'bandpass', f, q)).connect(g).connect(out);
+  }
+  for (const s of [o, vib]) { s.start(m); s.stop(m + len + 0.05); }
+}
+
+// 학생이 달리다 벽에 꽈당: 통통한 "뽀옹" (아래로 미끄러지는 사인파 + 작은 잡음)
+export function playBonk() {
+  const ac = unlockAudio();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator();
+  o.frequency.setValueAtTime(520, t);
+  o.frequency.exponentialRampToValueAtTime(140, t + 0.25);
+  o.connect(env(ac, t, 0.28, 0.005, 0.3));
+  o.start(t);
+  o.stop(t + 0.32);
+  burst(ac, t, 0.06, 0.12, 'lowpass', 700);
+}
+
 // 카운트다운 삐 (go면 높고 길게)
 export function playBeep(go = false) {
   const ac = unlockAudio();
