@@ -49,6 +49,7 @@ const TRACK = { half: 1.0, r: 0.34, y: 0.37, x: 0.72, cleats: 18 };
 const WHEEL_R = 0.3;
 // 팔 기본 각도 (rad, rotation.x): 붐은 앞위로, 암은 아래로 꺾이고, 버킷은 안쪽으로
 const ARM_POSE = { boom: -0.75, stick: 1.95, bucket: 0.5 };
+const SCOOP = { seconds: 1.4, boom: -0.6, stick: -0.5, bucket: 1.1 }; // Q: 팔을 들어 버킷으로 퍼 올리는 몸짓 (부수는 기능 없음)
 
 export class Car {
   constructor(color = EXCAVATOR_COLOR) {
@@ -88,6 +89,7 @@ export class Car {
 
     this.prevSpeed = 0;
     this.accel = 0;
+    this.scoopT = 0; // Q 버킷 몸짓 남은 시간
     this.time = 0;
   }
 
@@ -358,7 +360,7 @@ export class Car {
     step(S.boom, 40, 5, -this.accel * 0.8, dt, 0.45);
     step(S.stick, 55, 5, -this.accel * 1.2, dt, 0.6);
     step(S.bucket, 70, 3, -this.accel * 1.5 + flutter, dt, 0.8);
-    this.poseArm();
+    this.poseArm(dt);
 
     // 몸체가 살짝 기울어 귀엽게
     const roll = THREE.MathUtils.clamp(-this.lateralSpeed * 0.02 + this.steer * this.forwardSpeed * 0.004, -0.12, 0.12);
@@ -385,10 +387,21 @@ export class Car {
     this.exhaust.update(dt, tmpVec, f, this.boostFx);
   }
 
-  poseArm() {
-    this.boomPivot.rotation.x = ARM_POSE.boom + this.spring.boom.x;
-    this.stickPivot.rotation.x = ARM_POSE.stick + this.spring.stick.x;
-    this.bucketPivot.rotation.x = ARM_POSE.bucket + this.spring.bucket.x;
+  // Q: 버킷 퍼 올리기 (하는 중이면 무시)
+  scoop() { if (this.scoopT <= 0) this.scoopT = SCOOP.seconds; }
+
+  poseArm(dt = 0) {
+    // 퍼 올리기: 버킷을 먼저 오므리고 → 팔을 들었다가 → 천천히 내림
+    let up = 0, curl = 0;
+    if (this.scoopT > 0) {
+      this.scoopT = Math.max(0, this.scoopT - dt);
+      const t = 1 - this.scoopT / SCOOP.seconds;
+      up = Math.sin(Math.PI * Math.min(1, t * 1.15)) ** 2;
+      curl = Math.sin(Math.PI * Math.min(1, t * 1.6)) ** 0.7 * (t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4);
+    }
+    this.boomPivot.rotation.x = ARM_POSE.boom + this.spring.boom.x + SCOOP.boom * up;
+    this.stickPivot.rotation.x = ARM_POSE.stick + this.spring.stick.x + SCOOP.stick * up;
+    this.bucketPivot.rotation.x = ARM_POSE.bucket + this.spring.bucket.x + SCOOP.bucket * curl;
   }
 
   // 궤도 무늬 조각들을 고리(위 직선 → 앞 반원 → 아래 직선 → 뒤 반원)를 따라 배치

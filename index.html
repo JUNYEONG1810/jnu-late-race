@@ -17,32 +17,33 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=82">
+  <link rel="stylesheet" href="assets/css/style.css?v=83">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=82",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=82",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=82",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=82",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=82",
-      "./assets/js/life.js": "./assets/js/life.js?v=82",
-      "./assets/js/music.js": "./assets/js/music.js?v=82",
-      "./assets/js/route.js": "./assets/js/route.js?v=82",
-      "./assets/js/surface.js": "./assets/js/surface.js?v=82",
-      "./assets/js/car.js": "./assets/js/car.js?v=82",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=82",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=82",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=82",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=82",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=82",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=82",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=82",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=82",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=82",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=82",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=82"
+      "./assets/js/map.js": "./assets/js/map.js?v=83",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=83",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=83",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=83",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=83",
+      "./assets/js/life.js": "./assets/js/life.js?v=83",
+      "./assets/js/music.js": "./assets/js/music.js?v=83",
+      "./assets/js/route.js": "./assets/js/route.js?v=83",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=83",
+      "./assets/js/play.js": "./assets/js/play.js?v=83",
+      "./assets/js/car.js": "./assets/js/car.js?v=83",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=83",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=83",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=83",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=83",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=83",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=83",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=83",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=83",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=83",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=83",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=83"
     }
   }
   </script>
@@ -86,6 +87,14 @@
     <div id="fps" class="hidden"></div>
 
     <div id="toast" class="pill hidden"></div>
+    <div id="play-info" class="pill hidden"></div>
+    <!-- 사진 모드 (P) -->
+    <div id="photo-bar" class="panel">
+      <b>📷 사진 모드</b>
+      <span>WASD 이동 · 마우스 끌기 회전 · Space/Shift 위아래 · 휠 확대</span>
+      <button id="photo-shot">촬영 <kbd>Enter</kbd></button>
+      <button id="photo-exit">나가기 <kbd>P</kbd></button>
+    </div>
 
     <div id="boost-gauge" class="panel">
       <span class="boost-text">BOOST</span>
@@ -147,6 +156,7 @@
         <div class="res-grade"></div>
         <div class="res-times"></div>
         <div class="res-excuse hidden"><div class="res-excuse-title">지각 사유서</div><div class="res-excuse-text"></div><div class="res-excuse-sign">위 사유로 늦었음을 알려 드립니다. — 학생 올림</div></div>
+        <button id="res-save" title="게임 화면 + 등급 + 시간을 PNG로 저장">이미지로 저장</button>
         <button data-act="retry">다시하기</button>
         <button data-act="exit">자유 주행으로</button>
       </div>
@@ -197,6 +207,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=82"></script>
+  <script type="module" src="assets/js/main.js?v=83"></script>
 </body>
 </html>

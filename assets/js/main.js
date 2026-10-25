@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { loadCampus, buildMap, placeSpawnAtGate } from './map.js';
 import { buildLandscape, removeReplacedBuildings } from './landscape.js';
-import { loadTerrain } from './terrain.js';
+import { loadTerrain, heightAt } from './terrain.js';
 import { Car, Collider } from './car.js';
 import { CameraRig } from './camera.js';
 import { Hud } from './hud.js';
@@ -15,6 +15,7 @@ import { buildRoadMarks } from './roadmarks.js';
 import { buildShuttles } from './life.js';
 import { Music } from './music.js';
 import { buildSurface } from './surface.js';
+import { buildPlay } from './play.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -152,12 +153,18 @@ addEventListener('keydown', (e) => {
   unlockAudio();
   keys.add(e.code);
   if (e.code === 'KeyM') toggleSound();
+  if (photo.on) { // 사진 모드: P·Esc 나가기, Enter 촬영 (나머지 키는 카메라 이동)
+    if (e.code === 'KeyP' || e.code === 'Escape') setPhoto(false);
+    else if (e.code === 'Enter') takePhoto();
+    return;
+  }
   if (onTitle) {
     if (e.code === 'KeyL') startLate();
     else if (e.code === 'Enter') startFree();
     return;
   }
   if (e.code === 'KeyC') hud.toast(`시점: ${walker?.active ? rig.nextWalkMode().label : rig.nextMode().label}`);
+  if (e.code === 'KeyP' && (!lateMode?.active || lateMode.state === 'result')) { setPhoto(true); return; }
   if (walker?.active) {
     walker.poke(); // 졸던 학생은 아무 키에나 화들짝 깸
     if (onWalkKey(e.code)) return;
@@ -165,6 +172,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyH') hud.showHelp();
     if (e.code === 'KeyG') car.driver.togglePeek(); // 운전사 학생이 왼쪽 창문으로 고개 내밀기 (게임 결과와 상관없음)
     if (e.code === 'KeyE' && !lateMode?.active) getOff();
+    if (e.code === 'KeyQ' && !lateMode?.inputLocked) car.scoop(); // 버킷 퍼 올리기
   }
   lateMode?.onKey(e.code);
 });
@@ -179,13 +187,25 @@ addEventListener('blur', () => { keys.clear(); dragging = false; });
 let dragging = false;
 const canvas = renderer.domElement;
 canvas.addEventListener('pointerdown', (e) => {
-  if (!walker?.active) return;
+  if (!walker?.active && !photo.on) return;
   dragging = true;
   try { canvas.setPointerCapture(e.pointerId); } catch {} // 창 밖으로 끌어도 계속
 });
-canvas.addEventListener('pointermove', (e) => { if (dragging && walker?.active) rig.dragOrbit(e.movementX, e.movementY); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  if (photo.on) {
+    photo.yaw -= e.movementX * 0.004;
+    photo.pitch = THREE.MathUtils.clamp(photo.pitch - e.movementY * 0.004, -1.45, 1.45);
+  } else if (walker?.active) rig.dragOrbit(e.movementX, e.movementY);
+});
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, () => { dragging = false; });
 canvas.addEventListener('wheel', (e) => {
+  if (photo.on) { // 사진 모드: 휠로 확대·축소 (시야각)
+    e.preventDefault();
+    camera.fov = THREE.MathUtils.clamp(camera.fov + Math.sign(e.deltaY) * 3, 20, 90);
+    camera.updateProjectionMatrix();
+    return;
+  }
   if (!walker?.active) return;
   e.preventDefault();
   rig.zoomOrbit(e.deltaY);
@@ -308,6 +328,7 @@ let collider = null;
 let world = null;
 let lateMode = null;
 let walker = null;
+let play = null; // 놀거리 (play.js)
 
 // ---------- 내려서 걷기 (자유 모드) ----------
 
@@ -378,6 +399,122 @@ function updateMusicAndClock(dt) {
   }
 }
 const TIME_LEFT = () => TIME_LIMIT - (lateMode.elapsed || 0);
+
+// ---------- 사진 모드 (P): 화면 안내를 숨기고 자유 카메라, 촬영하면 PNG 저장 ----------
+const PHOTO = { speed: 14, minAbove: 1.2 }; // 이동 m/s, 땅 위 최소 높이
+const photo = { on: false, yaw: 0, pitch: 0, pos: new THREE.Vector3() };
+function setPhoto(on) {
+  if (on === photo.on) return;
+  photo.on = on;
+  document.body.classList.toggle('photo', on);
+  keys.clear();
+  if (on) {
+    photo.pos.copy(camera.position);
+    const d = new THREE.Vector3();
+    camera.getWorldDirection(d);
+    photo.yaw = Math.atan2(d.x, d.z);
+    photo.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1));
+    hud.toast('사진 모드', 1200);
+  } else {
+    camera.fov = 60;
+    camera.updateProjectionMatrix();
+    dragging = false;
+  }
+}
+function updatePhotoCamera(dt) {
+  const f = new THREE.Vector3(Math.sin(photo.yaw), 0, Math.cos(photo.yaw)), r = new THREE.Vector3(-f.z, 0, f.x);
+  const v = PHOTO.speed * dt;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) photo.pos.addScaledVector(f, v);
+  if (keys.has('KeyS') || keys.has('ArrowDown')) photo.pos.addScaledVector(f, -v);
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) photo.pos.addScaledVector(r, -v);
+  if (keys.has('KeyD') || keys.has('ArrowRight')) photo.pos.addScaledVector(r, v);
+  if (keys.has('Space')) photo.pos.y += v;
+  if (keys.has('ShiftLeft') || keys.has('ShiftRight')) photo.pos.y -= v;
+  photo.pos.y = Math.max(photo.pos.y, heightAt(photo.pos.x, photo.pos.z) + PHOTO.minAbove);
+  camera.position.copy(photo.pos);
+  const cp = Math.cos(photo.pitch);
+  camera.lookAt(photo.pos.x + Math.sin(photo.yaw) * cp, photo.pos.y + Math.sin(photo.pitch), photo.pos.z + Math.cos(photo.yaw) * cp);
+}
+// 지금 화면을 2D 캔버스로 (그린 직후에 읽어야 해서 한 번 더 그림)
+function frameCanvas() {
+  renderer.render(scene, camera);
+  const c = document.createElement('canvas');
+  c.width = renderer.domElement.width;
+  c.height = renderer.domElement.height;
+  c.getContext('2d').drawImage(renderer.domElement, 0, 0);
+  return c;
+}
+function downloadCanvas(c, name) {
+  const a = document.createElement('a');
+  a.download = name;
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
+const stamp = () => {
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+};
+function takePhoto() {
+  const c = frameCanvas();
+  const g = c.getContext('2d'), s = c.height / 720;
+  g.font = `700 ${14 * s}px sans-serif`;
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  g.textAlign = 'right';
+  g.fillText('포크레이트 · 지도 데이터 © OpenStreetMap 기여자', c.width - 14 * s, c.height - 14 * s);
+  downloadCanvas(c, `포크레이트-${stamp()}.png`);
+  window.__lastPhoto = { w: c.width, h: c.height }; // 확인용
+  hud.toast('📷 찰칵! 사진을 저장했어요', 1800);
+}
+document.getElementById('photo-shot').addEventListener('click', (e) => { e.currentTarget.blur(); takePhoto(); });
+document.getElementById('photo-exit').addEventListener('click', (e) => { e.currentTarget.blur(); setPhoto(false); });
+
+// 결과 화면 "이미지로 저장": 게임 화면 + 등급 + 시간 + 제목 (+ F면 지각 사유서)
+function saveResultImage() {
+  const r = hud.lastResult;
+  if (!r) return;
+  const c = frameCanvas();
+  const g = c.getContext('2d'), s = c.height / 720, W = c.width, H = c.height;
+  const ok = r.grade !== 'F';
+  const fmt = (t) => `${Math.floor(Math.abs(t) / 60)}분 ${String(Math.floor(Math.abs(t) % 60)).padStart(2, '0')}초`;
+  g.fillStyle = 'rgba(15,20,30,0.35)';
+  g.fillRect(0, 0, W, H);
+  // 오른쪽 카드
+  const cw = 420 * s, ch = (r.excuse ? 470 : 340) * s, cx = W - cw - 40 * s, cy = (H - ch) / 2, mid = cx + cw / 2;
+  g.fillStyle = 'rgba(255,253,246,0.96)';
+  g.beginPath(); g.roundRect(cx, cy, cw, ch, 22 * s); g.fill();
+  g.textAlign = 'center';
+  g.fillStyle = '#2b3240';
+  g.font = `900 ${34 * s}px sans-serif`; g.fillText('포크레이트', mid, cy + 56 * s);
+  g.font = `700 ${16 * s}px sans-serif`; g.fillStyle = '#6b7280'; g.fillText('9시까지 공대 2호관으로!', mid, cy + 84 * s);
+  g.font = `900 ${120 * s}px sans-serif`; g.fillStyle = ok ? '#2f8cff' : '#e8412c'; g.fillText(r.grade, mid, cy + 210 * s);
+  g.font = `800 ${22 * s}px sans-serif`; g.fillStyle = '#2b3240';
+  g.fillText(r.title || (ok ? '늦지 않았다!' : '지각…'), mid, cy + 250 * s);
+  g.font = `600 ${17 * s}px sans-serif`;
+  g.fillText(`미션 ${r.done}/${r.total} · 걸린 시간 ${fmt(r.elapsed)}${ok ? ` · 남은 ${fmt(r.remaining)}` : ''}`, mid, cy + 284 * s);
+  if (r.daily) { g.fillStyle = '#2f8cff'; g.fillText(`오늘의 도전 ${r.daily}`, mid, cy + 312 * s); }
+  if (r.excuse) { // 지각 사유서
+    const ey = cy + 330 * s;
+    g.fillStyle = '#fffdf3'; g.strokeStyle = '#b49a6a'; g.setLineDash([6 * s, 4 * s]); g.lineWidth = 1.5 * s;
+    g.beginPath(); g.roundRect(cx + 24 * s, ey, cw - 48 * s, 120 * s, 8 * s); g.fill(); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#8a5a35'; g.font = `900 ${15 * s}px sans-serif`; g.fillText('지각 사유서', mid, ey + 26 * s);
+    g.fillStyle = '#2b3240'; g.font = `700 ${15 * s}px sans-serif`;
+    wrapText(g, r.excuse, mid, ey + 52 * s, cw - 80 * s, 21 * s);
+  }
+  g.textAlign = 'left'; g.font = `700 ${13 * s}px sans-serif`; g.fillStyle = 'rgba(255,255,255,0.85)';
+  g.fillText('지도 데이터 © OpenStreetMap 기여자', 14 * s, H - 14 * s);
+  downloadCanvas(c, `포크레이트-${r.grade}-${stamp()}.png`);
+  window.__lastResultImage = { w: W, h: H, grade: r.grade }; // 확인용
+  hud.toast('결과 이미지를 저장했어요', 1800);
+}
+function wrapText(g, text, x, y, maxW, lh) {
+  let line = '';
+  for (const ch of text) {
+    if (g.measureText(line + ch).width > maxW && line) { g.fillText(line, x, y); y += lh; line = ch.trim() ? ch : ''; }
+    else line += ch;
+  }
+  if (line) g.fillText(line, x, y);
+}
+document.getElementById('res-save').addEventListener('click', (e) => { e.currentTarget.blur(); saveResultImage(); });
 
 let walkingUi = false;
 function setWalkingUi(on) {
@@ -462,6 +599,7 @@ async function start() {
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   car.surface = buildSurface(campus); // 잔디·흙·운동장 위는 느리게 (부스터 중엔 그대로)
+  play = buildPlay(scene, campus, collider, hud); // 축구·타임어택·드리프트 (자유 모드)
   loadingUi.set(0.72, '나무와 조형물 놓는 중…');
   await breathe();
   world.landscape = buildLandscape(scene, campus);
@@ -499,7 +637,7 @@ async function start() {
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
   loadingUi.done();
-  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
   setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
@@ -537,7 +675,7 @@ let fpsFrames = 0, fpsTime = 0;
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.1);
   checkAutoQuality();
-  const input = onTitle || lateMode.inputLocked ? NO_INPUT : readInput();
+  const input = onTitle || photo.on || lateMode.inputLocked ? NO_INPUT : readInput();
   if (onTitle) updateTitleCamera(clock.elapsedTime);
 
   const walking = walker.active; // 학생이 내려서 걷는 중 (굴착기는 시동만 걸린 채 서 있음)
@@ -563,8 +701,10 @@ function loop() {
   world.shuttle.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null,
     cineHide ? [[lateMode.stage.to.x, lateMode.stage.to.z], [car.pos.x, car.pos.y]] : []);
 
-  if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
+  if (photo.on) updatePhotoCamera(dt);
+  else if (walking) rig.updateWalk(dt, walker, { autoBehind: settings.walkCamAuto, dragging });
   else rig.update(dt, car);
+  play.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null, !onTitle && !lateMode.active && !photo.on);
   sky.position.copy(camera.position);
   sun.target.position.set(focus.x, focusY, focus.y);
   sun.position.copy(sun.target.position).add(SUN_OFFSET);
@@ -582,7 +722,7 @@ function loop() {
   if (!onTitle) {
     const target = lateMode.active && lateMode.target ? lateMode.target : null;
     hud.drawMinimap(focus, walking ? walker.heading : car.heading, target, walking ? car.pos : null,
-      lateMode.active && (lateMode.state === 'playing' || lateMode.state === 'mission') ? lateMode.route : null);
+      lateMode.active && (lateMode.state === 'playing' || lateMode.state === 'mission') ? lateMode.route : play.route());
   }
   hud.setBoost(car.boost, car.boosting ? 'active' : car.boostReady ? 'ready' : '');
   hud.drawSpeedLines(car.boostFx);

@@ -7,7 +7,7 @@ const tmp = new THREE.Vector3();
 // 미니맵: 보이는 반경(m)과 미리 그려 두는 지도 해상도(px/m)
 const MINIMAP = { radius: 260, res: 0.7 };
 // 이름표가 가리면 안 되는 HUD 요소들
-const LABEL_BLOCKERS = ['quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
+const LABEL_BLOCKERS = ['play-info', 'photo-bar', 'quality', 'minimap', 'mission-list', 'building-name', 'timer', 'boost-gauge', 'speedo', 'late-start', 'toast', 'walk-hint', 'settings', 'student-bubble'];
 
 export class Hud {
   constructor({ onQuality, onSound, onBgm }) {
@@ -377,7 +377,7 @@ export class Hud {
   bindLate(handlers) {
     const click = (el, fn) => el.addEventListener('click', () => { el.blur(); fn(); });
     click($('late-start'), handlers.start);
-    for (const btn of document.querySelectorAll('#pause-menu button, #result button')) {
+    for (const btn of document.querySelectorAll('#pause-menu button, #result button[data-act]')) {
       click(btn, handlers[btn.dataset.act]);
     }
     this.timerEl = $('timer');
@@ -567,9 +567,19 @@ export class Hud {
   }
 
   // r: { grade, elapsed, remaining, done, total, timedOut } 또는 null
+  // 놀거리 안내 (축구 점수·타임어택 시간·드리프트 점수). null이면 숨김
+  setPlay(text) {
+    if (text === this.playText) return;
+    this.playText = text;
+    const el = $('play-info');
+    el.classList.toggle('hidden', !text);
+    if (text) el.textContent = text;
+  }
+
   showResult(r) {
     const el = $('result');
     el.classList.toggle('hidden', !r);
+    this.lastResult = r || null; // 결과 이미지 저장용
     if (!r) return;
     const fmt = (s) => `${Math.floor(Math.abs(s) / 60)}분 ${String(Math.floor(Math.abs(s) % 60)).padStart(2, '0')}초`;
     const ok = r.grade !== 'F';

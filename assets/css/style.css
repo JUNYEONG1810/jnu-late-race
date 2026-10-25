@@ -611,3 +611,14 @@ body.cine #phone { display: none; }
 .res-excuse-sign { margin-top: 8px; font-size: 12px; color: #8b8270; text-align: right; }
 .res-daily { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #2f8cff; color: #fff; font-size: 13px; font-weight: 800; }
 #countdown.arrive { color: #ffd23f; }
+
+/* ---------- 놀거리 · 사진 모드 (밤샘 8단계) ---------- */
+#play-info { top: 116px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 800; pointer-events: none; }
+body.late #play-info, body.cine #play-info { display: none; }
+#photo-bar { display: none; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 10px 16px; align-items: center; gap: 12px; font-size: 14px; white-space: nowrap; }
+#photo-bar span { color: #5d6573; }
+#photo-bar button { font: inherit; font-weight: 700; padding: 6px 12px; border-radius: 8px; border: 0; background: #2f8cff; color: #fff; cursor: pointer; }
+#photo-bar #photo-exit { background: #e7e9ee; color: #2b3240; }
+body.photo #photo-bar { display: flex; }
+body.photo #hud > :not(#photo-bar):not(#toast) { display: none !important; }
+#res-save { background: #ffd23f; color: #2b3240; }
