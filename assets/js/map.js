@@ -998,20 +998,35 @@ const TREE = {
   perArea: { forest: 80, park: 260, grass: 450 }, // 나무 한 그루당 넓이 (m²)
   max: 7000,
 };
-const CROWN_COLORS = ['#5f9e4a', '#6fae52', '#4f8c42', '#7db85a', '#5a9550'];
+const CROWN_COLORS = ['#5f9e4a', '#6fae52', '#4f8c42', '#7db85a', '#5a9550', '#86b85e', '#4a7f3e', '#6a9a48'];
+// 나무 종류 (모양·크기·색 변형, 근거 없음: 시각적 다양성용 임의 비율). 진입로 가로수는 landscape.js에서 따로
+// [이름, 차도 옆 비율, 공원·잔디 비율, 숲 비율]
+const TREE_KINDS = [
+  ['round', 0.5, 0.35, 0.2],   // 둥근 활엽수 (지금까지의 나무)
+  ['broad', 0.3, 0.3, 0.15],   // 넓게 퍼진 활엽수 (낮고 넓은 수관)
+  ['shrub', 0.1, 0.2, 0.1],    // 관목 (줄기 없이 낮은 덤불)
+  ['cone', 0.07, 0.1, 0.3],    // 원뿔 침엽수
+  ['slim', 0.03, 0.05, 0.25],  // 가늘고 키 큰 침엽수
+];
 
 // 차도 양옆과 녹지 안에 저폴리 나무를 InstancedMesh로 심는다.
 // 순서를 섞어 두어서, 개수(count)를 절반으로 줄이면 골고루 절반만 보인다.
 function buildTrees(campus) {
   const rand = mulberry32(20261025);
   const blocked = makeTreeBlocker(campus);
-  const spots = []; // [x, z, 크기, 원뿔형?]
+  const spots = []; // [x, z, 크기, 종류]
 
   const [gx, gz] = campus.spawn.gate;
   const gateClear = 22; // 정문 루버 지붕(동쪽 끝까지 약 19m) 둘레
-  const add = (x, z, coniferChance) => {
+  // where: 1 = 차도 옆, 2 = 공원·잔디, 3 = 숲 (TREE_KINDS의 비율 칸)
+  const pick = (where) => {
+    let t = rand() * TREE_KINDS.reduce((a, k) => a + k[where], 0);
+    for (const k of TREE_KINDS) { t -= k[where]; if (t <= 0) return k[0]; }
+    return 'round';
+  };
+  const add = (x, z, where) => {
     if (spots.length >= TREE.max || blocked(x, z) || Math.hypot(x - gx, z - gz) < gateClear) return;
-    spots.push([x, z, 0.8 + rand() * 0.5, rand() < coniferChance]);
+    spots.push([x, z, 0.72 + rand() * 0.7, pick(where)]);
   };
 
   for (const r of campus.roads) {
@@ -1025,8 +1040,8 @@ function buildTrees(campus) {
       const ux = (x2 - x1) / len, uz = (z2 - z1) / len;
       for (let t = carry; t < len; t += TREE.roadSpacing) {
         const x = x1 + ux * t, z = z1 + uz * t;
-        add(x - uz * off, z + ux * off, 0.15);
-        add(x + uz * off, z - ux * off, 0.15);
+        add(x - uz * off, z + ux * off, 1);
+        add(x + uz * off, z - ux * off, 1);
       }
       carry = (carry - len) % TREE.roadSpacing;
       if (carry < 0) carry += TREE.roadSpacing;
@@ -1045,7 +1060,7 @@ function buildTrees(campus) {
       const x = x0 + rand() * (x1 - x0), z = z0 + rand() * (z1 - z0);
       if (!pointInPolygon(x, z, o)) continue;
       const before = spots.length;
-      add(x, z, g.kind === 'forest' ? 0.4 : 0.15);
+      add(x, z, g.kind === 'forest' ? 3 : 2);
       if (spots.length > before) placed++;
     }
   }
@@ -1057,24 +1072,37 @@ function buildTrees(campus) {
   }
 
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.32, 2.4, 5).translate(0, 1.2, 0);
-  const roundGeo = new THREE.IcosahedronGeometry(2.1, 0).translate(0, 3.9, 0);
-  const coneGeo = new THREE.ConeGeometry(1.9, 5.2, 7).translate(0, 4.6, 0);
+  const crowns = {
+    round: new THREE.IcosahedronGeometry(2.1, 0).translate(0, 3.9, 0),
+    broad: new THREE.DodecahedronGeometry(2.0, 0).scale(1.45, 0.72, 1.45).translate(0, 3.4, 0),
+    shrub: new THREE.DodecahedronGeometry(1.0, 0).scale(1.2, 0.75, 1.2).translate(0, 0.65, 0),
+    cone: new THREE.ConeGeometry(1.9, 5.2, 7).translate(0, 4.6, 0),
+    slim: new THREE.ConeGeometry(1.15, 7.0, 6).translate(0, 5.2, 0),
+  };
+  // 줄기 크기 비율 [굵기, 높이] (관목은 줄기 없음)
+  const TRUNK = { round: [1, 1], broad: [1.3, 0.85], cone: [0.9, 1.05], slim: [0.75, 1.25] };
   const crownMat = new THREE.MeshLambertMaterial({ flatShading: true });
-  const round = spots.filter((s) => !s[3]), cone = spots.filter((s) => s[3]);
-  const meshes = [
-    [new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: '#8a6a4f' }), spots.length), spots],
-    [new THREE.InstancedMesh(roundGeo, crownMat, round.length), round],
-    [new THREE.InstancedMesh(coneGeo, crownMat, cone.length), cone],
-  ];
+  const withTrunk = spots.filter((t) => t[3] !== 'shrub');
+  const meshes = [[new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: '#8a6a4f' }), withTrunk.length), withTrunk]];
+  for (const [kind, geo] of Object.entries(crowns)) {
+    const list = spots.filter((t) => t[3] === kind);
+    meshes.push([new THREE.InstancedMesh(geo, crownMat, list.length), list]);
+  }
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0), color = new THREE.Color();
   const group = new THREE.Group();
   for (const [mesh, list] of meshes) {
-    list.forEach(([x, z, size], i) => {
+    const trunk = mesh.material !== crownMat;
+    list.forEach(([x, z, size, kind], i) => {
       q.setFromAxisAngle(up, rand() * Math.PI * 2);
-      m.compose(p.set(x, heightAt(x, z) - 0.2, z), q, s.set(size, size * (0.9 + rand() * 0.25), size));
+      const [tw, th] = trunk ? TRUNK[kind] : [1, 1];
+      m.compose(p.set(x, heightAt(x, z) - 0.2, z), q, s.set(size * tw, size * th * (trunk ? 1 : 0.9 + rand() * 0.25), size * tw));
       mesh.setMatrixAt(i, m);
-      if (mesh.material === crownMat) mesh.setColorAt(i, color.set(CROWN_COLORS[Math.floor(rand() * CROWN_COLORS.length)]));
+      if (!trunk) {
+        color.set(CROWN_COLORS[Math.floor(rand() * CROWN_COLORS.length)]);
+        if (kind === 'cone' || kind === 'slim') color.offsetHSL(0.02, 0, -0.06); // 침엽수는 조금 더 짙고 푸르게
+        mesh.setColorAt(i, color);
+      }
     });
     mesh.castShadow = true;
     mesh.userData.total = list.length;
