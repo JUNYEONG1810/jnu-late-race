@@ -1,4 +1,4 @@
-// 부엉이 교수님: 도형으로 만든 캐릭터, 뒤뚱 걷기·끄덕임·엄지 동작, 그리고 말풍선.
+// 부엉이 교수님: 도형으로 만든 캐릭터(배바지 정장), 뒤뚱 걷기·숨쉬기·말할 때 몸짓, 그리고 말풍선.
 // 캐릭터의 앞은 로컬 +z.
 import * as THREE from 'three';
 import { PROFESSOR as P } from './professor-config.js';
@@ -14,87 +14,109 @@ export class Professor {
 
     this.walking = false;
     this.talking = false;
-    this.pose = 'rest';  // rest(뒷짐) | thumbsUp | stern
+    this.pose = 'rest';    // rest | thumbsUp | stern
+    this.gesture = null;   // 말하는 중 몸짓: null(손짓) | emphasis(양 날개 벌림) | point(카메라 가리키기)
     this.phase = 0;
     this.time = 0;
-    this.thumb = 0;      // 엄지 동작 정도 0~1
   }
 
   build() {
     const C = P.colors;
-    const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const ball = (r, c, x, y, z, sx = 1, sy = 1, sz = 1, parent = this.body) => {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), typeof c === 'string' ? mat(c) : c);
+    const mats = {};
+    const mat = (c) => (mats[c] ||= new THREE.MeshLambertMaterial({ color: c }));
+    const add = (geo, c, x, y, z, parent = this.body) => {
+      const m = new THREE.Mesh(geo, typeof c === 'string' ? mat(c) : c);
       m.position.set(x, y, z);
-      m.scale.set(sx, sy, sz);
       m.castShadow = true;
       parent.add(m);
       return m;
     };
+    const ball = (r, c, x, y, z, sx = 1, sy = 1, sz = 1, parent = this.body) => {
+      const m = add(new THREE.SphereGeometry(r, 22, 16), c, x, y, z, parent);
+      m.scale.set(sx, sy, sz);
+      return m;
+    };
+    const box = (w, h, d, c, x, y, z, parent = this.body) => add(new THREE.BoxGeometry(w, h, d), c, x, y, z, parent);
 
-    // 몸통 + 배
-    ball(P.body.radius, C.feather, 0, P.body.y, 0, 1, 1.05, 0.95);
-    ball(0.4, C.belly, 0, P.body.y - 0.04, 0.27, 0.85, 0.95, 0.5);
-    for (const [x, y] of [[-0.12, 0.5], [0.12, 0.5], [0, 0.38], [-0.14, 0.28], [0.14, 0.28]]) {
-      ball(0.05, C.belly_mark, x, y, 0.47, 1, 0.55, 0.4); // 배 깃털 무늬
+    const r = P.body.radius, cy = P.body.y, belly = P.body.belly; // 배는 앞뒤로 볼록
+
+    // ---- 몸: 흰 셔츠 배 → 높은 배바지 → 벨트 → 앞이 열린 재킷 ----
+    ball(r, C.shirt, 0, cy, 0, 1, 1, belly);
+    const pants = add(new THREE.SphereGeometry(r * 1.015, 28, 18, 0, Math.PI * 2, P.waist, Math.PI - P.waist), C.pants, 0, cy, 0);
+    pants.scale.z = belly;
+    const beltR = r * 1.03 * Math.sin(P.waist), beltY = cy + r * Math.cos(P.waist);
+    add(new THREE.TorusGeometry(beltR, 0.032, 8, 40).rotateX(Math.PI / 2).scale(1, 1, belly), C.belt, 0, beltY, 0);
+    box(0.1, 0.075, 0.03, C.buckle, 0, beltY, beltR * belly + 0.02);
+
+    const gap = 0.78; // 재킷 앞 열린 각도의 절반
+    const jacketMat = new THREE.MeshLambertMaterial({ color: C.jacket, side: THREE.DoubleSide });
+    const jacket = add(new THREE.SphereGeometry(r * 1.06, 32, 18, Math.PI / 2 + gap, Math.PI * 2 - gap * 2, 0.32, 1.72), jacketMat, 0, cy, 0);
+    jacket.scale.z = belly;
+    for (const s of [-1, 1]) { // 라펠: 위는 벌어지고 아래로 모이는 V
+      const lapel = box(0.1, 0.3, 0.025, C.lapel, s * 0.2, cy + 0.3, 0.44);
+      lapel.rotation.set(-0.55, 0, -s * 0.32);
     }
-    // 흰 셔츠 + 넥타이
-    ball(0.15, C.shirt, 0, 0.95, 0.36, 1, 1, 0.45);
-    const tieMat = mat(C.tie);
-    const knot = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.05), tieMat);
-    knot.position.set(0, 0.97, 0.43);
-    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.26, 4).rotateZ(Math.PI), tieMat);
-    blade.position.set(0, 0.8, 0.45);
-    blade.rotation.x = -0.25;
-    blade.scale.z = 0.4;
-    this.body.add(knot, blade);
+
+    // 짧은 넥타이 (배 위에 살짝 얹힘)
+    box(0.08, 0.06, 0.05, C.tie, 0, cy + 0.31, 0.48);
+    const blade = add(new THREE.ConeGeometry(0.05, 0.15, 4).rotateZ(Math.PI), C.tie, 0, cy + 0.21, 0.55);
+    blade.rotation.x = -0.6;
+    blade.scale.z = 0.45;
 
     // 발
-    this.feet = [-1, 1].map((s) => ball(0.1, C.feet, s * 0.17, 0.05, 0.2, 1, 0.45, 1.3));
+    this.feet = [-1, 1].map((s) => ball(0.1, C.feet, s * 0.17, 0.05, 0.22, 1, 0.45, 1.3));
 
-    // 날개: 어깨에서 뒤로 모아 뒷짐
+    // ---- 팔(날개): 재킷 소매 + 깃털 손. 어깨에서 몸 옆으로 내림 ----
     this.wings = [-1, 1].map((s) => {
       const pivot = new THREE.Group();
-      pivot.position.set(s * 0.4, 0.9, -0.12);
-      const wing = ball(0.3, C.wing, 0, -0.28, -0.12, 0.32, 0.95, 0.7, pivot);
-      const thumb = ball(0.08, C.wing, s * 0.1, -0.56, 0.02, 1.6, 1, 1, pivot); // 엄지 (엄지 척일 때만)
+      pivot.position.set(s * 0.46, cy + 0.36, 0);
+      add(new THREE.CylinderGeometry(0.085, 0.11, 0.36, 12), jacketMat, 0, -0.18, 0, pivot); // 소매
+      ball(0.115, C.shirt, 0, -0.37, 0, 1, 0.35, 1, pivot);                                  // 셔츠 소맷부리
+      ball(0.12, C.feather, 0, -0.47, 0, 0.6, 1.15, 0.9, pivot);                             // 깃털 손
+      const thumb = ball(0.06, C.feather, -s * 0.07, -0.42, 0.06, 1, 1.6, 1, pivot);         // 엄지 (엄지 척일 때만)
       thumb.visible = false;
       this.body.add(pivot);
-      return { pivot, wing, thumb, side: s };
+      return { pivot, thumb, side: s, rx: 0, rz: s * 0.25 };
     });
 
-    // 머리 (끄덕임 축)
+    // ---- 머리 (끄덕임 축): 몸과 거의 1:1로 크고 둥글게 ----
     this.head = new THREE.Group();
     this.head.position.y = P.head.y;
     this.body.add(this.head);
-    const h = this.head;
-    ball(P.head.radius, C.head, 0, 0, 0, 1.08, 0.95, 1, h);
+    const h = this.head, E = P.eye;
+    ball(P.head.radius, C.feather, 0, 0, 0, 1.05, 1, 1, h);
+    ball(0.38, C.face, 0, -0.06, 0.3, 1.12, 0.95, 0.5, h); // 얼굴판
     for (const s of [-1, 1]) {
-      ball(0.2, C.belly, s * P.eye.x, 0, 0.33, 1, 1, 0.4, h);                 // 눈 주위 얼굴판
-      ball(P.eye.radius, C.eye, s * P.eye.x, 0.02, 0.39, 1, 1, 0.6, h);       // 큰 노란 눈
-      ball(0.07, C.pupil, s * P.eye.x, 0.02, 0.46, 1, 1, 0.5, h);             // 눈동자
-      ball(0.022, '#ffffff', s * P.eye.x - 0.03, 0.06, 0.5, 1, 1, 0.5, h);    // 눈 반짝임
-      // 동그란 금테 안경
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.018, 8, 28), mat(C.glasses));
-      ring.position.set(s * P.eye.x, 0.02, 0.5);
-      h.add(ring);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.32), mat(C.glasses));
-      arm.position.set(s * 0.33, 0.04, 0.34);
-      arm.rotation.y = s * 0.35;
-      h.add(arm);
-      // 머리 위 깃털 뿔
-      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.26, 6), mat(C.tuft));
-      tuft.position.set(s * 0.27, 0.42, 0);
+      const ex = s * E.x;
+      ball(E.radius, C.eye, ex, E.y, 0.44, 1, 1, 0.45, h);               // 눈 테두리
+      ball(E.radius * 0.78, C.pupil, ex, E.y, 0.48, 1, 1, 0.4, h);       // 큰 검은 눈동자
+      ball(0.036, '#ffffff', ex - 0.045, E.y + 0.05, 0.535, 1, 1, 0.4, h); // 반짝임 큰 점
+      ball(0.018, '#ffffff', ex + 0.04, E.y - 0.04, 0.53, 1, 1, 0.4, h);   // 반짝임 작은 점
+      ball(0.075, C.cheek, s * 0.34, -0.21, 0.33, 1.2, 0.7, 0.35, h);     // 볼터치
+      const tuft = add(new THREE.ConeGeometry(0.09, 0.26, 6), C.tuft, s * 0.28, 0.45, 0, h); // 깃털 뿔
       tuft.rotation.z = -s * 0.45;
-      h.add(tuft);
     }
-    const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.06, 6).rotateZ(Math.PI / 2), mat(C.glasses));
-    bridge.position.set(0, 0.06, 0.51);
-    h.add(bridge);
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.17, 8), mat(C.beak));
-    beak.position.set(0, -0.11, 0.47);
-    beak.rotation.x = Math.PI / 2 + 0.45; // 앞·아래로
-    h.add(beak);
+    const beak = add(new THREE.ConeGeometry(0.035, 0.08, 8), C.beak, 0, -0.2, 0.51, h); // 작고 짧은 부리
+    beak.rotation.x = Math.PI / 2 + 0.6;
+
+    // 은색 가는 사각테 돋보기: 눈보다 작게, 부리 쪽으로 내려 눈 아래 절반에 걸침
+    const G = { y: E.y - 0.11, z: 0.565, w: 0.17, h: 0.09, t: 0.012 };
+    const lensMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, depthWrite: false });
+    for (const s of [-1, 1]) {
+      const gx = s * (E.x - 0.01);
+      box(G.w, G.t, G.t, C.glasses, gx, G.y + G.h / 2, G.z, h);
+      box(G.w, G.t, G.t, C.glasses, gx, G.y - G.h / 2, G.z, h);
+      box(G.t, G.h, G.t, C.glasses, gx - G.w / 2, G.y, G.z, h);
+      box(G.t, G.h, G.t, C.glasses, gx + G.w / 2, G.y, G.z, h);
+      add(new THREE.PlaneGeometry(G.w, G.h), lensMat, gx, G.y, G.z - 0.003, h).castShadow = false;
+      // 안경다리: 렌즈 바깥쪽 끝 → 머리 옆
+      const a = new THREE.Vector3(gx + s * G.w / 2, G.y + 0.02, G.z), b = new THREE.Vector3(s * 0.48, -0.02, 0.1);
+      const temple = box(G.t, G.t, a.distanceTo(b), C.glasses, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, h);
+      temple.rotation.order = 'YXZ';
+      temple.rotation.y = Math.atan2(b.x - a.x, b.z - a.z);
+      temple.rotation.x = -Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z));
+    }
+    box(2 * (E.x - 0.01 - G.w / 2), G.t, G.t, C.glasses, 0, G.y + 0.025, G.z, h); // 코걸이 다리
   }
 
   // 위치 (x, z)와 바라보는 방향 (dx, dz)
@@ -109,35 +131,52 @@ export class Professor {
 
   // 머리 꼭대기 근처의 월드 좌표 (말풍선 위치용)
   headTop(out = new THREE.Vector3()) {
-    return out.set(0, P.head.y + 0.75, 0).multiplyScalar(P.scale).add(this.object.position);
+    return out.set(0, P.head.y + 0.8, 0).multiplyScalar(P.scale).add(this.object.position);
   }
 
   update(dt) {
     this.time += dt;
-    const W = P.walk;
+    const W = P.walk, t = this.time;
     if (this.walking) this.phase += dt * W.stepRate;
     else this.phase += (Math.round(this.phase / Math.PI) * Math.PI - this.phase) * Math.min(1, dt * 10); // 발 모으기
     const s = Math.sin(this.phase);
-    // 뒤뚱(좌우 기울기) + 통통(위아래)
     const walk01 = this.walking ? 1 : 0;
+    // 뒤뚱(좌우 기울기) + 통통(위아래). 서 있을 때는 숨 쉬듯 살짝 오르내림
+    const breath = Math.sin(t * 2.2);
     this.body.rotation.z = s * W.waddle * walk01;
-    this.body.position.y = Math.abs(s) * W.bounce * walk01 + Math.sin(this.time * 2) * 0.008; // 가만히 있어도 숨쉬기
+    this.body.position.y = Math.abs(s) * W.bounce * walk01 + breath * 0.012 * (1 - walk01);
+    this.body.scale.set(1 + breath * 0.008, 1 - breath * 0.006, 1 + breath * 0.008);
     this.feet[0].position.y = 0.05 + Math.max(0, s) * 0.12 * walk01;
     this.feet[1].position.y = 0.05 + Math.max(0, -s) * 0.12 * walk01;
 
-    // 말할 때 끄덕임, stern이면 고개 살짝 숙임
-    const nod = this.talking ? Math.sin(this.time * P.nod.rate) * P.nod.amount : 0;
-    const tilt = this.pose === 'stern' ? 0.12 : 0;
+    // 말할 때 끄덕임, stern이면 고개 숙임
+    const nod = this.talking ? Math.sin(t * P.nod.rate) * P.nod.amount : 0;
+    const tilt = this.pose === 'stern' ? 0.14 : 0;
     this.head.rotation.x += (nod + tilt - this.head.rotation.x) * Math.min(1, dt * 12);
 
-    // 날개: 평소엔 뒤로 모은 뒷짐, thumbsUp이면 오른쪽 날개(로컬 -x)를 앞으로 들어 엄지 척
-    this.thumb += ((this.pose === 'thumbsUp' ? 1 : 0) - this.thumb) * Math.min(1, dt * 8);
+    // 팔(날개). rx: 앞뒤(음수 = 앞으로 듦), rz: 옆으로 벌림 (side 방향이 바깥)
+    // 오른쪽 날개 = 로컬 -x (side -1)가 손짓·가리키기·엄지를 맡는다
     for (const w of this.wings) {
-      const up = w.side < 0 ? this.thumb : 0;
-      w.pivot.rotation.y = 0;
-      w.pivot.rotation.x = 0.7 * (1 - up) + 0.6 * up;                  // 뒤로 젖혀 모으기 / 살짝 앞으로
-      w.pivot.rotation.z = -w.side * 0.5 * (1 - up) + w.side * 2.4 * up; // 날개 끝을 등 가운데로 / 옆 위로 번쩍
-      w.thumb.visible = up > 0.5;
+      const right = w.side < 0;
+      let rx = Math.sin(this.phase) * 0.35 * w.side * walk01; // 걸을 때 앞뒤로 흔들
+      let rz = w.side * (0.25 + breath * 0.03);               // 몸 옆에 자연스럽게
+      if (this.pose === 'thumbsUp') {
+        if (right) { rx = -0.2; rz = w.side * 2.5; }          // 옆 위로 번쩍, 엄지 척
+      } else if (this.gesture === 'point') {
+        if (right) { rx = -1.5; rz = w.side * 0.12; }         // 카메라를 가리킴
+      } else if (this.gesture === 'emphasis') {
+        rx = -0.35; rz = w.side * 1.1;                        // 양 날개를 살짝 벌림
+      } else if (this.talking && right) {
+        const wave = 0.5 + 0.5 * Math.sin(t * 5);              // 가볍게 들었다 내렸다
+        rx = -0.45;
+        rz = w.side * (0.6 + 0.5 * wave);
+      }
+      const k = Math.min(1, dt * 10);
+      w.rx += (rx - w.rx) * k;
+      w.rz += (rz - w.rz) * k;
+      w.pivot.rotation.x = w.rx;
+      w.pivot.rotation.z = w.rz;
+      w.thumb.visible = right && this.pose === 'thumbsUp';
     }
   }
 }
@@ -168,6 +207,13 @@ export class SpeechBubble {
     this.active = true;
     this.el.classList.remove('hidden');
     this.render(0);
+  }
+
+  // 지금 말하는 부분에 맞는 몸짓: 'point'("F다." 이후) | 'emphasis'("Serious" 말하는 중) | null
+  get gesture() {
+    if (!this.active || this.shown <= 0) return null;
+    if (this.cls.slice(0, this.shown).includes('big')) return 'point';
+    return !this.done && this.cls[this.shown - 1] === 'em' ? 'emphasis' : null;
   }
 
   // 남은 글자를 바로 다 보여 준다 (클릭·Space). 이미 다 나왔으면 false

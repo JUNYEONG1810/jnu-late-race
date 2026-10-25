@@ -195,6 +195,7 @@ export class LateMode {
     this.marker.animate(time);
     this.professor.update(dt);
     this.bubble.update(dt);
+    this.professor.gesture = this.bubble.gesture;
     if (this.bubble.active) {
       this.professor.talking = !this.bubble.done;
       tmp.copy(this.professor.headTop()).project(this.camera);
