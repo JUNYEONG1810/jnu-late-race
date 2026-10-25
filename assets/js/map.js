@@ -10,6 +10,8 @@ const WALL_COLORS = ['#ece0c6', '#f5f3ee', '#d7d9db', '#b86b52'];
 // 지붕: 옥상 방수 페인트 초록, 회색, 연갈색
 const ROOF_COLORS = ['#8fb79c', '#c3c5c1', '#b3aa9c'];
 const ENTRANCE_COLOR = '#3a3f47';
+// 외관 종류 (data/building-floors.csv "외관" 칸, 비우면 콘크리트) → 외벽색을 안 적었을 때의 기본색
+const FACADE_COLORS = { 커튼월: '#e3edf4', 벽돌: '#a65a44', 타일: '#ece7dc' };
 const OUTSIDE_TINT = new THREE.Color('#eceef0');
 const OUTSIDE_MIX = 0.45;
 
@@ -565,6 +567,71 @@ function makeWindowTexture(anisotropy) {
   return tex;
 }
 
+// 외관 텍스처: 한 칸 = 가로 3m × 한 층 4m (창문 텍스처와 같은 크기). 색은 정점 색(외벽색)과 곱해진다
+function facadeTexture(draw, anisotropy) {
+  const S = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  draw(canvas.getContext('2d'), S);
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = anisotropy;
+  return t;
+}
+
+function drawWindow(g, x, y, w, h) {
+  const grad = g.createLinearGradient(0, y, 0, y + h);
+  grad.addColorStop(0, '#7f9ab4');
+  grad.addColorStop(1, '#4b6178');
+  g.fillStyle = '#e8e8e8';
+  g.fillRect(x - 3, y - 3, w + 6, h + 6);
+  g.fillStyle = grad;
+  g.fillRect(x, y, w, h);
+}
+
+// 벽돌: 줄눈(밝은 선) + 엇갈린 세로 줄눈 + 창
+function drawBrick(g, S) {
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = '#d6cfc8';
+  for (let y = 0, row = 0; y < S; y += 8, row++) {
+    g.fillRect(0, y, S, 1.5);
+    for (let x = (row % 2) * 8; x < S; x += 16) g.fillRect(x, y, 1.5, 8);
+  }
+  drawWindow(g, 24, 38, 80, 58);
+}
+
+// 타일: 밝은 네모 줄눈 + 창
+function drawTile(g, S) {
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = '#dcdad5';
+  for (let i = 0; i < S; i += 16) {
+    g.fillRect(i, 0, 1, S);
+    g.fillRect(0, i, S, 1);
+  }
+  drawWindow(g, 22, 36, 84, 62);
+}
+
+// 커튼월: 위는 밝은 하늘, 아래로 짙어지는 유리 + 얇은 세로 멀리언 + 층마다 가로 띠
+function drawGlass(g, S) {
+  const grad = g.createLinearGradient(0, 0, 0, S);
+  grad.addColorStop(0, '#dcecf8');
+  grad.addColorStop(0.55, '#8fb4d2');
+  grad.addColorStop(1, '#5d7f9c');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = 'rgba(255,255,255,0.18)'; // 비스듬한 반사
+  g.beginPath();
+  g.moveTo(10, S); g.lineTo(50, 0); g.lineTo(70, 0); g.lineTo(30, S);
+  g.fill();
+  g.fillStyle = '#c9d0d6';
+  for (const x of [0, 42, 85]) g.fillRect(x, 0, 3, S);
+  g.fillStyle = '#7d8893';
+  g.fillRect(0, 0, S, 7);
+}
+
 class MeshBuilder {
   constructor(withUv) {
     this.pos = []; this.nor = []; this.col = []; this.uv = withUv ? [] : null;
@@ -610,7 +677,7 @@ class MeshBuilder {
 // 벽(창문 텍스처)과 지붕·입구(텍스처 없음)를 각각 한 메시로.
 // 지붕을 텍스처 메시에 넣으면 멀리서 밉맵 평균 때문에 창문색이 섞여 어두워진다.
 function buildBuildings(list, anisotropy) {
-  const walls = new MeshBuilder(true);
+  const walls = { 콘크리트: new MeshBuilder(true), 벽돌: new MeshBuilder(true), 타일: new MeshBuilder(true), 커튼월: new MeshBuilder(true) };
   const plain = new MeshBuilder(false);
   const entrance = new THREE.Color(ENTRANCE_COLOR);
 
@@ -618,8 +685,10 @@ function buildBuildings(list, anisotropy) {
     const o = b.outline;
     if (o.length < 3) continue;
     const k = hash(b.id);
-    const wall = new THREE.Color(WALL_COLORS[k % WALL_COLORS.length]);
-    const roof = new THREE.Color(ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]);
+    const facade = FACADE_COLORS[b.facade] ? b.facade : '콘크리트';
+    // 외벽색: csv에 적은 색 > 외관 종류 기본색 > 건물마다 정해진 색. 지붕색: csv(정사영상) > 건물마다 정해진 색
+    const wall = new THREE.Color(b.wallColor || FACADE_COLORS[facade] || WALL_COLORS[k % WALL_COLORS.length]);
+    const roof = new THREE.Color(b.roofColor || ROOF_COLORS[(k >> 4) % ROOF_COLORS.length]);
     if (!b.inCampus) {
       wall.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
       roof.lerp(OUTSIDE_TINT, OUTSIDE_MIX);
@@ -638,7 +707,7 @@ function buildBuildings(list, anisotropy) {
       // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
       const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
       // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
-      walls.wall(p1, p2, base - BURY_M, h, n, wall, Math.max(1, Math.round(len / BAY_M)), base);
+      walls[facade].wall(p1, p2, base - BURY_M, h, n, wall, Math.max(1, Math.round(len / BAY_M)), base);
       if (!longest || len > longest.len) longest = { p1, p2, n, len };
     }
 
@@ -661,15 +730,22 @@ function buildBuildings(list, anisotropy) {
     }
   }
 
-  const wallMesh = new THREE.Mesh(walls.geometry(), new THREE.MeshLambertMaterial({
-    vertexColors: true, map: makeWindowTexture(anisotropy),
-  }));
-  const plainMesh = new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true }));
-  for (const m of [wallMesh, plainMesh]) {
+  const tex = (draw) => facadeTexture(draw, anisotropy);
+  const materials = {
+    콘크리트: new THREE.MeshLambertMaterial({ vertexColors: true, map: makeWindowTexture(anisotropy) }),
+    벽돌: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawBrick) }),
+    타일: new THREE.MeshLambertMaterial({ vertexColors: true, map: tex(drawTile) }),
+    // 커튼월: 유리 격자에 하늘이 비치는 그러데이션 + 반짝임, 얇은 멀리언
+    커튼월: new THREE.MeshPhongMaterial({ vertexColors: true, map: tex(drawGlass), shininess: 90, specular: '#ffffff' }),
+  };
+  const meshes = Object.entries(walls).filter(([, w]) => w.pos.length)
+    .map(([type, w]) => new THREE.Mesh(w.geometry(), materials[type]));
+  meshes.push(new THREE.Mesh(plain.geometry(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+  for (const m of meshes) {
     m.castShadow = true;
     m.receiveShadow = true;
   }
-  return [wallMesh, plainMesh];
+  return meshes;
 }
 
 // ---------- 나무 ----------

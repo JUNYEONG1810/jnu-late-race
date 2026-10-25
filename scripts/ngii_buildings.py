@@ -2,7 +2,7 @@
 
 사용법:  python scripts/ngii_buildings.py   (그다음 python scripts/building_floors.py 로 csv·campus.json 반영)
 - 층수: 수치지도 2025 1:5,000 건물(N3A_B0010000)의 '층수'를 OSM 건물과 겹치는 면적으로 짝지음(겹침 30% 이상).
-- 지붕색: 정사영상(2025, 25cm)에서 건물 외곽선 1.5m 안쪽 점들의 색 중앙값(태양광 패널·그림자에 덜 흔들리게).
+- 지붕색: 정사영상(2025, 25cm)에서 건물 외곽선 1.5m 안쪽 점들 중 밝기 가운데 60%의 평균, 화이트 밸런스 보정.
 - 외관(추정): 위에서 찍은 사진이라 외벽은 거의 안 보여 규칙으로만 추정한다.
   생활관 → 타일, 2015년 이후 지은 건물·유리 아트리움이 보이는 교육융합관 → 커튼월, 1990년 전에 지은 건물 → 벽돌, 나머지는 비움(기본 콘크리트).
 게임에는 사진이 아니라 색·층수·종류 값만 쓴다.
@@ -18,6 +18,8 @@ from building_floors import area, point_in_poly  # noqa: E402
 
 OUT = ngii.ROOT / "data" / "raw" / "ngii_buildings.json"
 CURTAIN_WALL = {"교육융합관"}
+# 정사영상은 청록빛이 돈다(아스팔트가 (106, 133, 137)). 아스팔트를 무채색 회색으로 보는 화이트 밸런스
+WHITE_BALANCE = (125.3 / 106, 125.3 / 133, 125.3 / 137)
 
 
 def facade_guess(b, tags):
@@ -109,7 +111,8 @@ def main():
             # 밝기 순 가운데 60%의 평균 (그림자·반사 빼기)
             cols.sort(key=sum)
             mid = cols[len(cols) // 5: len(cols) * 4 // 5] or cols
-            rec["roof"] = "#%02x%02x%02x" % tuple(round(sum(c[i] for c in mid) / len(mid)) for i in range(3))
+            rec["roof"] = "#%02x%02x%02x" % tuple(
+                min(255, round(sum(c[i] for c in mid) / len(mid) * WHITE_BALANCE[i])) for i in range(3))
             n_roof += 1
         f = facade_guess(b, tags_by_id.get(b["id"], {}))
         if f:

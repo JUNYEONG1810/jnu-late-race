@@ -15,6 +15,7 @@
 - 외관 칸(외관·외벽색·지붕색): 비우면 게임 기본(콘크리트, 건물마다 정해진 색). 외관은 커튼월/벽돌/콘크리트/타일.
   자동값은 지붕색(정사영상)과 외관(규칙으로 추정, 외관출처 "추정"). csv에서 값을 고치면 외관출처가 "직접"이 되고 다시 실행해도 유지.
   자동값을 지워 기본으로 되돌리려면 칸을 비우고 외관출처에 "직접"을 적는다.
+  (사람이 고쳤는지는 data/building-looks-auto.json에 남긴 지난번 자동값과 비교해 판단)
 - scripts/build_map.py도 끝에서 apply_floors()를 불러, 지도를 다시 만들어도 층수가 유지된다.
 Python 표준 라이브러리만 사용.
 """
@@ -27,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = ROOT / "data" / "building-floors.csv"
 VWORLD_PATH = ROOT / "data" / "raw" / "vworld_buildings.json"
 NGII_PATH = ROOT / "data" / "raw" / "ngii_buildings.json"
+LOOKS_AUTO_PATH = ROOT / "data" / "building-looks-auto.json"  # 지난번 자동값 (csv 값이 이와 다르면 사람이 고친 것)
 CAMPUS_PATH = ROOT / "data" / "campus.json"
 EARTH_R = 6378137.0
 MISSIONS = ["농생대 1호관", "중앙도서관", "제1학생마루", "생활관 9C동 예향학사", "공과대 2호관"]
@@ -159,6 +161,8 @@ def apply_floors(campus, verbose=True):
     matched = match_vworld(buildings, vw) if vw else {}
     previous = read_manual()
     looks_prev = read_looks()
+    auto_prev = json.loads(LOOKS_AUTO_PATH.read_text(encoding="utf-8")) if LOOKS_AUTO_PATH.exists() else {}
+    auto_now = {}
     ngii = json.loads(NGII_PATH.read_text(encoding="utf-8")) if NGII_PATH.exists() else {}
     rows, stats = [], {"직접": 0, "브이월드": 0, BULK_LABEL: 0, "OSM": 0, "수치지도": 0, "없음": 0}
     overridden = 0
@@ -198,8 +202,10 @@ def apply_floors(campus, verbose=True):
         b["height"] = height_of(b["floors"])
         # 외관: 자동값(외관 추정, 지붕색 정사영상) vs csv. 외관출처가 "직접"이거나 자동값과 다르면 사람이 고친 값
         auto = (ng.get("facade", ""), "", ng.get("roof", ""))
+        auto_now[b["id"]] = list(auto)
         old = looks_prev.get(b["id"])
-        if old and (old[3] == "직접" or (any(old[:3]) and old[:3] != auto)):
+        was_auto = tuple(auto_prev.get(b["id"], old[:3] if old else auto))  # 기록이 없으면 지난 csv 값을 자동값으로 본다
+        if old and (old[3] == "직접" or old[:3] != was_auto):
             look, look_src = old[:3], "직접"
         else:
             look, look_src = auto, ("추정" if auto[0] else "")
@@ -214,6 +220,7 @@ def apply_floors(campus, verbose=True):
             stats[src] += 1
             rows.append({"name": b["name"], "height": b["height"], "floors": floors or "", "source": src,
                          "id": b["id"], "area": round(area(b["outline"])), "look": look, "lookSrc": look_src})
+    LOOKS_AUTO_PATH.write_text(json.dumps(auto_now, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     order = {n: i for i, n in enumerate(MISSIONS)}
     rows.sort(key=lambda r: (order.get(r["name"], len(order)), -r["area"]))
     with CSV_PATH.open("w", encoding="utf-8-sig", newline="") as f:  # 엑셀에서 한글이 깨지지 않게 BOM
