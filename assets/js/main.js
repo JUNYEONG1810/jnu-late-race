@@ -385,7 +385,7 @@ async function start() {
   const [campus, lawns, widths, styles, monuments, , farTerrain] = await Promise.all([
     count(loadCampus('data/campus.json?v=9')), count(loadCampus('data/lawns.json?v=1')), count(loadCampus('data/road-widths.json?v=1')),
     count(loadCampus('data/building-styles.json?v=8')), count(loadCampus('data/monuments.json?v=4')),
-    count(loadTerrain('data/terrain.json?v=1')), count(loadCampus('data/far-terrain.json?v=1')),
+    count(loadTerrain('data/terrain.json?v=4')), count(loadCampus('data/far-terrain.json?v=1')),
   ]);
   loadingUi.set(0.5, '땅과 건물 만드는 중…');
   await breathe();
@@ -405,7 +405,7 @@ async function start() {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
     groundPx: GROUND_PX[quality],
     terrainFar: 1, // 지형 격자 바깥은 먼 지형(바깥 풍경)이 채운다
-    drape: [2.5, 2.5, 2.5], // 차도 메시 간격: 지금 지형(AWS, 부드러움)에서는 v7과 같은 2.5m 한 가지 (정밀 지형은 3단계)
+    // 차도 메시 간격: 5m (지형이 급히 꺾이는 곳 2.5m, 둥근 이음 3m). 차도 위 땅은 scripts/smooth_road_terrain.py로 미리 부드럽게
     treeKinds: false, wallShade: false, // 나무 다양화·벽 아래 음영은 4단계
   });
   world.campus = campus;
