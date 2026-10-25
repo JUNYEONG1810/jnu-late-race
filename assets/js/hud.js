@@ -150,6 +150,19 @@ export class Hud {
     this.lastTimer = null;
   }
 
+  // 연출 중에는 게임 HUD를 숨기고 말풍선만
+  setCinematic(on) {
+    document.body.classList.toggle('cine', on);
+  }
+
+  // "F다." 같은 순간에 화면 흔들림
+  shake() {
+    document.body.classList.remove('shake');
+    void document.body.offsetWidth; // 애니메이션 다시 시작
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 650);
+  }
+
   setLateMode(on) {
     document.body.classList.toggle('late', on);
     if (!on) {

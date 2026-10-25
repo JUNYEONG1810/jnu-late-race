@@ -90,6 +90,10 @@ addEventListener('keydown', (e) => {
   lateMode?.onKey(e.code);
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('pointerdown', () => {
+  unlockAudio();
+  lateMode?.advance(); // 연출 대사 넘기기
+});
 addEventListener('blur', () => keys.clear());
 
 function readInput() {
@@ -128,7 +132,7 @@ async function start() {
 
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
-  lateMode = new LateMode({ scene, car, hud, campus, camera, rig });
+  lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
 
   setQuality(quality);
   rig.update(0, car);

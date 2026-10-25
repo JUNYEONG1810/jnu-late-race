@@ -279,6 +279,8 @@ function buildBuildings(list, anisotropy) {
       const off = 0.06;
       const q = (t) => [p1[0] + (p2[0] - p1[0]) * t + n[0] * off, p1[1] + (p2[1] - p1[1]) * t + n[2] * off];
       plain.wall(q(0.5 - w), q(0.5 + w), 0, 3, n, entrance);
+      // 연출(부엉이 교수님 등장)에서 쓰도록 입구 위치와 바깥 방향을 기록
+      b.entrance = { x: (p1[0] + p2[0]) / 2, z: (p1[1] + p2[1]) / 2, nx: n[0], nz: n[2] };
     }
   }
 
@@ -390,6 +392,14 @@ function buildTrees(campus) {
     // 1 = 전부, 0.5 = 절반
     setDensity(f) {
       for (const [mesh] of meshes) mesh.count = Math.floor(mesh.userData.total * f);
+    },
+    // (x, z) 둘레 r 안의 나무를 없앤다 (연출 카메라를 가리지 않게)
+    clearAround(x, z, r) {
+      const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+      for (const [mesh, list] of meshes) {
+        list.forEach(([tx, tz], i) => { if (Math.hypot(tx - x, tz - z) < r) mesh.setMatrixAt(i, zero); });
+        mesh.instanceMatrix.needsUpdate = true;
+      }
     },
   };
 }

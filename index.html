@@ -4,18 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>전남대 지각 레이스</title>
-  <link rel="stylesheet" href="assets/css/style.css?v=4">
+  <link rel="stylesheet" href="assets/css/style.css?v=5">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=4",
-      "./assets/js/car.js": "./assets/js/car.js?v=4",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=4",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=4",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=4",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=4",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=4"
+      "./assets/js/map.js": "./assets/js/map.js?v=5",
+      "./assets/js/car.js": "./assets/js/car.js?v=5",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=5",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=5",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=5",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=5",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=5",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=5",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=5",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=5"
     }
   }
   </script>
@@ -69,6 +72,12 @@
       <div id="countdown"></div>
     </div>
 
+    <div id="speech" class="hidden">
+      <div class="speech-name"></div>
+      <div class="speech-text"></div>
+      <div class="speech-more">▼</div>
+    </div>
+
     <div id="pause-menu" class="overlay hidden">
       <div class="dialog panel">
         <h2>일시정지</h2>
@@ -91,6 +100,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=4"></script>
+  <script type="module" src="assets/js/main.js?v=5"></script>
 </body>
 </html>

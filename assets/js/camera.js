@@ -15,6 +15,12 @@ export class CameraRig {
     this.look = new THREE.Vector3();
     this.camHeading = 0;
     this.snap = true;
+    this.cine = null; // 연출 카메라: { pos, look, fov }를 넣으면 그대로 따른다
+  }
+
+  // 연출이 끝나면 null. 지금 연출 위치에서 부드럽게 원래 시점으로 돌아간다
+  setCinematic(pose) {
+    this.cine = pose;
   }
 
   nextMode() {
@@ -24,6 +30,17 @@ export class CameraRig {
   }
 
   update(dt, car) {
+    if (this.cine) {
+      const { pos, look, fov } = this.cine;
+      this.pos.copy(pos);
+      this.look.copy(look);
+      this.camHeading = car.heading;
+      this.camera.position.copy(pos);
+      this.camera.lookAt(look);
+      if (fov && this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+      car.setCockpitView(false);
+      return;
+    }
     const id = CAMERA_MODES[this.mode].id;
     const cx = car.pos.x, cz = car.pos.y;
 
