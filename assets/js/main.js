@@ -17,8 +17,12 @@ const SKY_HORIZON = new THREE.Color('#e4f3ff');
 const SHOW_FPS = ['1', 'true', ''].includes(new URLSearchParams(location.search).get('fps'));
 // 굴착기 색 (첫 화면에서 고름)
 const CAR_COLORS = ['#f5b82e', '#e8503a', '#3a7be8', '#4cb15a', '#f08a24', '#e86fa8'];
-// 기본 그래픽 품질 (정문 출발 화면에서 품질 높음 fps를 재서 정함)
-const DEFAULT_QUALITY = 'high';
+// 시작 품질: 램 8GB·내장 그래픽 노트북에서도 버티도록 처음엔 "낮음" (사용자가 고른 품질은 브라우저에 기억해 다음에도 씀)
+const START_QUALITY = 'low';
+const DPR_MAX = 1.25; // 품질 높음의 화면 해상도 배율 상한 (낮음은 1)
+const GROUND_PX = { high: 3072, low: 2048 }; // 바닥 그림 해상도 (높음 4096 → 3072: GPU 약 76MB → 43MB)
+// 저사양 자동 품질: 첫 화면이 뜬 뒤 약 3초 동안 fps가 이보다 낮으면 한 단계 가볍게 (사용자가 고른 품질은 그대로)
+const AUTO_FPS = 45;
 // 항상 이름표를 띄울 주요 건물: [OSM 이름, 화면에 보일 이름]
 const LANDMARKS = [
   ['중앙도서관'], ['공과대 2호관'], ['농생대 1호관'], ['제1학생마루', '제1학생회관'],
@@ -40,7 +44,7 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 50
 scene.add(new THREE.HemisphereLight('#dceeff', '#b8b2a2', 1.6));
 const sun = new THREE.DirectionalLight('#fff6e8', 2.2);
 const SUN_OFFSET = new THREE.Vector3(70, 120, 50);
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(1024, 1024); // 2048 → 1024: 그림자 맵 메모리 1/4 (품질 높음에서만 그림자)
 Object.assign(sun.shadow.camera, { left: -90, right: 90, top: 90, bottom: -90, near: 10, far: 400 });
 sun.shadow.bias = -0.0003;
 sun.shadow.normalBias = 0.05;
@@ -69,22 +73,56 @@ function makeSky() {
 
 // ---------- 그래픽 품질 ----------
 
-let quality = DEFAULT_QUALITY;
-try { quality = localStorage.getItem('quality') || DEFAULT_QUALITY; } catch {}
+let quality = START_QUALITY;
+let userQuality = false; // 사용자가 직접 고른 품질이 있으면 자동으로 바꾸지 않음
+try {
+  const saved = localStorage.getItem('quality');
+  if (saved === 'low' || saved === 'high') { quality = saved; userQuality = true; }
+} catch {}
+let renderScale = 1; // 자동 품질이 "낮음"에서도 느릴 때만 0.8
 
-function setQuality(q) {
+// byUser: 왼쪽 위 버튼으로 고름 → 기억하고, 자동 품질은 손대지 않음
+function setQuality(q, byUser = false) {
   quality = q;
   const high = q === 'high';
-  renderer.setPixelRatio(high ? Math.min(devicePixelRatio, 1.5) : 1);
+  if (byUser) {
+    userQuality = true;
+    renderScale = 1;
+    try { localStorage.setItem('quality', q); } catch {}
+  }
+  renderer.setPixelRatio(high ? Math.min(devicePixelRatio, DPR_MAX) : renderScale);
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = high;
   sun.castShadow = high;
   world.trees.setDensity(high ? 1 : 0.5);
-  world.ground.setResolution(high ? 4096 : 2048); // 바닥 그림 해상도
+  world.ground.setResolution(GROUND_PX[q]); // 바닥 그림 해상도
   world.landscape.lamps.visible = high; // 가로등은 품질 높음에서만
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
-  try { localStorage.setItem('quality', q); } catch {}
+}
+
+// 첫 화면이 뜬 뒤 0.5~3.5초의 평균 fps가 낮으면 한 단계 가볍게: 높음 → 낮음, 낮음 → 해상도 배율 0.8
+const autoQ = { start: 0, frames: 0, done: false };
+function checkAutoQuality() {
+  if (autoQ.done) return;
+  const now = performance.now();
+  if (!autoQ.start) autoQ.start = now + 500;
+  if (now < autoQ.start) return;
+  autoQ.frames++;
+  if (now < autoQ.start + 3000) return;
+  autoQ.done = true;
+  const fps = (autoQ.frames * 1000) / (now - autoQ.start);
+  window.__autoFps = Math.round(fps); // 확인용
+  if (fps >= AUTO_FPS || userQuality) return;
+  if (quality === 'high') {
+    setQuality('low');
+    hud.toast('화면이 느려서 그래픽을 "낮음"으로 바꿨어요', 3500);
+  } else if (renderScale > 0.8) {
+    renderScale = 0.8;
+    renderer.setPixelRatio(renderScale);
+    renderer.setSize(innerWidth, innerHeight);
+    hud.toast('화면이 느려서 해상도를 조금 낮췄어요 (왼쪽 위 "낮음"을 누르면 원래대로)', 4000);
+  }
 }
 
 // ---------- 입력 ----------
@@ -151,7 +189,7 @@ const NO_INPUT = { up: false, down: false, left: false, right: false, drift: fal
 
 // ---------- 시작 ----------
 
-const hud = new Hud({ onQuality: setQuality, onSound: toggleSound });
+const hud = new Hud({ onQuality: (q) => setQuality(q, true), onSound: toggleSound });
 // 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬)
 const settings = { walkCamAuto: false, chatter: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
@@ -289,19 +327,65 @@ function setWalkingUi(on) {
   document.body.classList.toggle('walking', on);
 }
 
+// ---------- 로딩 화면: 진행률 막대 + 조작 팁 ----------
+
+const LOADING_TIPS = [
+  '방향키나 WASD로 운전, Space로 드리프트!',
+  'Shift를 누르고 있으면 부스터. 게이지는 저절로 차요.',
+  '지각 모드는 L. 3분 안에 미션 4곳을 들르고 공대 2호관으로!',
+  '미션 장소의 원 안에 멈춘 뒤 E를 누르세요.',
+  '자유 주행에서 멈춘 채 E를 누르면 학생이 내려서 걸어요.',
+  '걷는 중 H는 음메~, 1·2·3은 감정 표현.',
+  'C로 시점을 바꿀 수 있어요. M은 소리 켜기/끄기.',
+  '화면이 느리면 왼쪽 위 그래픽 "낮음"을 눌러 보세요.',
+];
+const loadingUi = (() => {
+  const el = document.getElementById('loading');
+  const fill = el.querySelector('.ld-fill'), text = el.querySelector('.ld-text'), tip = el.querySelector('.ld-tip');
+  let i = Math.floor(Math.random() * LOADING_TIPS.length);
+  const showTip = () => { tip.textContent = `팁: ${LOADING_TIPS[i++ % LOADING_TIPS.length]}`; };
+  showTip();
+  const timer = setInterval(showTip, 3200);
+  let failed = false;
+  return {
+    set(p, label) {
+      if (failed) return; // 실패한 뒤 늦게 끝난 다운로드가 안내를 덮지 않게
+      fill.style.width = `${Math.round(p * 100)}%`;
+      text.textContent = `${label} ${Math.round(p * 100)}%`;
+    },
+    fail(msg) {
+      failed = true;
+      clearInterval(timer);
+      el.classList.add('failed');
+      text.textContent = '불러오지 못했어요. 새로고침해 주세요.';
+      tip.textContent = msg;
+    },
+    done() { clearInterval(timer); el.remove(); },
+  };
+})();
+// 무거운 단계 사이에 화면을 한 번 그릴 틈 (진행률 막대가 움직이게)
+const breathe = () => new Promise((r) => setTimeout(r, 0));
+
 async function start() {
+  let got = 0;
+  const count = (p) => p.then((v) => { got++; loadingUi.set(got * 0.12, '캠퍼스 지도 받는 중…'); return v; });
+  loadingUi.set(0, '캠퍼스 지도 받는 중…');
   const [campus, lawns, widths] = await Promise.all([
-    loadCampus('data/campus.json?v=8'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadTerrain('data/terrain.json?v=1'),
+    count(loadCampus('data/campus.json?v=8')), count(loadCampus('data/lawns.json?v=1')), count(loadCampus('data/road-widths.json?v=1')),
+    count(loadTerrain('data/terrain.json?v=1')),
   ]);
+  loadingUi.set(0.5, '땅과 건물 만드는 중…');
+  await breathe();
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)
   campus.lawns = lawns; // 정사영상에서 찾은 잔디밭 (scripts/ngii_lawn.py)
   removeReplacedBuildings(campus); // 진입로 차단기 지붕을 막던 건물 → 부스·차단기
   world = buildMap(scene, campus, {
     anisotropy: renderer.capabilities.getMaxAnisotropy(), // 비스듬히 보이는 바닥 그림이 번지지 않게 장치 최대값
-    groundPx: quality === 'high' ? 4096 : 2048,
+    groundPx: GROUND_PX[quality],
   });
   collider = new Collider(campus);
+  loadingUi.set(0.72, '나무와 조형물 놓는 중…');
+  await breathe();
   world.landscape = buildLandscape(scene, campus);
   for (const o of world.gateObstacles) collider.addObstacle(o);
   for (const o of world.landscape.obstacles) collider.addObstacle(o);
@@ -317,6 +401,8 @@ async function start() {
 
   const { position, dir } = campus.spawn;
   car.place(position[0], position[1], dir[0], dir[1]);
+  loadingUi.set(0.88, '굴착기에 시동 거는 중…');
+  await breathe();
   lateMode = new LateMode({ scene, car, hud, campus, camera, rig, trees: world.trees });
   walker = new Walker(car, { campus, collider });
   walker.onStep = playStep;
@@ -330,10 +416,12 @@ async function start() {
   setQuality(quality);
   updateTitleCamera(0);
   rig.update(0, car);
-  document.getElementById('loading').remove();
+  loadingUi.set(1, '다 됐어요!');
+  loadingUi.done();
   window.game = { car, rig, collider, campus, renderer, world, lateMode, walker }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
+  setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
 }
 
 // 잰 차도 폭·차로 수·분리대를 OSM 도로에 덮어쓴다. 정문을 지나는 도로가 넓어지면 정문 기둥 사이도 넓힌다
@@ -367,6 +455,7 @@ let fpsFrames = 0, fpsTime = 0;
 
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.1);
+  checkAutoQuality();
   const input = onTitle || lateMode.inputLocked ? NO_INPUT : readInput();
   if (onTitle) updateTitleCamera(clock.elapsedTime);
 
@@ -436,5 +525,5 @@ addEventListener('resize', () => {
 
 start().catch((err) => {
   console.error(err);
-  document.getElementById('loading').textContent = `불러오기 실패: ${err.message} (python -m http.server 8000으로 열었는지 확인)`;
+  loadingUi.fail(`(${err.message}) 내 컴퓨터에서 열었다면 python -m http.server 8000으로 열었는지 확인해 주세요.`);
 });

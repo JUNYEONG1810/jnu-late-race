@@ -53,9 +53,9 @@ export class LateMode {
     this.marker = buildMarker();
     scene.add(this.marker.group);
 
-    this.professor = new Professor();
-    this.professor.object.visible = false;
-    scene.add(this.professor.object);
+    // 교수님 캐릭터는 만드는 데 0.5초쯤 걸려 첫 로딩에서 빼고, 첫 화면이 뜬 뒤(또는 지각 모드 시작 때) 만든다
+    this.scene = scene;
+    this.professor = null;
     this.bubble = new SpeechBubble(SPEAKER);
     this.stage = this.makeStage();
     // 교수님과 연출 카메라 사이의 나무를 치운다
@@ -93,6 +93,13 @@ export class LateMode {
     return { from, to, n: new THREE.Vector3(e.nx, 0, e.nz), camPos, lookY: to.y + 1.5 * PROFESSOR.scale };
   }
 
+  ensureProfessor() {
+    if (this.professor) return;
+    this.professor = new Professor();
+    this.professor.object.visible = false;
+    this.scene.add(this.professor.object);
+  }
+
   get active() { return this.state !== 'off'; }
   // 차 입력을 막는 상태
   get inputLocked() { return !['off', 'playing'].includes(this.state); }
@@ -120,6 +127,7 @@ export class LateMode {
     this.showTarget();
 
     const S = this.stage;
+    this.ensureProfessor();
     this.professor.object.visible = true;
     this.professor.place(S.from.x, S.from.z, S.n.x, S.n.z);
     this.professor.pose = 'rest';
@@ -138,7 +146,7 @@ export class LateMode {
     this.hud.clearPins();
     this.state = 'off';
     this.marker.group.visible = false;
-    this.professor.object.visible = false;
+    if (this.professor) this.professor.object.visible = false;
     this.bubble.hide();
     this.rig.setCinematic(null);
     this.hud.setCinematic(false);

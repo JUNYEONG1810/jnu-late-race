@@ -66,8 +66,25 @@ export function buildMap(scene, campus, { anisotropy = 1, groundPx = 4096 } = {}
   const gate = buildGate(campus.spawn);
   group.add(gate.group);
 
+  freeAfterUpload(group); // 정점 배열은 GPU에 올린 뒤 램에서 해제 (나무 위치 행렬은 그대로)
   scene.add(group);
   return { group, trees, gateObstacles: gate.obstacles, ground };
+}
+
+// 메모리 절약: 바뀌지 않는 메시의 정점·색·uv·인덱스 배열을 GPU에 올린 직후 자바스크립트 쪽에서 버린다.
+// (내장 그래픽은 GPU 메모리도 램을 쓰므로 같은 데이터가 두 번 램을 차지하던 것을 한 번으로)
+// 경계 구는 미리 계산해 둔다. 나중에 정점을 다시 읽거나 고치는 메시에는 쓰지 않는다(geometry.userData.keepArrays).
+const dropArray = function () { this.array = null; };
+export function freeAfterUpload(obj) {
+  obj.traverse((o) => {
+    const g = o.geometry;
+    if (!g || g.userData.keepArrays) return;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if (!g.boundingBox) g.computeBoundingBox();
+    for (const a of Object.values(g.attributes)) a.onUpload(dropArray);
+    if (g.index) g.index.onUpload(dropArray);
+  });
+  return obj;
 }
 
 // ---------- 지형 + 바닥 그림 ----------
@@ -79,7 +96,9 @@ function buildGround(campus, px, anisotropy) {
     z0: Math.min(...zs) - GROUND_MARGIN, z1: Math.max(...zs) + GROUND_MARGIN,
   };
   const material = new THREE.MeshLambertMaterial();
+  let painted = 0;
   const paint = (size) => {
+    painted = size;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = Math.round((size * (bounds.z1 - bounds.z0)) / (bounds.x1 - bounds.x0));
@@ -87,6 +106,8 @@ function buildGround(campus, px, anisotropy) {
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = anisotropy;
+    tex.userData.size = [canvas.width, canvas.height]; // 해제한 뒤에도 크기를 알 수 있게 (메모리 측정용)
+    tex.onUpdate = () => { canvas.width = canvas.height = 1; }; // GPU에 올린 뒤 원본 캔버스(최대 40MB)를 해제
     material.map?.dispose();
     material.map = tex;
     material.needsUpdate = true;
@@ -96,9 +117,9 @@ function buildGround(campus, px, anisotropy) {
   mesh.receiveShadow = true;
   return {
     mesh, bounds,
-    // 품질을 바꾸면 바닥 그림 해상도도 바꾼다 (높음 4096, 낮음 2048)
+    // 품질을 바꾸면 바닥 그림 해상도도 바꾼다 (높음 3072, 낮음 2048)
     setResolution(size) {
-      if (material.map.image.width !== size) paint(size);
+      if (painted !== size) paint(size);
     },
   };
 }
