@@ -1,6 +1,6 @@
 // 조경 소품: 벤치·자전거 보관소·버스정류장, 조형물·기념물, 가로등.
 // 소품과 조형물은 종류마다 한 메시로 합치고(정점 색), 가로등은 InstancedMesh.
-// 기념물은 인물 모양을 만들지 않고 단정한 비석·받침대·탑으로만 표현한다.
+// 기념물은 단정한 비석·받침대·탑으로. 흉상·동상만 이목구비 없는 매끈한 조각으로(마네킹 같은 인물 형상은 쓰지 않음).
 import * as THREE from 'three';
 import { mulberry32, distToSegment, pointInPolygon } from './map.js';
 import { heightAt } from './terrain.js';
@@ -64,18 +64,22 @@ export function buildLandscape(scene, campus) {
 
   // 기념물: data/monuments.json(형태·크기·근거)이 있으면 그것으로. 부딪혀도 조용히 멈추는 충돌(quietObstacles)
   const quietObstacles = [];
+  const smooth = new PartBuilder(); // 흉상·동상: 매끈한 면(부드러운 음영)
   const monList = campus.monumentsData || (campus.monuments || []).map((m) => ({ ...m, form: m.shape }));
   for (const m of monList) {
     const [x, z] = m.p;
     if (m.form !== 'plaza' && roads.onRoad(x, z)) { removed++; continue; }
     const near = roads.nearest(x, z, 30, false);
     const yaw = m.angle != null ? (m.angle * Math.PI) / 180 : near ? Math.atan2(near.x - x, near.z - z) : 0;
-    const { top, half } = monument(parts, m, x, z, yaw);
+    const { top, half } = monument(parts, m, x, z, yaw, smooth, group);
     if (half > 0) quietObstacles.push(square(x, z, half, yaw));
     // 이름표는 OSM의 공식 이름만 (설명 문구 없음)
     if (m.name && m.form !== 'plaza') labels.push({ text: m.name, x, y: heightAt(x, z) + top + 1.2, z, maxDist: m.form === 'tower' ? 160 : MONUMENT_LABEL_DIST });
   }
   group.add(buildPavement(monList));
+  const statueMesh = smooth.mesh(false);
+  statueMesh.castShadow = statueMesh.receiveShadow = true;
+  group.add(statueMesh);
 
   const propMesh = parts.mesh();
   propMesh.castShadow = propMesh.receiveShadow = true;
@@ -254,7 +258,7 @@ function busShelter(b, x, z, yaw) {
 // 기념물·조형물 (data/monuments.json: 형태·크기·재료와 근거 등급).
 // 근거가 없는 값은 단순한 기본 형태·크기. 인물상은 실제 사람 비례로, 얼굴은 눈·입 없는 매끈한 조각으로만.
 // 돌려주는 값: 꼭대기 높이, 충돌 사각형 반 폭(0이면 충돌 없음)
-function monument(b, m, x, z, yaw) {
+function monument(b, m, x, z, yaw, smooth, deco) {
   const T = b.frame(x, z, yaw);
   const c = m.color || STONE;
   switch (m.form) {
@@ -263,12 +267,10 @@ function monument(b, m, x, z, yaw) {
       const base = m.baseColor || STONE, H = m.height || 17;
       const P = H * 0.36, top = H * 0.87;
       b.box(T, 0, (P - 1) / 2, 0, 3.6, P + 1, 3.6, base);   // 받침 (비탈에서 뜨지 않게 아래로 1m 더)
-      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {   // 받침 위 네 귀퉁이 비스듬한 돌 판
-        b.boxRot(T, sx * 1.45, P + 0.45, sz * 1.45, 1.1, 0.9, 0.3, 0, Math.atan2(sx, sz), 0.2, base);
-      }
-      b.box(T, 0, P + 0.45, 1.2, 1.2, 0.9, 0.3, base);      // 앞가운데 세운 돌 판
+      b.box(T, 0, P + 0.12, 0, 3.9, 0.24, 3.9, base);       // 받침 머릿돌 (살짝 내민 판)
+      b.box(T, 0, P + 0.24 + 0.3, 0, 2.6, 0.6, 2.6, base);  // 몸체를 받치는 낮은 단
       for (let k = 0; k < 3; k++) {                          // 마디 진 몸체 셋이 서로 감기며 올라감
-        for (let y = P; y < top; y += 1.7) {                 // 사진에서 기둥마다 마디 약 5개
+        for (let y = P + 0.84; y < top; y += 1.7) {                 // 사진에서 기둥마다 마디 약 5개
           const a = k * (Math.PI * 2 / 3) + y * 0.3;
           const px = Math.cos(a) * 0.55, pz = Math.sin(a) * 0.55;
           b.cyl(T, px, y, pz, 0.28, 0.36, 1.75, c, 8);
@@ -286,28 +288,36 @@ function monument(b, m, x, z, yaw) {
       }
       return { top: H, half: 1.8 };
     }
-    case 'bust': {   // 받침대 + 실물 크기 흉상 (얼굴 표현 없음)
+    case 'bust': {   // 받침대 + 실물 크기 고전 흉상 (이목구비 없음, 매끈한 면)
       b.box(T, 0, 0.15, 0, 1.2, 0.3, 1.2, STONE);
       b.box(T, 0, 0.95, 0, 0.7, 1.3, 0.7, GRANITE);
-      const y0 = 1.6;
-      b.cylScaled(T, 0, y0, 0, 0.33, 0.24, 0.3, c, 1, 0.55);  // 가슴 (아래가 반듯이 잘린 흉상, 위로 어깨까지 넓어짐)
-      b.ell(T, 0, y0 + 0.3, 0, 0.33, 0.13, 0.18, c);       // 둥근 어깨
-      b.cyl(T, 0, y0 + 0.38, 0, 0.065, 0.075, 0.14, c, 10); // 목
-      b.ell(T, 0, y0 + 0.64, 0.01, 0.105, 0.135, 0.12, c); // 머리
-      return { top: y0 + 0.8, half: 0.7 };
+      b.box(T, 0, 1.63, 0, 0.8, 0.06, 0.8, STONE);         // 받침대 머릿돌
+      smooth.add(lathe(BUST_PROFILE, BUST_DEPTH), shift(T, 0, 1.66, 0), c);
+      return { top: 1.66 + 0.8, half: 0.7 };
     }
-    case 'statue': { // 받침대 + 선 자세 인물 (사람 키, 얼굴 표현 없음)
+    case 'statue': { // 받침대 + 긴 외투를 입고 선 동상 (사람 키, 이목구비 없음, 매끈한 면)
       b.box(T, 0, 0.2, 0, 1.6, 0.4, 1.6, STONE);
       b.box(T, 0, 1.0, 0, 1.2, 1.2, 1.2, GRANITE);
-      figure(b, T, 0, 1.6, 0, c);
-      return { top: 3.4, half: 0.8 };
+      b.box(T, 0, 1.63, 0, 1.3, 0.06, 1.3, STONE);
+      const S = shift(T, 0, 1.66, 0);
+      smooth.add(new THREE.CylinderGeometry(0.34, 0.36, 0.06, 24).scale(1, 1, 0.8).translate(0, 0.03, 0), S, c); // 동상 발판
+      smooth.add(lathe(STATUE_PROFILE, STATUE_DEPTH), S, c);
+      for (const sx of [-1, 1]) {                           // 팔: 외투 소매가 몸에 붙어 내려옴
+        smooth.add(new THREE.CapsuleGeometry(0.065, 0.5, 6, 12).scale(1, 1, 0.9).rotateZ(sx * 0.07).translate(sx * 0.255, 1.12, 0.01), S, c);
+      }
+      return { top: 1.66 + 1.75, half: 0.8 };
     }
-    case 'group': {  // 원형 받침 + 인물 실루엣 여럿 (사람 키, 나란히 앞을 향해 걷는 자세 없이 곧게 섬)
+    case 'marker': { // 정사영상의 둥근 받침 + 이름을 새긴 낮은 판석 하나 (인물 형상은 근거 없어 넣지 않음)
       const r = (m.base?.d || 4) / 2, h = m.base?.h || 0.5;
-      b.cyl(T, 0, -0.5, 0, r, r, h + 0.5, m.base?.color || STONE, 24);
-      const n = m.figures || 3;
-      for (let i = 0; i < n; i++) figure(b, T, (i - (n - 1) / 2) * 0.85, h, (i % 2) * 0.35 - 0.15, c);
-      return { top: h + 1.8, half: r };
+      b.cyl(T, 0, -0.5, 0, r, r, h + 0.5, m.base?.color || STONE, 32);
+      b.cyl(T, 0, h, 0, r - 0.3, r - 0.25, 0.05, '#b4b1a8', 32); // 받침 윗면 안쪽 단
+      const tilt = -0.32;                                   // 뒤로 살짝 눕힌 판석
+      b.boxRot(T, 0, h + 0.08 + 0.32, 0, 1.4, 0.7, 0.24, tilt, 0, 0, GRANITE);
+      if (m.name) {
+        const I = new THREE.Matrix4().makeRotationX(tilt).setPosition(0, h + 0.08 + 0.32, 0).multiply(new THREE.Matrix4().makeTranslation(0, 0, 0.125));
+        deco.add(inscription(m.name, 1.2, 0.5, T.clone().multiply(I)));
+      }
+      return { top: h + 0.9, half: r };
     }
     case 'stoneFigure': { // 석인(문인석 등): 둥근 몸돌 + 머리 + 납작한 관
       b.box(T, 0, 0.08, 0, 0.8, 0.16, 0.7, STONE);
@@ -359,13 +369,69 @@ function monument(b, m, x, z, yaw) {
   }
 }
 
-// 서 있는 사람 실루엣 (키 약 1.75m): 다리·외투 몸통·팔·목·매끈한 머리. 과장 없는 실제 비례
-function figure(b, T, x, y, z, c) {
-  for (const s of [-1, 1]) b.cyl(T, x + s * 0.1, y, z, 0.075, 0.085, 0.85, c, 8);         // 다리
-  b.cylScaled(T, x, y + 0.75, z, 0.2, 0.24, 0.72, c, 1, 0.62);                              // 몸통
-  for (const s of [-1, 1]) b.cyl(T, x + s * 0.27, y + 0.85, z, 0.05, 0.06, 0.6, c, 8);      // 팔
-  b.cyl(T, x, y + 1.47, z, 0.055, 0.06, 0.1, c, 8);                                         // 목
-  b.ell(T, x, y + 1.64, z, 0.1, 0.125, 0.11, c);                                            // 머리
+// 흉상 옆선(반지름, 높이): 아래가 반듯이 잘린 가슴 → 넓은 어깨 → 목 → 달걀 모양 머리 (약 0.8m, 머리 높이 약 0.25m)
+const BUST_PROFILE = [
+  [0, 0], [0.23, 0], [0.27, 0.06], [0.31, 0.17], [0.34, 0.27], [0.335, 0.33], [0.3, 0.38], [0.22, 0.42],
+  [0.13, 0.45], [0.078, 0.475], [0.075, 0.52], [0.088, 0.55], [0.103, 0.6], [0.11, 0.66], [0.106, 0.72],
+  [0.09, 0.765], [0.058, 0.795], [0, 0.805],
+];
+// 높이별 앞뒤 두께 비율: 가슴·어깨는 납작하게, 목에서 머리로 갈수록 둥글게(머리는 앞뒤로 조금 긺)
+const BUST_DEPTH = (y) => THREE.MathUtils.lerp(0.55, 1.12, THREE.MathUtils.smoothstep(y, 0.42, 0.53));
+
+// 긴 외투를 입고 선 사람 (키 약 1.75m: 외투 자락 → 허리 → 가슴 → 어깨 → 목 → 머리)
+const STATUE_PROFILE = [
+  [0, 0.06], [0.27, 0.06], [0.26, 0.3], [0.235, 0.6], [0.215, 0.9], [0.225, 1.08], [0.245, 1.25], [0.25, 1.36],
+  [0.23, 1.42], [0.15, 1.46], [0.06, 1.5], [0.055, 1.54], [0.08, 1.58], [0.093, 1.64], [0.095, 1.7],
+  [0.085, 1.75], [0.055, 1.79], [0, 1.8],
+];
+const STATUE_DEPTH = (y) => THREE.MathUtils.lerp(0.6, 1.1, THREE.MathUtils.smoothstep(y, 1.46, 1.56));
+
+// 옆선을 돌린 매끈한 몸(정점 법선 유지). depth(y): 앞뒤(z) 두께 비율
+function lathe(profile, depth) {
+  const g = new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), 28);
+  const p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    const k = depth(p.getY(i));
+    p.setZ(i, p.getZ(i) * k);
+    v.fromBufferAttribute(n, i);
+    v.z /= k;
+    v.normalize();
+    n.setXYZ(i, v.x, v.y, v.z);
+  }
+  return g;
+}
+
+function shift(T, x, y, z) {
+  return T.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z));
+}
+
+// 판석에 새긴 이름: 돌 색 바탕에 짙은 글자 (캔버스 텍스처)
+function inscription(text, w, h, M) {
+  const cv = document.createElement('canvas');
+  cv.width = 512;
+  cv.height = Math.round(512 * h / w);
+  const x = cv.getContext('2d');
+  x.fillStyle = '#5a5e63';
+  x.fillRect(0, 0, cv.width, cv.height);
+  let size = cv.height * 0.42;
+  const font = () => `600 ${size}px "Malgun Gothic", "Noto Sans KR", sans-serif`;
+  x.font = font();
+  while (x.measureText(text).width > cv.width * 0.86 && size > 10) { size -= 2; x.font = font(); }
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillStyle = 'rgba(255,255,255,0.18)';
+  x.fillText(text, cv.width / 2 + 1.5, cv.height / 2 + 1.5); // 새긴 홈의 밝은 가장자리
+  x.fillStyle = '#26282b';
+  x.fillText(text, cv.width / 2, cv.height / 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({
+    map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2,
+  }));
+  mesh.applyMatrix4(M);
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 // 기념 공간 바닥 (OSM 외곽선 또는 동심원 포장): 땅 위에 얇게, 정사영상 색
@@ -618,13 +684,13 @@ class PartBuilder {
     this.add(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z), T, color);
   }
 
-  mesh() {
+  mesh(flat = true) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     geo.computeBoundingSphere();
-    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: flat }));
   }
 }
 

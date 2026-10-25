@@ -204,7 +204,7 @@ let lateMode = null;
 async function start() {
   const [campus, lawns, widths, styles, monuments] = await Promise.all([
     loadCampus('data/campus.json?v=6'), loadCampus('data/lawns.json?v=1'), loadCampus('data/road-widths.json?v=1'),
-    loadCampus('data/building-styles.json?v=6'), loadCampus('data/monuments.json?v=3'),
+    loadCampus('data/building-styles.json?v=6'), loadCampus('data/monuments.json?v=4'),
     loadTerrain('data/terrain.json?v=2'),
   ]);
   applyRoadWidths(campus, widths.roads); // 수치지도·정사영상으로 잰 실제 차도 폭 (scripts/ngii_roads.py)

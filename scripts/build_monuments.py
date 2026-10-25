@@ -25,14 +25,14 @@ YB_PHOTO = '위키미디어 공용 "CNU Yongbong Tower.JPG" (Wikicnu, CC BY 3.0,
 NONE = "근거 없음"
 
 # 번호는 campus.json monuments 순서(1부터). 형태 종류:
-# tower 용봉탑 / stele 비석 / bust 흉상 / statue 동상 / stoneFigure 석인 / jangseung 장승 / group 군상 /
+# tower 용봉탑 / stele 비석 / bust 흉상 / statue 동상 / stoneFigure 석인 / jangseung 장승 / marker 받침 + 이름 판석 /
 # sculpture 추상 조형물 / installation 설치물 / mural 벽화 / plaza 기념 공간(바닥만)
 SPEC = {
     1: dict(form="stele", note="정사영상 범위 밖(서쪽 끝)", grade=NONE),
-    2: dict(form="group", dx=-3.8, dz=-2.7, base=dict(shape="round", d=4.5, h=0.5), figures=3, material="stone",
+    2: dict(form="marker", dx=-3.8, dz=-2.7, base=dict(shape="round", d=4.5, h=0.5), material="stone",
             grade="준확실(정사영상·태그)",
             evidence={"위치·바닥": "정사영상: OSM 점에서 서쪽 3.8m에 지름 약 4.5m의 흰 원형 받침", "재료": "OSM material=stone, artwork_type=statue",
-                      "인물 수·자세·높이": NONE + " (사진 없음 → 단순한 인물 실루엣 3개, 사람 키)"}),
+                      "조각 형태": NONE + " (사진 없음 → 인물 형상은 넣지 않고, 받침 위에 이름을 새긴 낮은 판석 하나로 단순화)"}),
     3: dict(form="sculpture", material="stone", grade="준확실(정사영상·태그)",
             evidence={"재료·종류": "OSM material=stone, artwork_type=sculpture", "형태·크기": NONE + " (정사영상에서 식별 안 됨)"}),
     4: dict(form="stele", material="stone", grade="준확실(정사영상·태그)",
@@ -41,7 +41,7 @@ SPEC = {
             evidence={"바닥 크기·방향": "정사영상: 길이 약 8.7m × 폭 1.7m의 흰 돌 판이 북동-남서로 놓임", "재료": "OSM material=stone",
                       "높이": NONE + " (기본 1.5m)"}),
     6: dict(form="bust", grade="준확실(정사영상·태그)",
-            evidence={"종류": "OSM artwork_type=bust (작가 최은태)", "재료·크기·자세": NONE + " (사진 없음 → 받침대 + 매끈한 흉상, 실물 크기)",
+            evidence={"종류": "OSM artwork_type=bust (작가 최은태)", "재료·크기·자세": NONE + " (사진 없음 → 받침대 + 이목구비 없는 매끈한 고전 흉상, 실물 크기)",
                       "주변": "정사영상: 나무 아래, 옆에 OSM 기념 공간(27번)"}),
     7: dict(form="installation", dx=-2.6, dz=-1.1, d=3.5, colors=True, grade="준확실(정사영상·태그)",
             evidence={"위치·크기·색": "정사영상: 잔디밭에 지름 약 3.5m로 노랑·주황·흰 작은 조각들이 모여 있음", "형태·높이": NONE + " (낮은 꽃잎 모양 덩이로 단순화)"}),
@@ -75,13 +75,13 @@ SPEC = {
     18: dict(form="sculpture", material="stone", grade="준확실(정사영상·태그)",
              evidence={"종류·재료": "OSM artwork_type=sculpture, material=stone (작가 최규철)", "형태·크기": NONE + " (정사영상에서 식별 안 됨)"}),
     19: dict(form="bust", grade="준확실(정사영상·태그)",
-             evidence={"종류": "OSM artwork_type=bust", "재료·크기": NONE + " (사진 없음 → 받침대 + 매끈한 흉상)"}),
+             evidence={"종류": "OSM artwork_type=bust", "재료·크기": NONE + " (사진 없음 → 받침대 + 이목구비 없는 매끈한 고전 흉상)"}),
     20: dict(form="sculpture", grade=NONE, evidence={"종류": "OSM artwork_type=sculpture (이름 없음)", "형태": NONE + " (나무에 가림)"}),
     21: dict(form="sculpture", grade=NONE, evidence={"종류": "OSM artwork_type=sculpture (이름 없음)", "형태": NONE + " (나무·주차장)"}),
     22: dict(form="stele", material="stone", grade="준확실(정사영상·태그)",
              evidence={"재료·글자": "OSM material=stone, inscription 있음(게임에 넣지 않음)", "형태·크기": NONE}),
     23: dict(form="statue", material="metal", grade="준확실(정사영상·태그)",
-             evidence={"종류·재료": "OSM artwork_type=statue, material=metal (작가 김행신)", "자세·크기": NONE + " (사진 없음 → 받침대 + 선 자세 인물 실루엣, 사람 키)"}),
+             evidence={"종류·재료": "OSM artwork_type=statue, material=metal (작가 김행신)", "자세·크기": NONE + " (사진 없음 → 받침대 + 긴 외투를 입고 선 매끈한 동상, 사람 키, 이목구비 없음)"}),
     24: dict(form="mural", grade=NONE, evidence={"종류": "OSM artwork_type=mural (선 3점, 이름 없음)", "그림": NONE + " (나무에 가림)"}),
     25: dict(form="plaza", plaza=dict(shape="osm"), grade="준확실(정사영상·태그)",
              evidence={"바닥": "OSM 외곽선 + 정사영상: 지름 약 7m 둥근 화단 섬, 안에 작은 흰 물체들", "기념물 형태": NONE}),
