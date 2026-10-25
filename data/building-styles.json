@@ -2,116 +2,645 @@
   "_설명": "건물별 외관 지정 (우선순위: 이 파일 > csv '직접' > csv 추정). 좌표는 게임 좌표(m). 근거 이미지는 ref/ (커밋 안 함). 브이월드 3D는 캠퍼스에 실사 텍스처 건물이 없어 국토지리정보원 정사영상(2025, 25cm, 지붕·기울어 보이는 외벽)과 수치지도 속성을 근거로 함. facade: 커튼월/벽돌/콘크리트/타일/석재, windows: 개별창/띠창/전면유리, bay: 창 한 칸 가로(m), bands: 층 띠, mainFloors: OSM 외곽선 전체를 이 층수로(저층부), parts: 따로 세우는 덩어리(outline 또는 circle, floors는 건물 바닥부터), features: 옥상 구조물 등",
   "w270549104": {
     "name": "중앙도서관",
-    "facade": "콘크리트", "wallColor": "#d9d6cc", "windows": "띠창", "bay": 3.0, "bands": true,
+    "facade": "콘크리트",
+    "wallColor": "#d9d6cc",
+    "windows": "띠창",
+    "bay": 3.0,
+    "bands": true,
     "parts": [
-      { "circle": { "c": [92.8, -8.7], "r": 25.5 }, "floors": 2, "facade": "콘크리트", "windows": "띠창", "roofColor": "#4f9c84" }
+      {
+        "circle": {
+          "c": [
+            92.8,
+            -8.7
+          ],
+          "r": 25.5
+        },
+        "floors": 2,
+        "facade": "콘크리트",
+        "windows": "띠창",
+        "roofColor": "#4f9c84"
+      }
     ],
     "features": [
-      { "type": "cylinder", "c": [92.8, -8.7], "r": 14, "h": 1.4, "on": "main", "color": "#6cb59a" },
-      { "type": "cylinder", "c": [92.8, -8.7], "r": 3.2, "h": 1.8, "on": "main", "color": "#2f4f4a" }
+      {
+        "type": "cylinder",
+        "c": [
+          92.8,
+          -8.7
+        ],
+        "r": 14,
+        "h": 1.4,
+        "on": "main",
+        "color": "#6cb59a"
+      },
+      {
+        "type": "cylinder",
+        "c": [
+          92.8,
+          -8.7
+        ],
+        "r": 3.2,
+        "h": 1.8,
+        "on": "main",
+        "color": "#2f4f4a"
+      }
     ],
-    "evidence": { "형태·지붕": "ref/e/중앙도서관.png (정사각 본동 아래로 더 넓은 원형 저층부가 모서리 사이로 보임, 지붕 가운데 원형 단)", "외벽": "근거 약함 (거의 바로 위에서 찍혀 외벽 안 보임) → 밝은 콘크리트 + 띠창 추정" }
+    "evidence": {
+      "형태·지붕": "ref/e/중앙도서관.png (정사각 본동 아래로 더 넓은 원형 저층부가 모서리 사이로 보임, 지붕 가운데 원형 단)",
+      "외벽": "근거 약함 (거의 바로 위에서 찍혀 외벽 안 보임) → 밝은 콘크리트 + 띠창 추정"
+    }
   },
   "r15052204": {
     "name": "교육융합관",
-    "facade": "콘크리트", "wallColor": "#a9adab", "windows": "개별창", "bay": 3.0, "bands": true,
-    "roofColor": "#6f9a62", "mainFloors": 3,
+    "facade": "콘크리트",
+    "wallColor": "#a9adab",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": true,
+    "roofColor": "#6f9a62",
+    "mainFloors": 3,
     "parts": [
-      { "outline": [[53.3, -242.4], [96.0, -252.5], [98.4, -230.4], [56.4, -225.1]], "floors": 10, "roofColor": "#5f9a77" },
-      { "outline": [[82.8, -199.2], [97.2, -199.2], [97.2, -181.2], [82.8, -181.2]], "floors": 4, "facade": "커튼월", "windows": "전면유리", "wallColor": "#e3edf4", "roofColor": "#7f9aa8" }
+      {
+        "outline": [
+          [
+            53.3,
+            -242.4
+          ],
+          [
+            96.0,
+            -252.5
+          ],
+          [
+            98.4,
+            -230.4
+          ],
+          [
+            56.4,
+            -225.1
+          ]
+        ],
+        "floors": 10,
+        "roofColor": "#5f9a77"
+      },
+      {
+        "outline": [
+          [
+            82.8,
+            -199.2
+          ],
+          [
+            97.2,
+            -199.2
+          ],
+          [
+            97.2,
+            -181.2
+          ],
+          [
+            82.8,
+            -181.2
+          ]
+        ],
+        "floors": 4,
+        "facade": "커튼월",
+        "windows": "전면유리",
+        "wallColor": "#e3edf4",
+        "roofColor": "#7f9aa8"
+      }
     ],
-    "evidence": { "형태": "ref/e/교육융합관.png (북쪽 본동만 높고 나머지는 옥상정원·태양광의 낮은 부분)", "유리": "ref/e/교육융합관.png, ref/b_edu.png (가운데 짙은 유리 지붕 = 아트리움 → 그 부분만 커튼월)", "외벽": "ref/b_edu.png (본동 남쪽 외벽이 기울어 보임: 회색 벽 + 격자 개별창)" }
+    "evidence": {
+      "형태": "ref/e/교육융합관.png (북쪽 본동만 높고 나머지는 옥상정원·태양광의 낮은 부분)",
+      "유리": "ref/e/교육융합관.png, ref/b_edu.png (가운데 짙은 유리 지붕 = 아트리움 → 그 부분만 커튼월)",
+      "외벽": "ref/b_edu.png (본동 남쪽 외벽이 기울어 보임: 회색 벽 + 격자 개별창)"
+    }
   },
   "w1125454152": {
     "name": "생활관 9A동 예향학사",
-    "facade": "타일", "wallColor": "#ece8df", "windows": "개별창", "bay": 3.0, "bands": false,
-    "accent": { "color": "#b9724f", "every": 4 },
-    "evidence": { "외벽": "ref/e/생활관 9A동 예향학사.png (남쪽 외벽이 기울어 보임: 흰 벽 + 주황갈색 세로 띠 + 규칙적인 창)", "층수": "수치지도 15층, 사진에서 9C(9층)보다 훨씬 길게 기울어 보임 → 15층 유지" }
+    "facade": "타일",
+    "wallColor": "#ece8df",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "accent": {
+      "color": "#b9724f",
+      "every": 4
+    },
+    "evidence": {
+      "외벽": "ref/e/생활관 9A동 예향학사.png (남쪽 외벽이 기울어 보임: 흰 벽 + 주황갈색 세로 띠 + 규칙적인 창)",
+      "층수": "수치지도 15층, 사진에서 9C(9층)보다 훨씬 길게 기울어 보임 → 15층 유지"
+    }
   },
   "w1125454150": {
     "name": "생활관 9B동 예향학사",
-    "facade": "타일", "wallColor": "#ece8df", "windows": "개별창", "bay": 3.0, "bands": false,
-    "accent": { "color": "#b9724f", "every": 4 },
-    "evidence": { "외벽": "ref/e/생활관 9B동 예향학사.png, ref/e/생활관 9C동 예향학사.png (9A와 같은 흰 벽 + 갈색 세로 띠)", "층수": "수치지도 15층, 9C보다 길게 기울어 보임 → 15층 유지" }
+    "facade": "타일",
+    "wallColor": "#ece8df",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "accent": {
+      "color": "#b9724f",
+      "every": 4
+    },
+    "evidence": {
+      "외벽": "ref/e/생활관 9B동 예향학사.png, ref/e/생활관 9C동 예향학사.png (9A와 같은 흰 벽 + 갈색 세로 띠)",
+      "층수": "수치지도 15층, 9C보다 길게 기울어 보임 → 15층 유지"
+    }
   },
   "w1125454151": {
     "name": "생활관 9C동 예향학사",
-    "facade": "타일", "wallColor": "#ece8df", "windows": "개별창", "bay": 3.0, "bands": false,
-    "accent": { "color": "#b9724f", "every": 4 },
-    "evidence": { "외벽": "ref/e/생활관 9C동 예향학사.png (흰 벽 + 가운데 갈색 계단실 띠)", "층수": "수치지도 9층, 이웃 9B보다 짧게 기울어 보임 → 9층 유지" }
+    "facade": "타일",
+    "wallColor": "#ece8df",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "accent": {
+      "color": "#b9724f",
+      "every": 4
+    },
+    "evidence": {
+      "외벽": "ref/e/생활관 9C동 예향학사.png (흰 벽 + 가운데 갈색 계단실 띠)",
+      "층수": "수치지도 9층, 이웃 9B보다 짧게 기울어 보임 → 9층 유지"
+    }
   },
   "w1125454153": {
     "name": "생활관 9D동 예향학사",
-    "facade": "타일", "wallColor": "#ece8df", "windows": "개별창", "bay": 3.0, "bands": false,
-    "accent": { "color": "#b9724f", "every": 4 },
-    "evidence": { "외벽": "ref/e/생활관 9D동 예향학사.png (9A~9C와 같은 단지 외관)", "층수": "수치지도 15층 유지" }
+    "facade": "타일",
+    "wallColor": "#ece8df",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "accent": {
+      "color": "#b9724f",
+      "every": 4
+    },
+    "evidence": {
+      "외벽": "ref/e/생활관 9D동 예향학사.png (9A~9C와 같은 단지 외관)",
+      "층수": "수치지도 15층 유지"
+    }
   },
   "w277766413": {
     "name": "제1학생마루",
-    "facade": "콘크리트", "wallColor": "#d5d3cc", "windows": "띠창", "bay": 3.0, "bands": true,
-    "mainFloors": 1, "roofColor": "#3f7f5a",
+    "facade": "콘크리트",
+    "wallColor": "#d5d3cc",
+    "windows": "띠창",
+    "bay": 3.0,
+    "bands": true,
+    "mainFloors": 1,
+    "roofColor": "#3f7f5a",
     "parts": [
-      { "outline": [[223.4, -28.0], [261.7, -23.8], [254.0, 16.3], [221.7, 6.8]], "floors": 4, "roofColor": "#b9bbb5" },
-      { "outline": [[257.4, -8.5], [277.8, -6.0], [272.7, 16.2], [254.9, 11.9]], "floors": 2, "floorHeight": 4.5, "windows": "개별창", "roofColor": "#6d7378" }
+      {
+        "outline": [
+          [
+            223.4,
+            -28.0
+          ],
+          [
+            261.7,
+            -23.8
+          ],
+          [
+            254.0,
+            16.3
+          ],
+          [
+            221.7,
+            6.8
+          ]
+        ],
+        "floors": 4,
+        "roofColor": "#b9bbb5"
+      },
+      {
+        "outline": [
+          [
+            257.4,
+            -8.5
+          ],
+          [
+            277.8,
+            -6.0
+          ],
+          [
+            272.7,
+            16.2
+          ],
+          [
+            254.9,
+            11.9
+          ]
+        ],
+        "floors": 2,
+        "floorHeight": 4.5,
+        "windows": "개별창",
+        "roofColor": "#6d7378"
+      }
     ],
-    "evidence": { "형태": "ref/e/제1학생마루.png (북서쪽 연회색 평지붕 본동, 동쪽 짙은 회색 금속 지붕 홀, 남쪽 초록 옥상데크의 낮은 부분)", "외벽": "근거 약함 → 밝은 콘크리트 + 띠창 추정" }
+    "evidence": {
+      "형태": "ref/e/제1학생마루.png (북서쪽 연회색 평지붕 본동, 동쪽 짙은 회색 금속 지붕 홀, 남쪽 초록 옥상데크의 낮은 부분)",
+      "외벽": "근거 약함 → 밝은 콘크리트 + 띠창 추정"
+    }
   },
   "r15057693": {
     "name": "공과대 2호관",
-    "facade": "콘크리트", "wallColor": "#e1e0da", "windows": "띠창", "bay": 3.0, "bands": true, "roofColor": "#e6e8e4",
-    "evidence": { "지붕": "ref/e/공과대 2호관.png (긴 판상 본동, 흰 지붕)", "외벽": "근거 약함 → 지붕처럼 밝은 콘크리트 + 띠창 추정" }
+    "facade": "콘크리트",
+    "wallColor": "#e1e0da",
+    "windows": "띠창",
+    "bay": 3.0,
+    "bands": true,
+    "roofColor": "#e6e8e4",
+    "evidence": {
+      "지붕": "ref/e/공과대 2호관.png (긴 판상 본동, 흰 지붕)",
+      "외벽": "근거 약함 → 지붕처럼 밝은 콘크리트 + 띠창 추정"
+    }
   },
   "w277767025": {
     "name": "대학본부",
-    "facade": "석재", "wallColor": "#d8d2c4", "windows": "개별창", "bay": 3.0, "bands": false,
-    "mainFloors": 2, "roofColor": "#6f9d6a",
+    "facade": "석재",
+    "wallColor": "#d8d2c4",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "mainFloors": 2,
+    "roofColor": "#6f9d6a",
     "parts": [
-      { "circle": { "c": [291.0, 118.0], "r": 16 }, "floors": 3, "roofColor": "#8fb2a6" },
-      { "outline": [[320.0, 97.0], [362.0, 90.0], [364.0, 107.0], [323.0, 116.0]], "floors": 4, "roofColor": "#c9cbc6" }
+      {
+        "circle": {
+          "c": [
+            291.0,
+            118.0
+          ],
+          "r": 16
+        },
+        "floors": 3,
+        "roofColor": "#8fb2a6"
+      },
+      {
+        "outline": [
+          [
+            320.0,
+            97.0
+          ],
+          [
+            362.0,
+            90.0
+          ],
+          [
+            364.0,
+            107.0
+          ],
+          [
+            323.0,
+            116.0
+          ]
+        ],
+        "floors": 4,
+        "roofColor": "#c9cbc6"
+      }
     ],
-    "evidence": { "형태": "ref/e/대학본부.png (서쪽 원통형 건물 + 동쪽 판상 본동 + 남쪽 낮은 옥상정원)", "외벽": "근거 약함 → 본부 건물에 흔한 밝은 석재 추정", "층수": "OSM 4층, 수치지도 9층으로 다름 — 사진으로 판단할 근거가 부족해 지금 값(4층) 유지" }
+    "evidence": {
+      "형태": "ref/e/대학본부.png (서쪽 원통형 건물 + 동쪽 판상 본동 + 남쪽 낮은 옥상정원)",
+      "외벽": "근거 약함 → 본부 건물에 흔한 밝은 석재 추정",
+      "층수": "OSM 4층, 수치지도 9층으로 다름 — 사진으로 판단할 근거가 부족해 지금 값(4층) 유지"
+    }
   },
   "w1125131723": {
     "name": "진리관",
-    "facade": "콘크리트", "wallColor": "#dcdad3", "windows": "개별창", "bay": 3.0, "bands": true,
+    "facade": "콘크리트",
+    "wallColor": "#dcdad3",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": true,
     "features": [
-      { "type": "box", "outline": [[-152.6, -30.7], [-137.3, -30.7], [-137.3, -17.9], [-152.6, -17.9]], "h": 4, "on": "main", "color": "#b9bcb8" }
+      {
+        "type": "box",
+        "outline": [
+          [
+            -152.6,
+            -30.7
+          ],
+          [
+            -137.3,
+            -30.7
+          ],
+          [
+            -137.3,
+            -17.9
+          ],
+          [
+            -152.6,
+            -17.9
+          ]
+        ],
+        "h": 4,
+        "on": "main",
+        "color": "#b9bcb8"
+      }
     ],
-    "evidence": { "지붕": "ref/e/진리관.png (초록 지붕 가운데 회색 옥탑)", "외벽": "ref/e/진리관.png (남쪽에 밝은 외벽이 조금 보임) → 밝은 콘크리트" }
+    "evidence": {
+      "지붕": "ref/e/진리관.png (초록 지붕 가운데 회색 옥탑)",
+      "외벽": "ref/e/진리관.png (남쪽에 밝은 외벽이 조금 보임) → 밝은 콘크리트"
+    }
   },
   "w277766294": {
     "name": "농생대 1호관",
-    "facade": "콘크리트", "wallColor": "#d8d5cc", "windows": "띠창", "bay": 3.0, "bands": true,
+    "facade": "콘크리트",
+    "wallColor": "#d8d5cc",
+    "windows": "띠창",
+    "bay": 3.0,
+    "bands": true,
     "parts": [
-      { "outline": [[-412.0, 97.6], [-402.6, 92.8], [-384.5, 105.2], [-393.0, 117.5]], "floors": 4, "roof": "hip", "roofH": 3.2, "roofColor": "#5ec79a" }
+      {
+        "outline": [
+          [
+            -412.0,
+            97.6
+          ],
+          [
+            -402.6,
+            92.8
+          ],
+          [
+            -384.5,
+            105.2
+          ],
+          [
+            -393.0,
+            117.5
+          ]
+        ],
+        "floors": 4,
+        "roof": "hip",
+        "roofH": 3.2,
+        "roofColor": "#5ec79a"
+      }
     ],
-    "evidence": { "형태·지붕": "ref/e/농생대 1호관.png (긴 판상 본동 초록 지붕, 가운데 밝은 초록 경사 지붕의 현관동)", "외벽": "근거 약함 → 밝은 콘크리트 + 띠창 추정" }
+    "evidence": {
+      "형태·지붕": "ref/e/농생대 1호관.png (긴 판상 본동 초록 지붕, 가운데 밝은 초록 경사 지붕의 현관동)",
+      "외벽": "근거 약함 → 밝은 콘크리트 + 띠창 추정"
+    }
   },
   "w271056106": {
     "name": "인문대 1호관",
-    "facade": "벽돌", "wallColor": "#b47a5e", "windows": "개별창", "bay": 3.0, "bands": false, "skipMain": true,
+    "facade": "벽돌",
+    "wallColor": "#b47a5e",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": false,
+    "skipMain": true,
     "parts": [
-      { "outline": [[-42.8, -43.0], [-1.2, -78.7], [10.7, -61.7], [-26.7, -27.7]], "floors": 4, "roof": "hip", "roofH": 5, "roofColor": "#d36b5e" },
-      { "outline": [[-57.3, -42.2], [-45.4, -49.0], [-25.0, -26.0], [-36.0, -15.8]], "floors": 4, "roof": "hip", "roofH": 4, "roofColor": "#d36b5e" },
-      { "outline": [[-6.3, -83.8], [3.05, -91.5], [24.3, -67.65], [14.1, -59.2]], "floors": 4, "roof": "hip", "roofH": 4, "roofColor": "#d36b5e" }
+      {
+        "outline": [
+          [
+            -42.8,
+            -43.0
+          ],
+          [
+            -1.2,
+            -78.7
+          ],
+          [
+            10.7,
+            -61.7
+          ],
+          [
+            -26.7,
+            -27.7
+          ]
+        ],
+        "floors": 4,
+        "roof": "hip",
+        "roofH": 5,
+        "roofColor": "#d36b5e"
+      },
+      {
+        "outline": [
+          [
+            -57.3,
+            -42.2
+          ],
+          [
+            -45.4,
+            -49.0
+          ],
+          [
+            -25.0,
+            -26.0
+          ],
+          [
+            -36.0,
+            -15.8
+          ]
+        ],
+        "floors": 4,
+        "roof": "hip",
+        "roofH": 4,
+        "roofColor": "#d36b5e"
+      },
+      {
+        "outline": [
+          [
+            -6.3,
+            -83.8
+          ],
+          [
+            3.05,
+            -91.5
+          ],
+          [
+            24.3,
+            -67.65
+          ],
+          [
+            14.1,
+            -59.2
+          ]
+        ],
+        "floors": 4,
+        "roof": "hip",
+        "roofH": 4,
+        "roofColor": "#d36b5e"
+      }
     ],
-    "evidence": { "지붕": "ref/e/인문대 1호관.png (붉은 기와 우진각 지붕 세 덩어리, H자 평면)", "외벽": "근거 약함 → 붉은 기와 지붕의 오래된 건물이라 벽돌 추정" }
+    "evidence": {
+      "지붕": "ref/e/인문대 1호관.png (붉은 기와 우진각 지붕 세 덩어리, H자 평면)",
+      "외벽": "근거 약함 → 붉은 기와 지붕의 오래된 건물이라 벽돌 추정"
+    }
   },
   "w290680706": {
     "name": "용봉관",
-    "facade": "콘크리트", "wallColor": "#e2e0d9", "windows": "개별창", "bay": 3.0, "bands": true, "roofColor": "#dfe3dd",
+    "facade": "콘크리트",
+    "wallColor": "#e2e0d9",
+    "windows": "개별창",
+    "bay": 3.0,
+    "bands": true,
+    "roofColor": "#dfe3dd",
     "features": [
-      { "type": "box", "outline": [[141.8, 111.0], [147.8, 111.0], [147.8, 117.0], [141.8, 117.0]], "h": 3.5, "on": "main", "color": "#cfd2cc" }
+      {
+        "type": "box",
+        "outline": [
+          [
+            141.8,
+            111.0
+          ],
+          [
+            147.8,
+            111.0
+          ],
+          [
+            147.8,
+            117.0
+          ],
+          [
+            141.8,
+            117.0
+          ]
+        ],
+        "h": 3.5,
+        "on": "main",
+        "color": "#cfd2cc"
+      }
     ],
-    "evidence": { "지붕": "ref/e/용봉관.png (흰 평지붕, 가운데 계단실 옥탑)", "외벽": "ref/e/용봉관.png (서쪽에 밝은 외벽이 조금 보임) → 밝은 콘크리트" }
+    "evidence": {
+      "지붕": "ref/e/용봉관.png (흰 평지붕, 가운데 계단실 옥탑)",
+      "외벽": "ref/e/용봉관.png (서쪽에 밝은 외벽이 조금 보임) → 밝은 콘크리트"
+    }
   },
   "w290374303": {
     "name": "민주마루",
-    "facade": "콘크리트", "wallColor": "#dedcd5", "windows": "띠창", "bay": 3.0, "bands": true,
-    "mainFloors": 4, "roofColor": "#d9dcd6",
+    "facade": "콘크리트",
+    "wallColor": "#dedcd5",
+    "windows": "띠창",
+    "bay": 3.0,
+    "bands": true,
+    "mainFloors": 4,
+    "roofColor": "#d9dcd6",
     "parts": [
-      { "outline": [[227.4, 55.0], [257.8, 65.4], [245.8, 103.0], [216.2, 93.4]], "floors": 5, "floorHeight": 5, "windows": "개별창", "roofColor": "#eceee9" }
+      {
+        "outline": [
+          [
+            227.4,
+            55.0
+          ],
+          [
+            257.8,
+            65.4
+          ],
+          [
+            245.8,
+            103.0
+          ],
+          [
+            216.2,
+            93.4
+          ]
+        ],
+        "floors": 5,
+        "floorHeight": 5,
+        "windows": "개별창",
+        "roofColor": "#eceee9"
+      }
     ],
-    "evidence": { "형태": "ref/e/민주마루.png (큰 흰 지붕의 홀 + 남쪽 낮은 앞 동)", "외벽": "근거 약함 → 밝은 콘크리트 추정" }
+    "evidence": {
+      "형태": "ref/e/민주마루.png (큰 흰 지붕의 홀 + 남쪽 낮은 앞 동)",
+      "외벽": "근거 약함 → 밝은 콘크리트 추정"
+    }
+  },
+  "r6990678": {
+    "name": "공과대 5호관",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 1번 칸: ㄷ자 평지붕 전체에 태양광, 외벽은 안 보임 → 외벽 기본값",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w1120956385": {
+    "name": "정보마루",
+    "facade": "콘크리트",
+    "wallColor": "#e2e1dc",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 3번 칸: 흰 평지붕 + 태양광, 서·남쪽에 밝은 외벽이 기울어 보임",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w270541744": {
+    "name": "부설고",
+    "facade": "콘크리트",
+    "wallColor": "#e3e1da",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 4번 칸: ㄱ자 연회색 지붕 + 태양광, 남쪽에 밝은 외벽",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w1125544293": {
+    "name": "G&R허브",
+    "facade": "콘크리트",
+    "wallColor": "#e8e8e4",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 5번 칸: 흰 지붕 + 유리 천창·태양광, 남동쪽에 흰 외벽",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w1107793925": {
+    "name": "치전원 1호관 (임상교육관)",
+    "facade": "콘크리트",
+    "wallColor": "#dad9d3",
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 6번 칸: 10층, 남쪽으로 길게 기울어 보이는 연회색 외벽 + 규칙적인 창",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w1120956383": {
+    "name": "사회과학대학",
+    "facade": "콘크리트",
+    "wallColor": "#dedcd5",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 7번 칸: 초록·흰 지붕 + 태양광, 밝은 외벽 일부",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
+  },
+  "w1131867320": {
+    "name": "자연과학대학 1호관",
+    "facade": "콘크리트",
+    "wallColor": "#dcdad3",
+    "features": [
+      {
+        "type": "solar",
+        "share": 0.6
+      }
+    ],
+    "evidence": {
+      "근거": "ref/e2/sheet_01.png 8번 칸: 초록 지붕 + 태양광, 남쪽에 밝은 외벽",
+      "방식": "간이(재료·색·창 형태·지붕 형태만, 브이월드 3D 실사 텍스처 없음)"
+    }
   }
 }

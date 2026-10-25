@@ -155,6 +155,15 @@ def element_rings(el):
     return []
 
 
+def element_inner_rings(el):
+    """relation의 안쪽 고리들 (중정 등, 위경도 튜플 목록)."""
+    if el["type"] != "relation":
+        return []
+    inners = [[(p["lat"], p["lon"]) for p in m.get("geometry", [])]
+              for m in el.get("members", []) if m.get("role") == "inner" and m.get("geometry")]
+    return stitch_rings(inners)
+
+
 def parse_height(tags):
     h = tags.get("height", "").replace("m", "").strip()
     try:
@@ -221,6 +230,11 @@ def main():
                 b["osmLevels"] = int(float(tags["building:levels"]))
             except (KeyError, ValueError):
                 b["osmLevels"] = None
+            # 중정(안쪽 고리): 이 외곽선 안에 든 것만
+            holes = [open_ring([proj(*p) for p in r]) for r in element_inner_rings(el)]
+            holes = [h for h in holes if len(h) >= 3 and point_in_poly(centroid(h), ring)]
+            if holes:
+                b["holes"] = [rpts(h) for h in holes]
             buildings.append(b)
 
     # 도로: 영역 안 구간만 남기고, 끝에서 한 점씩 더 붙여 가장자리까지 이어지게

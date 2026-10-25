@@ -726,8 +726,8 @@ function buildBuildings(list, anisotropy) {
     let top = 0;
 
     if (!st.skipMain) {
-      const longest = extrude(o, base, base + mainH, look, wall, roof, { wallsFor, plain });
-      top = mainH;
+      const longest = extrude(o, base, base + mainH, look, wall, roof, { wallsFor, plain, roof: st.roof, roofH: st.roofH, holes: b.holes });
+      top = mainH + (st.roof === 'hip' ? st.roofH || 3 : 0);
       // 가장 긴 벽 가운데 1층에 어두운 입구
       if (longest && longest.len >= 6 && mainH >= 3.5) {
         const { p1, p2, n, len } = longest;
@@ -766,8 +766,12 @@ function buildBuildings(list, anisotropy) {
         if (i % stepI === 0) box(plain, circleOutline([x, z], 0.9, 6), base - BURY_M, base + mainH + 0.6, ac);
       });
     }
-    // 옥상 구조물 (옥탑, 원형 단 등)
+    // 옥상 구조물 (옥탑, 원형 단, 태양광 판 등)
     for (const f of st.features || []) {
+      if (f.type === 'solar') {
+        solarPanels(plain, f.outline || o, base + mainH, f.share || 1, tint(new THREE.Color('#2f4b6b')), f.outline ? [] : b.holes || []);
+        continue;
+      }
       const fo = f.type === 'cylinder' ? circleOutline(f.c, f.r) : f.outline;
       const on = f.on === 'main' ? mainH : 0;
       box(plain, fo, base + on - 0.2, base + on + f.h, tint(new THREE.Color(f.color)));
@@ -793,30 +797,35 @@ function buildBuildings(list, anisotropy) {
 }
 
 // 외곽선을 y0~y1로 세움: 벽(외관 텍스처) + 지붕(평지붕 또는 우진각). 가장 긴 벽 정보를 돌려줌
-function extrude(o, base, y1, look, wallColor, roofColor, { wallsFor, plain, roof = 'flat', roofH = 3 }) {
+function extrude(o, base, y1, look, wallColor, roofColor, { wallsFor, plain, roof = 'flat', roofH = 3, holes = [] }) {
   const wb = wallsFor(`${look.facade}|${look.windows}|${look.bands ? 1 : 0}`);
   const floorH = look.floorH || FLOOR_M;
-  const sign = area(o) > 0 ? 1 : -1;
   let longest = null;
-  for (let i = 0; i < o.length; i++) {
-    const p1 = o[i], p2 = o[(i + 1) % o.length];
-    const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-    if (len < 1e-6) continue;
-    // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
-    const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
-    // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
-    wb.wall(p1, p2, base - BURY_M, y1, n, wallColor, Math.max(1, Math.round(len / look.bay)), base, floorH);
-    if (!longest || len > longest.len) longest = { p1, p2, n, len };
+  // 바깥 고리는 바깥으로, 중정 고리는 중정 쪽으로 법선
+  for (const [ring, outward] of [[o, 1], ...holes.map((h) => [h, -1])]) {
+    const sign = (area(ring) > 0 ? 1 : -1) * outward;
+    for (let i = 0; i < ring.length; i++) {
+      const p1 = ring[i], p2 = ring[(i + 1) % ring.length];
+      const len = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+      if (len < 1e-6) continue;
+      // 바깥쪽 법선 (면적이 +면 (dz, -dx) 쪽이 바깥)
+      const n = [((p2[1] - p1[1]) / len) * sign, 0, (-(p2[0] - p1[0]) / len) * sign];
+      // 변마다 창문이 딱 맞게 들어가도록 칸 수를 정수로
+      wb.wall(p1, p2, base - BURY_M, y1, n, wallColor, Math.max(1, Math.round(len / look.bay)), base, floorH);
+      if (outward > 0 && (!longest || len > longest.len)) longest = { p1, p2, n, len };
+    }
   }
   if (roof === 'hip') hipRoof(plain, o, y1, roofH, roofColor);
-  else flatTop(plain, o, y1, roofColor);
+  else flatTop(plain, o, y1, roofColor, holes);
   return longest;
 }
 
-function flatTop(plain, o, y, color) {
+function flatTop(plain, o, y, color, holes = []) {
   const contour = o.map(([x, z]) => new THREE.Vector2(x, z));
-  for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, [])) {
-    plain.tri([o[i][0], y, o[i][1]], [o[j][0], y, o[j][1]], [o[m][0], y, o[m][1]], [0, 1, 0], color);
+  const hv = holes.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)));
+  const pts = [o, ...holes].flat();
+  for (const [i, j, m] of THREE.ShapeUtils.triangulateShape(contour, hv)) {
+    plain.tri([pts[i][0], y, pts[i][1]], [pts[j][0], y, pts[j][1]], [pts[m][0], y, pts[m][1]], [0, 1, 0], color);
   }
 }
 
@@ -845,6 +854,30 @@ function hipRoof(plain, o, y, h, color) {
     if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; } // 바깥(위)을 보게
     const l = Math.hypot(nx, ny, nz) || 1;
     plain.tri(p, q, s, [nx / l, ny / l, nz / l], color);
+  }
+}
+
+// 옥상 태양광 판: 건물 긴 변 방향으로 줄지어(3.4m × 2.3m 간격, 판 3×1.8m), 가장자리에서 2.5m 안쪽.
+// share: 줄의 몇 할을 채울지 (사진에서 지붕 일부만 덮인 건물)
+function solarPanels(plain, o, y, share, color, holes = []) {
+  const r = orientedRect(o);
+  const edge = (x, z) => {
+    let d = Infinity;
+    for (const ring of [o, ...holes]) {
+      for (let i = 0; i < ring.length; i++) d = Math.min(d, distToSegment(x, z, [...ring[i], ...ring[(i + 1) % ring.length]]));
+    }
+    return d;
+  };
+  const rows = Math.floor((r.W - 5) / 2.3);
+  for (let rw = 0; rw <= rows; rw++) {
+    if (rw / Math.max(1, rows) > share + 0.001) break;
+    const v = -r.W / 2 + 2.5 + rw * 2.3;
+    for (let u = -r.L / 2 + 2.5; u <= r.L / 2 - 2.5; u += 3.4) {
+      const [x, z] = rectPoint(r, u, v);
+      if (!pointInPolygon(x, z, o) || holes.some((h) => pointInPolygon(x, z, h)) || edge(x, z) < 2.4) continue;
+      const q = (du, dv) => rectPoint(r, u + du, v + dv);
+      box(plain, [q(-1.5, -0.9), q(1.5, -0.9), q(1.5, 0.9), q(-1.5, 0.9)], y + 0.1, y + 0.45, color);
+    }
   }
 }
 
@@ -980,7 +1013,7 @@ function makeTreeBlocker(campus) {
     const o = b.outline;
     o.forEach((p, i) => { const q = o[(i + 1) % o.length]; putRange(edges, p[0], p[1], q[0], q[1], 3, [p[0], p[1], q[0], q[1]]); });
     const xs = o.map((p) => p[0]), zs = o.map((p) => p[1]);
-    putRange(insides, Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 0, o);
+    putRange(insides, Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 0, { o, holes: b.holes || [] });
   }
   for (const r of campus.roads) {
     const clear = r.width / 2 + (r.car ? 1.5 : 0.6);
@@ -995,7 +1028,7 @@ function makeTreeBlocker(campus) {
     const k = `${Math.floor(x / cell)},${Math.floor(z / cell)}`;
     for (const e of edges.get(k) || []) if (distToSegment(x, z, e) < 3) return true;
     for (const e of roads.get(k) || []) if (distToSegment(x, z, e) < e[4]) return true;
-    for (const o of insides.get(k) || []) if (pointInPolygon(x, z, o)) return true;
+    for (const { o, holes } of insides.get(k) || []) if (pointInPolygon(x, z, o) && !holes.some((h) => pointInPolygon(x, z, h))) return true;
     for (const o of waters) if (pointInPolygon(x, z, o)) return true;
     return false;
   };
