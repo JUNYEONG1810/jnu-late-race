@@ -169,6 +169,8 @@ function pushOutOfBox(car, cx, cz, yaw, hw, hl) {
 }
 
 // 셔틀버스 (지역 +z가 앞): 흰 몸체 + 파란 띠 + 유리창 띠 + 바퀴. 글자·로고 없음
+// (records.js의 "셔틀버스 고장" 사건도 같은 모양을 새로 만들어 씀)
+export function makeBusGeometry() { return busGeometry(); }
 function busGeometry() {
   const P = [];
   const box = (sx, sy, sz, x, y, z, col) => P.push([new THREE.BoxGeometry(sx, sy, sz).translate(x, y, z), col]);

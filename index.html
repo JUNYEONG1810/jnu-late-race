@@ -17,34 +17,35 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="포크레이트 — 9시까지 공대 2호관으로!">
   <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
-  <link rel="stylesheet" href="assets/css/style.css?v=91">
+  <link rel="stylesheet" href="assets/css/style.css?v=95">
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "./assets/js/map.js": "./assets/js/map.js?v=91",
-      "./assets/js/landscape.js": "./assets/js/landscape.js?v=91",
-      "./assets/js/terrain.js": "./assets/js/terrain.js?v=91",
-      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=91",
-      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=91",
-      "./assets/js/life.js": "./assets/js/life.js?v=91",
-      "./assets/js/music.js": "./assets/js/music.js?v=91",
-      "./assets/js/route.js": "./assets/js/route.js?v=91",
-      "./assets/js/surface.js": "./assets/js/surface.js?v=91",
-      "./assets/js/play.js": "./assets/js/play.js?v=91",
-      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=91",
-      "./assets/js/car.js": "./assets/js/car.js?v=91",
-      "./assets/js/driver.js": "./assets/js/driver.js?v=91",
-      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=91",
-      "./assets/js/walker.js": "./assets/js/walker.js?v=91",
-      "./assets/js/camera.js": "./assets/js/camera.js?v=91",
-      "./assets/js/hud.js": "./assets/js/hud.js?v=91",
-      "./assets/js/voice.js": "./assets/js/voice.js?v=91",
-      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=91",
-      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=91",
-      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=91",
-      "./assets/js/professor.js": "./assets/js/professor.js?v=91",
-      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=91"
+      "./assets/js/map.js": "./assets/js/map.js?v=95",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=95",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=95",
+      "./assets/js/surroundings.js": "./assets/js/surroundings.js?v=95",
+      "./assets/js/roadmarks.js": "./assets/js/roadmarks.js?v=95",
+      "./assets/js/life.js": "./assets/js/life.js?v=95",
+      "./assets/js/music.js": "./assets/js/music.js?v=95",
+      "./assets/js/route.js": "./assets/js/route.js?v=95",
+      "./assets/js/surface.js": "./assets/js/surface.js?v=95",
+      "./assets/js/play.js": "./assets/js/play.js?v=95",
+      "./assets/js/campus-life.js": "./assets/js/campus-life.js?v=95",
+      "./assets/js/records.js": "./assets/js/records.js?v=95",
+      "./assets/js/car.js": "./assets/js/car.js?v=95",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=95",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=95",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=95",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=95",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=95",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=95",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=95",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=95",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=95",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=95",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=95"
     }
   }
   </script>
@@ -85,6 +86,8 @@
       <label><input type="checkbox" data-set="walkCamAuto"> 걸을 때 카메라 자동으로 뒤로</label>
       <label><input type="checkbox" data-set="chatter"> 학생 혼잣말</label>
       <label><input type="checkbox" data-set="faceWindow"> 운전사 얼굴 창 (왼쪽 아래)</label>
+      <label><input type="checkbox" data-set="ghost"> 지각 모드 최고 기록 고스트</label>
+      <label><input type="checkbox" data-set="events"> 지각 모드 무작위 사건 (공사·셔틀버스)</label>
       <label title="먼 산, 나무 다양화, 도로 표시, 셔틀버스, 오리·고양이·동물 학생, 얼굴 창 같은 장식을 한꺼번에 꺼서 가볍게"><input type="checkbox" data-set="light"> 가벼운 모드 (장식 끄기)</label>
     </div>
     <div id="fps" class="hidden"></div>
@@ -163,6 +166,7 @@
         <h2 class="res-title"></h2>
         <div class="res-grade"></div>
         <div class="res-times"></div>
+        <div class="res-titles hidden"></div>
         <div class="res-excuse hidden"><div class="res-excuse-title">지각 사유서</div><div class="res-excuse-text"></div><div class="res-excuse-sign">위 사유로 늦었음을 알려 드립니다. — 학생 올림</div></div>
         <button id="res-save" title="게임 화면 + 등급 + 시간을 PNG로 저장">이미지로 저장</button>
         <button data-act="retry">다시하기</button>
@@ -186,8 +190,42 @@
           <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
           <kbd>E</kbd> 미션 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지
         </div>
+        <button id="btn-titles" class="title-link">칭호</button>
         <button id="btn-credits" class="title-link">크레딧</button>
       </div>
+    </div>
+
+    <!-- 칭호 (첫 화면) -->
+    <div id="titles" class="overlay hidden">
+      <div class="dialog panel titles-card">
+        <h2>칭호</h2>
+        <p class="titles-tip">얻은 칭호를 누르면 대표 칭호가 돼요 (결과 화면·결과 이미지에 표시)</p>
+        <div class="titles-grid"></div>
+        <button class="titles-ending hidden">🎬 엔딩 다시 보기</button>
+        <button data-act="close">닫기</button>
+      </div>
+    </div>
+
+    <!-- 첫 A+ 엔딩: 캠퍼스 비행 + 크레딧 (Esc·Space·클릭으로 건너뛰기) -->
+    <div id="ending" class="hidden">
+      <div class="ending-roll">
+        <h2>포크레이트</h2>
+        <p>9시까지 공대 2호관으로!</p>
+        <p class="ending-gap">🎉 첫 A+ 축하해요 🎉</p>
+        <h3>만든 것들</h3>
+        <p>3D: three.js</p>
+        <p>지도 데이터 © OpenStreetMap 기여자 (ODbL)</p>
+        <p>지형·정사영상·수치지도·항공사진: 국토지리정보원</p>
+        <p>지형 타일: Terrain Tiles (ETOPO1 NOAA, GMTED2010·SRTM USGS)</p>
+        <p>건물 층수: 국토교통부 브이월드</p>
+        <p>3D 캠퍼스 아이디어: SMASH 대학교에서 영감</p>
+        <p>소리·목소리·음악: Web Audio로 직접 합성</p>
+        <h3>함께한 친구들</h3>
+        <p>황소 학생 · 교수님 · 오리 · 고양이 · 동물 학생들</p>
+        <p class="ending-gap">Claude Code와 함께 제작</p>
+        <p class="ending-gap">내일도 늦지 마세요~</p>
+      </div>
+      <div class="ending-skip">Esc · Space · 클릭: 건너뛰기</div>
     </div>
 
     <div id="credits" class="overlay hidden">
@@ -215,6 +253,6 @@
     <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
   </div>
 
-  <script type="module" src="assets/js/main.js?v=91"></script>
+  <script type="module" src="assets/js/main.js?v=95"></script>
 </body>
 </html>

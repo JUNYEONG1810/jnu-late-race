@@ -128,6 +128,7 @@ export class LateMode {
     this.targets = daily ? dailyOrder(this.baseTargets) : this.baseTargets;
     this.route = null;
     this.routeT = 0;
+    this.onRunStart?.(); // main: 고스트 기록 시작, 무작위 사건 고르기
     // 교수님 전화 1~2번: 이른 때 한 번(25~45초), 남은 시간 약 1분에 한 번(반반 확률)
     const pick = (l) => l[Math.floor(Math.random() * l.length)];
     this.calls = [{ at: 25 + Math.random() * 20, line: pick(PHONE_LINES.early) }];
@@ -167,6 +168,7 @@ export class LateMode {
   }
 
   exit() {
+    this.onRunEnd?.(); // main: 사건 치우기, 고스트 멈춤
     this.hud.clearPins();
     this.state = 'off';
     this.marker.group.visible = false;
@@ -519,8 +521,9 @@ export class LateMode {
     this.state = 'result';
     this.professor.talking = false;
     if (this.success) playDing();
-    this.onResult?.(this.grade);
     const { best, isNew } = this.saveBest();
+    // main: 결과 음악, 칭호, 고스트 저장. 돌려준 값(대표 칭호, 새 칭호)은 결과 화면에
+    const extra = this.onResult?.(this.grade, { isNew, remaining: this.remaining, daily: this.daily }) || {};
     // 지각 사유서 (F): 멈춰 있던 미션과 엮은 사유(두 배로 자주) + 어디서나 쓰는 사유 중 하나
     let excuse = null;
     if (this.grade === 'F') {
@@ -531,7 +534,7 @@ export class LateMode {
     this.excuse = excuse;
     this.hud.showResult({ grade: this.grade, elapsed: this.elapsed, remaining: this.remaining,
       done: this.done, total: this.targets.length, timedOut: this.timedOut, best, isNew, excuse,
-      daily: this.daily ? todayLabel() : null });
+      daily: this.daily ? todayLabel() : null, ...extra });
   }
 
   // 최고 기록: 시간 안에 도착한 것 중 남은 시간이 가장 긴 기록. 저장이 막힌 브라우저에서도 게임은 그대로

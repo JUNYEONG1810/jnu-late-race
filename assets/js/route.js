@@ -5,6 +5,7 @@ export class RoadGraph {
   constructor(campus) {
     this.pts = [];
     this.adj = [];
+    this.blocked = new Set(); // 막힌 간선 "a,b" (무작위 사건: 공사·셔틀버스 고장)
     const id = new Map();
     const node = ([x, z]) => {
       const k = `${Math.round(x * 10)},${Math.round(z * 10)}`;
@@ -32,7 +33,20 @@ export class RoadGraph {
     return best;
   }
 
-  // (ax, az) → (bx, bz) 도로를 따라가는 점 목록 (처음·끝은 그 자리). 못 찾으면 직선
+  // (x, z)에서 r 안을 지나는 간선을 막음 / 모두 풀기
+  block(x, z, r) {
+    this.adj.forEach((list, a) => {
+      for (const [b] of list) {
+        const [x1, z1] = this.pts[a], [x2, z2] = this.pts[b];
+        const dx = x2 - x1, dz = z2 - z1, L2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / L2));
+        if (Math.hypot(x1 + dx * t - x, z1 + dz * t - z) < r) this.blocked.add(`${a},${b}`);
+      }
+    });
+  }
+  clearBlocks() { this.blocked.clear(); }
+
+  // (ax, az) → (bx, bz) 도로를 따라가는 점 목록 (처음·끝은 그 자리). 못 찾으면 직선 (.ok = false)
   path(ax, az, bx, bz) {
     const s = this.nearest(ax, az), t = this.nearest(bx, bz);
     if (s < 0 || t < 0) return [[ax, az], [bx, bz]];
@@ -51,14 +65,15 @@ export class RoadGraph {
       done[u] = 1;
       if (u === t) break;
       for (const [v, w] of this.adj[u]) {
+        if (this.blocked.size && this.blocked.has(`${u},${v}`)) continue;
         const ng = g[u] + w;
         if (ng < g[v]) { g[v] = ng; prev[v] = u; open.push([ng + h(v), v]); }
       }
     }
-    if (!isFinite(g[t])) return [[ax, az], [bx, bz]];
+    if (!isFinite(g[t])) return Object.assign([[ax, az], [bx, bz]], { ok: false });
     const out = [];
     for (let u = t; u !== -1; u = prev[u]) out.push(P[u]);
     out.reverse();
-    return [[ax, az], ...out, [bx, bz]];
+    return Object.assign([[ax, az], ...out, [bx, bz]], { ok: true });
   }
 }

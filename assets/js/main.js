@@ -17,6 +17,7 @@ import { Music } from './music.js';
 import { buildSurface } from './surface.js';
 import { buildPlay } from './play.js';
 import { buildCampusLife } from './campus-life.js';
+import { Records, Ghost, Ending, RunEvents } from './records.js';
 
 const SKY_TOP = new THREE.Color('#5ea8ec');
 const SKY_HORIZON = new THREE.Color('#e6f1fb');
@@ -154,6 +155,10 @@ addEventListener('keydown', (e) => {
   unlockAudio();
   keys.add(e.code);
   if (e.code === 'KeyM') toggleSound();
+  if (ending?.active) { // 엔딩: Esc·Space·Enter로 건너뛰기
+    if (['Escape', 'Space', 'Enter'].includes(e.code)) ending.skip();
+    return;
+  }
   if (photo.on) { // 사진 모드: P·Esc 나가기, Enter 촬영 (나머지 키는 카메라 이동)
     if (e.code === 'KeyP' || e.code === 'Escape') setPhoto(false);
     else if (e.code === 'Enter') takePhoto();
@@ -180,6 +185,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('pointerdown', () => {
   unlockAudio();
+  if (ending?.active) { ending.skip(); return; }
   lateMode?.advance(); // 연출 대사 넘기기
 });
 addEventListener('blur', () => { keys.clear(); dragging = false; });
@@ -237,7 +243,7 @@ function toggleBgm() {
 }
 // 설정 (브라우저에 기억): 걸을 때 카메라 자동으로 뒤로 (기본 꺼짐), 학생 혼잣말 (기본 켬),
 // 가벼운 모드 (기본 꺼짐: 켜면 장식 요소를 한꺼번에 끔)
-const settings = { walkCamAuto: false, chatter: true, light: false, faceWindow: true };
+const settings = { walkCamAuto: false, chatter: true, light: false, faceWindow: true, ghost: true, events: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('walkSettings') || '{}')); } catch {}
 hud.bindSettings(settings, () => {
   try { localStorage.setItem('walkSettings', JSON.stringify(settings)); } catch {}
@@ -335,6 +341,8 @@ let lateMode = null;
 let walker = null;
 let play = null; // 놀거리 (play.js)
 let life = null; // 캠퍼스 산책 (campus-life.js)
+let records = null, ghost = null, ending = null, events = null; // 기록과 도전 (records.js)
+let pendingEvent = null; // 이번 판 무작위 사건 (출발하면 알림)
 
 // ---------- 내려서 걷기 (자유 모드) ----------
 
@@ -608,7 +616,9 @@ async function start() {
   // 지붕만 있는 차양은 지나갈 수 있게 충돌에서 뺀다
   collider = new Collider({ ...campus, buildings: campus.buildings.filter((b) => !b.style?.canopy) });
   car.surface = buildSurface(campus); // 잔디·흙·운동장 위는 느리게 (부스터 중엔 그대로)
-  play = buildPlay(scene, campus, collider, hud); // 축구·타임어택·드리프트 (자유 모드)
+  records = new Records(hud); // 칭호 (이 브라우저에만 저장)
+  const onEvent = (name, v) => records.event(name, v);
+  play = buildPlay(scene, campus, collider, hud, onEvent); // 축구·타임어택·드리프트 (자유 모드)
   // 용지 물가: 굴착기만 막음 (걷는 황소는 빠질 수 있음)
   const waterSeen = new Set();
   for (const g of campus.greens) {
@@ -645,10 +655,40 @@ async function start() {
   walker.onChatter = studentChatter;
   scene.add(walker.object);
   lateMode.onBeforeStart = () => walker.boardNow(); // 걷는 중에 지각 모드 버튼: 먼저 운전석으로
-  lateMode.onResult = (grade) => music.result(grade); // 등급별 짧은 결과 음악
+  // 기록과 도전: 고스트(최고 기록), 무작위 사건, 칭호, 첫 A+ 엔딩
+  ghost = new Ghost(scene, car);
+  events = new RunEvents(scene, campus, collider);
+  ending = new Ending(rig, camera, campus, lateMode.stage);
+  lateMode.onRunStart = () => {
+    ghost.start(lateMode.targets.map((t) => t.id).join(','));
+    const ev = settings.events ? events.pick(lateMode.graph, { x: campus.spawn.position[0], z: campus.spawn.position[1] }, lateMode.targets) : (events.clear(lateMode.graph), null);
+    pendingEvent = ev;
+  };
+  lateMode.onRunEnd = () => { events.clear(lateMode.graph); ghost.stop(); pendingEvent = null; };
+  lateMode.onResult = (grade, info) => {
+    music.result(grade); // 등급별 짧은 결과 음악
+    ghost.finish(grade === 'A+' && info.isNew && !info.daily);
+    const { fresh } = records.run({ grade, ...info });
+    // 첫 A+: 결과가 뜨고 조금 뒤 엔딩 (한 번만, 칭호 화면에서 다시 보기)
+    if (grade === 'A+' && !records.endingSeen) {
+      setTimeout(() => {
+        if (lateMode.state !== 'result' || ending.active) return; // 그사이 다시하기·나가기를 눌렀으면 다음 A+ 때
+        records.endingSeen = true;
+        records.save();
+        ending.start();
+      }, 2500);
+    }
+    return { title: records.title, newTitles: fresh };
+  };
+  hud.bindTitles(records, () => {
+    if (!records.endingSeen) return;
+    document.getElementById('titles').classList.add('hidden');
+    ending.start();
+  });
+
   lateMode.onMissionDone = () => { drive.relievedT = DRIVE_FACE.relieved; car.driver.waveHoof(); }; // 휴~ + 창밖으로 발굽 흔들기
   life = buildCampusLife(scene, { campus, collider, hud, lateMode, walker, car, speak,
-    sounds: { meow: playMeow, splash: playSplash, stamp: playStamp } });
+    sounds: { meow: playMeow, splash: playSplash, stamp: playStamp }, onEvent });
   walker.onSplash = (x, z) => life.splashAt(x, z); // 풍덩: 물보라·소리, 오리가 흩어짐
   hud.initMinimap(campus);
   setupTitle();
@@ -659,7 +699,7 @@ async function start() {
   rig.update(0, car);
   loadingUi.set(1, '다 됐어요!');
   loadingUi.done();
-  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life }; // 콘솔에서 확인용
+  window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life, records, ghost, ending, events }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
   setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
@@ -759,6 +799,17 @@ function loop() {
   else rig.update(dt, car);
   play.update(lateMode.frozen ? 0 : dt, car, walking ? walker : null, !onTitle && !lateMode.active && !photo.on);
   life.update(lateMode.frozen ? 0 : dt, camera, focus, !lateMode.active);
+  // 기록과 도전: 부스터 시간, 고스트, 엔딩
+  if (car.boosting && !walking) records.boost(dt);
+  const racing = lateMode.active && ['playing', 'mission', 'arrive'].includes(lateMode.state);
+  ghost.update(lateMode.frozen ? 0 : dt, lateMode.elapsed || 0, racing, settings.ghost && !settings.light);
+  ending.update(dt);
+  if (pendingEvent && lateMode.state === 'playing') { // 출발하자마자 오늘의 사건 알림
+    const E = pendingEvent;
+    pendingEvent = null;
+    hud.toast(E.kind === 'bus' ? `🚌 ${E.near ? `${E.near} 근처에서 ` : ''}셔틀버스가 고장 나 길을 막았어요! 미니맵 길을 따라 돌아가요`
+      : `🚧 ${E.near ? `${E.near} 근처 ` : ''}공사 중! 미니맵 길을 따라 돌아가요`, 4200);
+  }
   hud.updateNpc(camera);
   sky.position.copy(camera.position);
   sun.target.position.set(focus.x, focusY, focus.y);

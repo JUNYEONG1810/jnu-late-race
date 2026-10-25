@@ -37,7 +37,8 @@ const STAMP_KEY = 'jnu-late-race-stamps', PET_KEY = 'jnu-late-race-pets';
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장 못 해도 계속 */ } };
 
-export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker, car, speak, sounds }) {
+// onEvent(이름, 값): 칭호 (records.js) — 'pet' {count}, 'stamps' {done, total}, 'splash'
+export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker, car, speak, sounds, onEvent = () => {} }) {
   const group = new THREE.Group();
   scene.add(group);
   const quietPts = [];
@@ -89,6 +90,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
         walker.setEmote(1);
         sounds.meow?.();
         hud.toast(`🐱 냐옹~ (고양이를 쓰다듬은 횟수 ${pets}번)`, 2200);
+        onEvent('pet', { count: pets });
         return true;
       }
       const b = benches.reduce((a, q) => { const d = Math.hypot(q.x - walker.pos.x, q.z - walker.pos.y); return d < LIFE.bench.reach && (!a || d < a.d) ? { ...q, d } : a; }, null);
@@ -112,7 +114,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
       hud.sayNpc(line, speak(line, { pitch: s.kind.pitch }), () => s.headTop());
       return true;
     },
-    splashAt(x, z) { splash.start(x, (ducks.level ?? heightAt(x, z)) + 0.08, z); sounds.splash?.(); ducks.scare(x, z, 30); },
+    splashAt(x, z) { splash.start(x, (ducks.level ?? heightAt(x, z)) + 0.08, z); sounds.splash?.(); ducks.scare(x, z, 30); onEvent('splash'); },
 
     update(dt, camera, focus, free) {
       const walking = walker.active;
@@ -134,6 +136,7 @@ export function buildCampusLife(scene, { campus, collider, hud, lateMode, walker
           const n = Object.keys(got).length;
           hud.toast(`${s.emoji} ${s.name} 도장 쾅! (${n}/${stamps.length})${n === stamps.length ? ' — 도장판 완성!' : ''}`, 2600);
           sounds.stamp?.();
+          onEvent('stamps', { done: n, total: stamps.length });
         }
       }
       this.updateProfessor(dt, camera, focus, free);

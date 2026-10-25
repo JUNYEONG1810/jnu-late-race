@@ -645,3 +645,28 @@ body.title #npc-bubble, body.cine #npc-bubble, body.title #stamp-board, body.cin
 #face-window svg { width: 100%; height: 100%; display: block; }
 #face-window.pop { transform: scale(1.08); }
 body.title #face-window, body.cine #face-window, body.photo #face-window { display: none; }
+
+/* ---------- 칭호 · 엔딩 (밤샘 11단계) ---------- */
+.res-titles { margin: 6px 0 2px; font-size: 15px; }
+.res-titles.hidden { display: none; }
+.res-titles .res-new { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #ffd23f; color: #2b3240; font-size: 12px; margin-right: 4px; }
+.titles-card { max-width: 640px; }
+.titles-tip { margin: -4px 0 10px; font-size: 13px; color: #6b7385; }
+.titles-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.dialog .title-item { display: grid; gap: 1px; justify-items: center; width: auto; margin: 0; padding: 8px 4px; border-radius: 12px; border: 2px dashed #c9cdd6; background: #fafbfc; color: #8b919c; font: inherit; cursor: default; }
+.title-item b { font-size: 22px; }
+.title-item span { font-size: 14px; font-weight: 800; }
+.title-item small { font-size: 11px; line-height: 1.3; }
+.dialog .title-item.got { border-style: solid; border-color: #f2b134; background: #fffaf0; color: #2b3240; cursor: pointer; }
+.dialog .title-item.cur { border-color: #e8412c; box-shadow: 0 0 0 2px rgba(232, 65, 44, 0.25); }
+.titles-ending.hidden { display: none; }
+#ending { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+#ending.hidden { display: none; }
+#ending .ending-roll { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); width: min(560px, 90vw); text-align: center; color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55); animation: ending-roll 21s linear forwards; }
+#ending .ending-roll h2 { font-size: 44px; margin: 0 0 4px; }
+#ending .ending-roll h3 { margin: 40px 0 8px; font-size: 20px; color: #ffe08a; }
+#ending .ending-roll p { margin: 6px 0; font-size: 17px; font-weight: 700; }
+#ending .ending-gap { margin-top: 36px !important; font-size: 20px !important; }
+#ending .ending-skip { position: absolute; right: 20px; bottom: 16px; padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); color: #fff; font-size: 13px; }
+@keyframes ending-roll { from { top: 100%; transform: translate(-50%, 0); } to { top: 0; transform: translate(-50%, -100%); } }
+body.ending #hud > :not(#attribution):not(#ending), body.ending #title, body.ending #result, body.ending #titles { display: none !important; }

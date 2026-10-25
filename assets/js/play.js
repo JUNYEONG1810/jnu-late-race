@@ -23,7 +23,8 @@ const RECORD_KEY = 'jnu-late-race-play';
 function loadRecords() { try { return JSON.parse(localStorage.getItem(RECORD_KEY) || '{}'); } catch { return {}; } }
 function saveRecords(r) { try { localStorage.setItem(RECORD_KEY, JSON.stringify(r)); } catch { /* 저장 못 해도 계속 */ } }
 
-export function buildPlay(scene, campus, collider, hud) {
+// onEvent(이름, 값): 칭호 (records.js) — 'goal', 'drift' {score}, 'courses' {done, total}
+export function buildPlay(scene, campus, collider, hud, onEvent = () => {}) {
   const group = new THREE.Group();
   scene.add(group);
   const records = loadRecords();
@@ -44,6 +45,7 @@ export function buildPlay(scene, campus, collider, hud) {
       if (s.goal) {
         hud.toast(`⚽ 골! (${soccer.score[0]} : ${soccer.score[1]})`, 2500);
         if (!records.firstGoal) { records.firstGoal = true; saveRecords(records); }
+        onEvent('goal');
       }
       if (s.close) msgs.push(`⚽ ${soccer.score[0]} : ${soccer.score[1]}`);
       // 타임어택
@@ -55,6 +57,7 @@ export function buildPlay(scene, campus, collider, hud) {
         const best = records[name];
         const isNew = !best || time < best;
         if (isNew) { records[name] = time; saveRecords(records); }
+        onEvent('courses', { done: attack.courses.filter((c) => records[c.name]).length, total: attack.courses.length });
         hud.toast(`🏁 ${name} ${time.toFixed(2)}초${isNew ? ' — 최고 기록!' : ` (최고 ${best.toFixed(2)}초)`}`, 3500);
       }
       if (attack.running) msgs.push(`🏁 ${attack.running.name} ${attack.time.toFixed(1)}초 (확인점 ${attack.check}/${attack.running.checks.length})`);
@@ -72,6 +75,7 @@ export function buildPlay(scene, campus, collider, hud) {
         const sc = Math.round(drift.score);
         const isNew = sc > (records.drift || 0);
         if (isNew) { records.drift = sc; saveRecords(records); }
+        onEvent('drift', { score: sc });
         hud.toast(`🌀 드리프트 ${sc}점${isNew ? ' — 최고 기록!' : ` (최고 ${records.drift}점)`}`, 3000);
         drift.on = false;
         drift.score = 0;

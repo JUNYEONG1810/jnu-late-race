@@ -1,6 +1,7 @@
 // 화면 위 정보: 속도, 가까운 건물 이름, 주요 건물 이름표, 미니맵, 품질·소리 버튼, 조작법, 알림.
 import * as THREE from 'three';
 import { FACES } from './driver.js';
+import { TITLES } from './records.js';
 import { DRIVER } from './driver-config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -174,6 +175,31 @@ export class Hud {
     el.classList.add('pop');
     clearTimeout(this.facePop);
     this.facePop = setTimeout(() => el.classList.remove('pop'), 160);
+  }
+
+
+  // 첫 화면 "칭호": 얻은 칭호(누르면 대표 칭호로)와 아직 못 얻은 칭호(힌트), 엔딩 다시 보기
+  bindTitles(records, onEnding) {
+    const el = $('titles');
+    const render = () => {
+      el.querySelector('.titles-grid').innerHTML = TITLES.map((t) => {
+        const got = !!records.got[t.id], cur = records.current === t.id;
+        return `<button class="title-item${got ? ' got' : ''}${cur ? ' cur' : ''}" data-id="${t.id}" ${got ? '' : 'disabled'}>`
+          + `<b>${got ? t.emoji : '❔'}</b><span>${got ? t.name : '???'}</span><small>${t.hint}</small></button>`;
+      }).join('');
+      const n = TITLES.filter((t) => records.got[t.id]).length;
+      el.querySelector('h2').textContent = `칭호 ${n}/${TITLES.length}`;
+      el.querySelector('.titles-ending').classList.toggle('hidden', !records.endingSeen);
+    };
+    $('btn-titles').addEventListener('click', () => { render(); el.classList.remove('hidden'); });
+    el.querySelector('[data-act=close]').addEventListener('click', () => el.classList.add('hidden'));
+    el.querySelector('.titles-ending').addEventListener('click', onEnding);
+    el.querySelector('.titles-grid').addEventListener('click', (e) => {
+      const b = e.target.closest('.title-item.got');
+      if (!b) return;
+      records.setCurrent(b.dataset.id);
+      render();
+    });
   }
 
 
@@ -680,6 +706,11 @@ export class Hud {
       + (ok ? `<br>남은 시간 <b>${fmt(r.remaining)}</b>` : '')
       + (r.isNew ? `<br><b class="res-best">${r.daily ? '오늘의 ' : ''}최고 기록!</b>`
         : r.best ? `<br>${r.daily ? '오늘의 ' : ''}최고 기록: 남은 시간 <b>${fmt(r.best.remaining)}</b> (${r.best.grade})` : '');
+    // 대표 칭호 + 이번에 새로 얻은 칭호
+    const tt = el.querySelector('.res-titles');
+    tt.innerHTML = (r.newTitles?.length ? `<b class="res-new">새 칭호</b> ${r.newTitles.map((t) => `${t.emoji} ${t.name}`).join(' · ')}` : '')
+      + (r.title && !r.newTitles?.length ? `칭호 <b>${r.title}</b>` : '');
+    tt.classList.toggle('hidden', !tt.innerHTML);
     // 지각 사유서 (F)
     const ex = el.querySelector('.res-excuse');
     ex.classList.toggle('hidden', !r.excuse);
