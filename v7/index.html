@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>전남대 지각 레이스</title>
+  <!-- 공유 카드 (메신저·SNS 미리보기). 이미지는 docs/keyart/render.html로 만든 1200×630 -->
+  <meta name="description" content="전남대 광주캠퍼스를 3D로 옮긴 브라우저 게임. 미니 굴착기로 미션을 끝내고 9시까지 공대 2호관에 도착하세요!">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="전남대 지각 레이스">
+  <meta property="og:description" content="전남대 광주캠퍼스를 3D로 옮긴 브라우저 게임. 미니 굴착기로 미션을 끝내고 9시까지 공대 2호관에 도착하세요!">
+  <meta property="og:url" content="https://junyeong1810.github.io/jnu-late-race/">
+  <meta property="og:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="미니 굴착기가 부스터를 켜고 돌진하고, 뒤에서 교수님이 손목을 가리키는 장면">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="전남대 지각 레이스">
+  <meta name="twitter:image" content="https://junyeong1810.github.io/jnu-late-race/assets/img/og-image.jpg">
+  <link rel="stylesheet" href="assets/css/style.css?v=75">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "./assets/js/map.js": "./assets/js/map.js?v=75",
+      "./assets/js/landscape.js": "./assets/js/landscape.js?v=75",
+      "./assets/js/terrain.js": "./assets/js/terrain.js?v=75",
+      "./assets/js/car.js": "./assets/js/car.js?v=75",
+      "./assets/js/driver.js": "./assets/js/driver.js?v=75",
+      "./assets/js/driver-config.js": "./assets/js/driver-config.js?v=75",
+      "./assets/js/walker.js": "./assets/js/walker.js?v=75",
+      "./assets/js/camera.js": "./assets/js/camera.js?v=75",
+      "./assets/js/hud.js": "./assets/js/hud.js?v=75",
+      "./assets/js/voice.js": "./assets/js/voice.js?v=75",
+      "./assets/js/late-mode.js": "./assets/js/late-mode.js?v=75",
+      "./assets/js/missions-data.js": "./assets/js/missions-data.js?v=75",
+      "./assets/js/dialogue-data.js": "./assets/js/dialogue-data.js?v=75",
+      "./assets/js/professor.js": "./assets/js/professor.js?v=75",
+      "./assets/js/professor-config.js": "./assets/js/professor-config.js?v=75"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="loading">캠퍼스 불러오는 중…</div>
+
+  <div id="hud">
+    <canvas id="speedlines"></canvas>
+    <div id="labels"></div>
+    <div id="pins"></div>
+    <div id="building-name" class="pill hidden"></div>
+
+    <div id="speedo" class="panel">
+      <span id="speed">0</span><small>km/h</small>
+    </div>
+
+    <canvas id="minimap"></canvas>
+
+    <div id="quality" class="panel">
+      <span>그래픽</span>
+      <button data-q="low">낮음</button>
+      <button data-q="high">높음</button>
+      <button id="sound-btn" title="소리 켜기/끄기 (M)">🔊</button>
+      <button id="settings-btn" title="설정">⚙</button>
+    </div>
+    <div id="settings" class="panel off">
+      <label><input type="checkbox" data-set="walkCamAuto"> 걸을 때 카메라 자동으로 뒤로</label>
+      <label><input type="checkbox" data-set="chatter"> 학생 혼잣말</label>
+    </div>
+    <div id="fps" class="hidden"></div>
+
+    <div id="toast" class="pill hidden"></div>
+
+    <div id="boost-gauge" class="panel">
+      <span class="boost-text">BOOST</span>
+      <div class="boost-bar"><div class="boost-fill"></div></div>
+    </div>
+
+    <div id="help" class="panel">
+      <div><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 운전</div>
+      <div><kbd>Space</kbd> 브레이크·드리프트 &nbsp; <kbd>Shift</kbd> 부스터 (게이지 사용)</div>
+      <div><kbd>C</kbd> 시점 바꾸기 &nbsp; <kbd>M</kbd> 소리 &nbsp; <kbd>H</kbd> 조작법 다시 보기</div>
+      <div><kbd>E</kbd> 내려서 걷기 (자유 주행에서 멈췄을 때)</div>
+    </div>
+
+    <!-- 학생이 내려서 걸을 때 -->
+    <div id="walk-hint" class="panel">
+      <span class="wh-board"><kbd>E</kbd> 타기</span> · <kbd>Shift</kbd> 달리기 · <kbd>Space</kbd> 점프 · <kbd>R</kbd> 굴착기 부르기 · 마우스 끌기 시점 · <kbd>V</kbd> 시점 초기화<br>
+      <kbd>H</kbd> 음메 · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 감정 표현
+    </div>
+    <div id="student-bubble" class="hidden"></div>
+    <div id="student-z" class="hidden"><span>Z</span><span>Z</span><span>Z</span></div>
+
+    <button id="late-start" class="panel">🏃 지각 모드 시작 <kbd>L</kbd></button>
+
+    <!-- 지각 모드에서만 보이는 것들 -->
+    <div id="late-ui">
+      <div id="timer" class="pill">7:00</div>
+      <div id="mission-list" class="panel"></div>
+      <div id="target-tag" class="pill"></div>
+      <div id="target-arrow"><div class="arrow">➤</div><span></span></div>
+      <div id="mission-hint" class="pill hidden"></div>
+      <div id="mission-progress" class="panel hidden">
+        <div class="mp-emoji"></div>
+        <div class="mp-line"></div>
+        <div class="mp-bar"><div class="mp-fill"></div></div>
+      </div>
+      <div id="countdown"></div>
+    </div>
+
+    <div id="speech" class="hidden">
+      <div class="speech-name"></div>
+      <div class="speech-text"></div>
+      <div class="speech-more">▼</div>
+    </div>
+
+    <div id="pause-menu" class="overlay hidden">
+      <div class="dialog panel">
+        <h2>일시정지</h2>
+        <button data-act="resume">계속</button>
+        <button data-act="retry">다시하기</button>
+        <button data-act="exit">자유 주행으로</button>
+      </div>
+    </div>
+
+    <div id="result" class="overlay hidden">
+      <div class="dialog panel">
+        <h2 class="res-title"></h2>
+        <div class="res-grade"></div>
+        <div class="res-times"></div>
+        <button data-act="retry">다시하기</button>
+        <button data-act="exit">자유 주행으로</button>
+      </div>
+    </div>
+
+    <!-- 첫 화면 -->
+    <div id="title">
+      <div class="title-card panel">
+        <h1>전남대 지각 레이스</h1>
+        <p class="title-sub">미니 굴착기를 타고 캠퍼스를 달려, 9시 수업에 늦지 마세요!</p>
+        <div class="title-colors" aria-label="굴착기 색"></div>
+        <div class="title-buttons">
+          <button id="btn-free">자유 주행</button>
+          <button id="btn-late">지각 모드</button>
+        </div>
+        <div class="title-keys">
+          <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>WASD</kbd> 운전 · <kbd>Space</kbd> 드리프트 · <kbd>Shift</kbd> 부스터<br>
+          <kbd>E</kbd> 미션 · <kbd>C</kbd> 시점 · <kbd>M</kbd> 소리 · <kbd>Esc</kbd> 일시정지
+        </div>
+        <button id="btn-credits" class="title-link">크레딧</button>
+      </div>
+    </div>
+
+    <div id="credits" class="overlay hidden">
+      <div class="dialog panel credits-card">
+        <h2>크레딧</h2>
+        <p><b>사용한 오픈소스와 데이터</b><br>
+          <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> (MIT 라이선스)<br>
+          지도 데이터 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap 기여자</a> (ODbL)<br>
+          건물 층수: 국토교통부 <a href="https://www.vworld.kr" target="_blank" rel="noopener">브이월드</a><br>
+          정사영상·수치지도: <a href="https://map.ngii.go.kr" target="_blank" rel="noopener">국토지리정보원</a> (잔디·도로 폭·층수·지붕색 판단에만 사용, 사진은 게임에 넣지 않음)<br>
+          지형 높이: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles</a> (AWS Open Data) —
+          <span class="credit-en">Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration;
+          GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey.</span></p>
+        <p>3D 캠퍼스 아이디어: SMASH 대학교(<a href="https://hong-iron.github.io/SMASH/" target="_blank" rel="noopener">hong-iron.github.io/SMASH</a>)에서 영감</p>
+        <p>소리와 목소리는 Web Audio로 직접 합성 (소리 파일 없음)</p>
+        <p>Claude Code와 함께 제작</p>
+        <button data-act="close">닫기</button>
+      </div>
+    </div>
+
+    <a id="attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">지도 데이터 © OpenStreetMap 기여자</a>
+  </div>
+
+  <script type="module" src="assets/js/main.js?v=75"></script>
+</body>
+</html>
