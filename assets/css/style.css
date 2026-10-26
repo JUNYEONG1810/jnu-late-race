@@ -615,7 +615,7 @@ body.cine #phone { display: none; }
 /* ---------- 놀거리 · 사진 모드 (밤샘 8단계) ---------- */
 #play-info { top: 116px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 800; pointer-events: none; }
 body.late #play-info, body.cine #play-info { display: none; }
-#photo-bar { display: none; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 10px 16px; align-items: center; gap: 12px; font-size: 14px; white-space: nowrap; }
+#photo-bar { display: none; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 10px 16px; align-items: center; gap: 12px; font-size: 14px; white-space: nowrap; pointer-events: auto; }
 #photo-bar span { color: #5d6573; }
 #photo-bar button { font: inherit; font-weight: 700; padding: 6px 12px; border-radius: 8px; border: 0; background: #2f8cff; color: #fff; cursor: pointer; }
 #photo-bar #photo-exit { background: #e7e9ee; color: #2b3240; }
@@ -672,7 +672,7 @@ body.title #face-window, body.cine #face-window, body.photo #face-window { displ
 body.ending #hud > :not(#attribution):not(#ending), body.ending #title, body.ending #result, body.ending #titles { display: none !important; }
 
 /* ---------- 꾸미기 (밤샘 12단계) ---------- */
-#dress { display: none; left: 20px; top: 50%; transform: translateY(-50%); width: 360px; padding: 14px 16px; }
+#dress { display: none; left: 20px; top: 50%; transform: translateY(-50%); width: 360px; padding: 14px 16px; pointer-events: auto; }
 body.dress #dress { display: block; }
 body.dress #title, body.dress #walk-hint, body.dress #student-bubble, body.dress #student-z, body.dress #face-window { display: none; }
 #dress h3 { margin: 0 0 8px; font-size: 18px; }
