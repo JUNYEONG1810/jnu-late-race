@@ -33,8 +33,6 @@ const CAR_COLORS = ['#f5b82e', '#e8503a', '#3a7be8', '#4cb15a', '#f08a24', '#e86
 const START_QUALITY = 'low';
 const DPR_MAX = 1.25; // 품질 높음의 화면 해상도 배율 상한 (낮음은 1)
 const GROUND_PX = { high: 3072, low: 2048 }; // 바닥 그림 해상도 (높음 4096 → 3072: GPU 약 76MB → 43MB)
-// 저사양 자동 품질: 첫 화면이 뜬 뒤 약 3초 동안 fps가 이보다 낮으면 한 단계 가볍게 (사용자가 고른 품질은 그대로)
-const AUTO_FPS = 45;
 // 항상 이름표를 띄울 주요 건물: [OSM 이름, 화면에 보일 이름]
 const LANDMARKS = [
   ['중앙도서관'], ['공과대 2호관'], ['농생대 1호관'], ['제1학생마루', '제1학생회관'],
@@ -95,23 +93,19 @@ function makeSky() {
 // ---------- 그래픽 품질 ----------
 
 let quality = START_QUALITY;
-let userQuality = false; // 사용자가 직접 고른 품질이 있으면 자동으로 바꾸지 않음
 try {
   const saved = localStorage.getItem('quality');
-  if (saved === 'low' || saved === 'high') { quality = saved; userQuality = true; }
+  if (saved === 'low' || saved === 'high') quality = saved;
 } catch {}
-let renderScale = 1; // 자동 품질이 "낮음"에서도 느릴 때만 0.8
 
-// byUser: 왼쪽 위 버튼으로 고름 → 기억하고, 자동 품질은 손대지 않음
+// byUser: 왼쪽 위 버튼으로 고름 → 브라우저에 기억
 function setQuality(q, byUser = false) {
   quality = q;
   const high = q === 'high';
   if (byUser) {
-    userQuality = true;
-    renderScale = 1;
     try { localStorage.setItem('quality', q); } catch {}
   }
-  renderer.setPixelRatio(high ? Math.min(devicePixelRatio, DPR_MAX) : renderScale);
+  renderer.setPixelRatio(high ? Math.min(devicePixelRatio, DPR_MAX) : 1);
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = high;
   sun.castShadow = high;
@@ -121,30 +115,6 @@ function setQuality(q, byUser = false) {
   world.shuttle.setCount(high ? 2 : 1); // 셔틀버스 수
   scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
   hud.setQuality(q);
-}
-
-// 첫 화면이 뜬 뒤 0.5~3.5초의 평균 fps가 낮으면 한 단계 가볍게: 높음 → 낮음, 낮음 → 해상도 배율 0.8
-const autoQ = { start: 0, frames: 0, done: false };
-function checkAutoQuality() {
-  if (autoQ.done) return;
-  const now = performance.now();
-  if (!autoQ.start) autoQ.start = now + 500;
-  if (now < autoQ.start) return;
-  autoQ.frames++;
-  if (now < autoQ.start + 3000) return;
-  autoQ.done = true;
-  const fps = (autoQ.frames * 1000) / (now - autoQ.start);
-  window.__autoFps = Math.round(fps); // 확인용
-  if (fps >= AUTO_FPS || userQuality) return;
-  if (quality === 'high') {
-    setQuality('low');
-    hud.toast('화면이 느려서 그래픽을 "낮음"으로 바꿨어요', 3500);
-  } else if (renderScale > 0.8) {
-    renderScale = 0.8;
-    renderer.setPixelRatio(renderScale);
-    renderer.setSize(innerWidth, innerHeight);
-    hud.toast('화면이 느려서 해상도를 조금 낮췄어요 (왼쪽 위 "낮음"을 누르면 원래대로)', 4000);
-  }
 }
 
 // ---------- 입력 ----------
@@ -825,17 +795,24 @@ async function start() {
   setupTitle();
   setupDress();
 
+  // 교수님 캐릭터는 로딩 중에 만든다 (첫 화면이 뜬 뒤에 만들면 첫 화면에서 몇 초 버벅임: 사용자 Chrome에서 확인)
+  lateMode.ensureProfessor();
   setQuality(quality);
   applyLight();
   if (look.season !== 'summer') applySeason(look.season);
   updateTitleCamera(0);
   rig.update(0, car);
+  // 첫 화면이 뜨기 전에, 로딩 화면이 보이는 동안 셰이더를 미리 컴파일하고(병렬) 한 장을 그려 GPU에 올려 둔다.
+  // (안 하면 첫 화면이 뜬 직후 몇 초 멈춤: 사용자 Chrome에서 4.9초 확인)
+  loadingUi.set(0.95, '그래픽 준비 중…');
+  await breathe();
+  try { await renderer.compileAsync(scene, camera); } catch { /* 지원하지 않으면 첫 화면에서 컴파일 */ }
+  renderer.render(scene, camera);
   loadingUi.set(1, '다 됐어요!');
   loadingUi.done();
   window.game = { car, rig, collider, campus, renderer, world, lateMode, walker, play, life, records, ghost, ending, events, wardrobe }; // 콘솔에서 확인용
   window.__readyMs = performance.now(); // 페이지를 연 뒤 첫 화면까지 (측정용)
   renderer.setAnimationLoop(loop);
-  setTimeout(() => lateMode.ensureProfessor(), 1500); // 첫 화면이 뜬 뒤 교수님 캐릭터를 미리 만들어 둠
 }
 
 // 잰 차도 폭·차로 수·분리대를 OSM 도로에 덮어쓴다. 정문을 지나는 도로가 넓어지면 정문 기둥 사이도 넓힌다
@@ -898,7 +875,6 @@ let fpsFrames = 0, fpsTime = 0;
 
 function loop() {
   const dt = Math.min(clock.getDelta(), 0.1);
-  checkAutoQuality();
   const input = onTitle || photo.on || lateMode.inputLocked ? NO_INPUT : readInput();
   if (onTitle) updateTitleCamera(clock.elapsedTime);
 

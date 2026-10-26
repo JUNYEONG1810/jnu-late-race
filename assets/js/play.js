@@ -120,7 +120,7 @@ function buildSoccer(group, campus, collider) {
   goals.castShadow = true;
   group.add(goals);
   // 공: 흰 바탕에 짙은 무늬 (20면체를 나눠 몇 면만 짙게, 정점 색)
-  const geo = new THREE.IcosahedronGeometry(B.r, 1).toNonIndexed();
+  const geo = new THREE.IcosahedronGeometry(B.r, 1); // 다면체는 원래 인덱스가 없음
   const col = [], c1 = new THREE.Color('#f5f5f0'), c2 = new THREE.Color('#2b2e33');
   for (let f = 0; f < geo.attributes.position.count / 3; f++) {
     const c = f % 5 === 0 ? c2 : c1;
