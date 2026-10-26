@@ -82,3 +82,19 @@ python -m http.server 8000
 ```
 
 그다음 `http://localhost:8000`을 엽니다 (JSON을 fetch로 읽기 때문에 파일을 더블클릭해서는 열리지 않습니다).
+
+## 라이선스와 출처
+
+자세한 내용은 [LICENSE](LICENSE)를 보세요.
+
+- **게임 코드, 캐릭터 디자인, 키 아트:** Copyright (c) 2026 JUNYEONG1810. All rights reserved. 허락 없이 복제·재배포·상업적으로 이용할 수 없습니다.
+- **지도 데이터** (`data/`의 OpenStreetMap 기반 데이터): © OpenStreetMap 기여자, [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/)
+- **공공데이터 기반 값** (지형·차도 폭·잔디·층수 등): 각 기관 이용 조건에 따라 출처를 표시합니다.
+  - 국토지리정보원(수치지도·정사영상·항공사진)
+  - 국토교통부 브이월드(건물 층수)
+  - AWS Terrain Tiles: Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration; GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey.
+- **외관 참고 사진** (위키미디어 공용, 게임에는 넣지 않음): Wikicnu (CC BY 3.0), Saigen Jiro (CC0), 박엘리샤 (CC BY-SA 4.0), 이명민 (CC BY 3.0), Gunarta (CC BY-SA 4.0), 전남대학교 대외협력과 (CC BY-SA 4.0)
+- **외부 라이브러리·글꼴:** 각자의 라이선스를 따릅니다.
+  - three.js (MIT)
+  - Black Han Sans·Noto Sans KR (SIL Open Font License 1.1, 키 아트 글자)
+- **영감:** 3D 캠퍼스 아이디어는 SMASH 대학교에서 얻었습니다. 코드는 가져오지 않고 새로 작성했습니다.
